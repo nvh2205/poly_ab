@@ -1,0 +1,38 @@
+1. Get the application URL by running these commands:
+{{- if .Values.app.ingress.enabled }}
+{{- range $host := .Values.app.ingress.hosts }}
+  {{- range .paths }}
+  http{{ if $.Values.app.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+
+  To get the external IP:
+  kubectl get ingress {{ .Values.app.name }}-ingress
+{{- else if contains "NodePort" .Values.app.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ .Values.app.name }}-service)
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.app.service.type }}
+     NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+           You can watch the status by running 'kubectl get --namespace {{ .Release.Namespace }} svc -w {{ .Values.app.name }}-service'
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ .Values.app.name }}-service --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo http://$SERVICE_IP:{{ .Values.app.service.port }}
+{{- else if contains "ClusterIP" .Values.app.service.type }}
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app={{ .Values.app.name }}" -o jsonpath="{.items[0].metadata.name}")
+  export CONTAINER_PORT=$(kubectl get pod --namespace {{ .Release.Namespace }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+  echo "Visit http://127.0.0.1:8080 to use your application"
+  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 8080:$CONTAINER_PORT
+{{- end }}
+
+2. View logs:
+  kubectl logs -f deployment/{{ .Values.app.name }}
+
+3. Check pod status:
+  kubectl get pods -l app={{ .Values.app.name }}
+
+4. Access PostgreSQL:
+  kubectl exec -it deployment/postgresql -- psql -U {{ .Values.postgresql.auth.username }} -d {{ .Values.postgresql.auth.database }}
+
+5. Access Redis:
+  kubectl exec -it deployment/redis -- redis-cli{{ if .Values.redis.auth.enabled }} -a $REDIS_PASSWORD{{ end }}
+

@@ -1,0 +1,13 @@
+apiVersion: v2
+name: strategy-trade-poly
+description: Polymarket Orderbook Data Collection System
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - polymarket
+  - orderbook
+  - nestjs
+maintainers:
+  - name: PolyLynx Team
+

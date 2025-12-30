@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.app.name }}
+  labels:
+    app: {{ .Values.app.name }}
+    version: {{ .Chart.AppVersion }}
+spec:
+  replicas: {{ .Values.app.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: {{ .Values.app.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.app.name }}
+        version: {{ .Chart.AppVersion }}
+    spec:
+      imagePullSecrets:
+      - name: gcr-json-key
+      containers:
+      - name: {{ .Values.app.name }}
+        image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
+        imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.app.service.targetPort }}
+          protocol: TCP
+        env:
+        - name: NODE_ENV
+          value: {{ .Values.app.env.NODE_ENV | quote }}
+        - name: PORT
+          value: {{ .Values.app.env.PORT | quote }}
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Values.app.name }}-config
+              key: dbHost
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Values.app.name }}-config
+              key: dbPort
+        - name: DB_USERNAME
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Values.app.name }}-config
+              key: dbUsername
+        - name: DB_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Values.app.name }}-config
+              key: dbDatabase
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.app.name }}-secrets
+              key: dbPassword
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Values.app.name }}-config
+              key: redisHost
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Values.app.name }}-config
+              key: redisPort
+        resources:
+          {{- toYaml .Values.app.resources | nindent 10 }}
+        livenessProbe:
+          {{- toYaml .Values.app.livenessProbe | nindent 10 }}
+        readinessProbe:
+          {{- toYaml .Values.app.readinessProbe | nindent 10 }}
+

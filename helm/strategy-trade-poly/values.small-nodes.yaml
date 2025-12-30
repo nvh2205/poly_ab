@@ -1,0 +1,82 @@
+# Optimized values for small GKE nodes (e2-small/e2-micro)
+# Node capacity: ~940m CPU, ~2.8GB RAM
+# Use this for cost-effective development/testing clusters
+
+app:
+  name: strategy-trade-poly
+  replicaCount: 1
+  
+  image:
+    repository: gcr.io/polylynx/strategy-trade-poly
+    pullPolicy: Always
+    tag: "latest"
+  
+  resources:
+    limits:
+      cpu: 250m          # Reduced from 500m
+      memory: 256Mi      # Reduced from 512Mi
+    requests:
+      cpu: 100m          # Reduced from 200m
+      memory: 128Mi      # Reduced from 256Mi
+  
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 3000
+    initialDelaySeconds: 60   # Increased for slower startup
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 5       # More lenient
+  
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 3000
+    initialDelaySeconds: 30   # Increased
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 5       # More lenient
+
+# PostgreSQL settings - optimized for small nodes
+postgresql:
+  enabled: true
+  
+  resources:
+    limits:
+      cpu: 200m          # Reduced from 500m
+      memory: 512Mi      # Reduced from 1Gi
+    requests:
+      cpu: 100m          # Reduced from 250m
+      memory: 256Mi      # Reduced from 512Mi
+  
+  persistence:
+    enabled: true
+    size: 10Gi           # Reduced from 20Gi for cost saving
+    storageClass: "standard-rwo"
+
+# Redis settings - optimized for small nodes
+redis:
+  enabled: true
+  
+  resources:
+    limits:
+      cpu: 150m          # Reduced from 500m
+      memory: 256Mi      # Reduced from 1Gi
+    requests:
+      cpu: 50m           # Reduced from 250m
+      memory: 128Mi      # Reduced from 512Mi
+  
+  persistence:
+    enabled: true
+    size: 5Gi            # Reduced from 10Gi
+    storageClass: "standard-rwo"
+
+
+
+
+
+
+
+
+
+

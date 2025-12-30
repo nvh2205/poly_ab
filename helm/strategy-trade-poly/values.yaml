@@ -1,0 +1,162 @@
+# Default values for strategy-trade-poly
+# This is a YAML-formatted file.
+
+# Global settings
+global:
+  projectId: polylynx
+  region: us-central1
+  clusterName: "cluster-1"
+
+# Application settings
+app:
+  name: strategy-trade-poly
+  replicaCount: 1
+  
+  image:
+    repository: gcr.io/polylynx/strategy-trade-poly
+    pullPolicy: Always
+    tag: "latest"
+    # Base64 encoded GCR JSON key for pulling images
+    # Create using: kubectl create secret docker-registry gcr-json-key \
+    #   --docker-server=gcr.io \
+    #   --docker-username=_json_key \
+    #   --docker-password="$(cat ~/path/to/gcr-key.json)" \
+    #   --docker-email=your-email@example.com
+    # Or set this to base64 encoded dockerconfigjson
+    imagePullSecret: ""
+  
+  service:
+    type: LoadBalancer
+    port: 80
+    targetPort: 3000
+    # Whitelist specific IPs for security (optional)
+    loadBalancerSourceRanges:
+      - "0.0.0.0/0"  # Allow all IPs (change to specific IP for security)
+  
+  ingress:
+    enabled: true
+    className: "gce"
+    annotations:
+      kubernetes.io/ingress.global-static-ip-name: ""
+      networking.gke.io/managed-certificates: ""
+    hosts:
+      - host: strategy-trade-poly.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+    #  - secretName: strategy-trade-poly-tls
+    #    hosts:
+    #      - strategy-trade-poly.example.com
+  
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 3000
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 5
+  
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 3000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 5
+  
+  env:
+    NODE_ENV: production
+    PORT: "3000"
+
+# PostgreSQL settings
+postgresql:
+  enabled: true
+  
+  image:
+    repository: postgres
+    tag: "15-alpine"
+    pullPolicy: IfNotPresent
+  
+  auth:
+    postgresPassword: "CHANGE_ME_POSTGRES_PASSWORD"
+    username: "polymarket"
+    password: "CHANGE_ME_DB_PASSWORD"
+    database: "polymarket_db"
+  
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClass: "standard-rwo"
+  
+  resources:
+    limits:
+      cpu: 200m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  
+  service:
+    type: LoadBalancer
+    port: 5432
+    # Whitelist specific IPs for security (your current IP)
+    loadBalancerSourceRanges:
+      - "113.23.55.126/32"  # Your current IP
+
+# Redis settings
+redis:
+  enabled: true
+  
+  image:
+    repository: redis
+    tag: "7-alpine"
+    pullPolicy: IfNotPresent
+  
+  auth:
+    enabled: false
+    password: ""
+  
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: "standard-rwo"
+  
+  resources:
+    limits:
+      cpu: 150m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+  
+  service:
+    type: ClusterIP
+    port: 6379
+  
+  args:
+    - "--appendonly"
+    - "yes"
+
+# ConfigMap settings
+configMap:
+  # Database connection settings (will be set from postgresql values)
+  dbHost: "postgresql-service"
+  dbPort: "5432"
+  dbUsername: "polymarket"
+  dbDatabase: "polymarket_db"
+  
+  # Redis connection settings (will be set from redis values)
+  redisHost: "redis-service"
+  redisPort: "6379"
+

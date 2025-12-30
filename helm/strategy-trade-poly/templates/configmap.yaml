@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.app.name }}-config
+  labels:
+    app: {{ .Values.app.name }}
+data:
+  dbHost: {{ .Values.configMap.dbHost | quote }}
+  dbPort: {{ .Values.configMap.dbPort | quote }}
+  dbUsername: {{ .Values.configMap.dbUsername | quote }}
+  dbDatabase: {{ .Values.configMap.dbDatabase | quote }}
+  redisHost: {{ .Values.configMap.redisHost | quote }}
+  redisPort: {{ .Values.configMap.redisPort | quote }}
+

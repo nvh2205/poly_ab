@@ -1,0 +1,4 @@
+---
+alwaysApply: true
+---
+Không viết các file docs.md khi gen code

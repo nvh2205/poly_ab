@@ -1,0 +1,24 @@
+{{- if .Values.postgresql.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql-service
+  labels:
+    app: postgresql
+spec:
+  type: {{ .Values.postgresql.service.type }}
+  {{- if and (eq .Values.postgresql.service.type "LoadBalancer") .Values.postgresql.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- range .Values.postgresql.service.loadBalancerSourceRanges }}
+    - {{ . }}
+    {{- end }}
+  {{- end }}
+  ports:
+    - port: {{ .Values.postgresql.service.port }}
+      targetPort: {{ .Values.postgresql.service.port }}
+      protocol: TCP
+      name: postgresql
+  selector:
+    app: postgresql
+{{- end }}
+

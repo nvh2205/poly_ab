@@ -1,0 +1,56 @@
+# Example production values file
+# Copy this file and update with your actual values
+# Usage: helm install strategy-trade-poly ./helm/strategy-trade-poly -f values.production.yaml
+
+global:
+  projectId: polylynx
+  region: us-central1
+  clusterName: "your-cluster-name"
+
+app:
+  name: strategy-trade-poly
+  replicaCount: 3  # Increase for production
+  
+  image:
+    repository: gcr.io/polylynx/strategy-trade-poly
+    tag: "v1.0.0"  # Use specific version tags in production
+  
+  ingress:
+    enabled: true
+    className: "gce"
+    annotations:
+      kubernetes.io/ingress.global-static-ip-name: "strategy-trade-poly-ip"
+      networking.gke.io/managed-certificates: "strategy-trade-poly-cert"
+    hosts:
+      - host: strategy-trade-poly.yourdomain.com
+        paths:
+          - path: /
+            pathType: Prefix
+  
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+    requests:
+      cpu: 1000m
+      memory: 1Gi
+
+postgresql:
+  enabled: true
+  auth:
+    password: "CHANGE_ME_STRONG_PASSWORD"  # Use a strong password
+  
+  persistence:
+    enabled: true
+    size: 100Gi  # Increase for production
+
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "CHANGE_ME_REDIS_PASSWORD"  # Enable auth in production
+  
+  persistence:
+    enabled: true
+    size: 50Gi  # Increase for production
+

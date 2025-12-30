@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.app.name }}-service
+  labels:
+    app: {{ .Values.app.name }}
+spec:
+  type: {{ .Values.app.service.type }}
+  ports:
+    - port: {{ .Values.app.service.port }}
+      targetPort: {{ .Values.app.service.targetPort }}
+      protocol: TCP
+      name: http
+  {{- if .Values.app.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml .Values.app.service.loadBalancerSourceRanges | nindent 4 }}
+  {{- end }}
+  selector:
+    app: {{ .Values.app.name }}
+

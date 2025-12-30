@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: poly_postgres
+    environment:
+      POSTGRES_USER: polymarket
+      POSTGRES_PASSWORD: polymarket123
+      POSTGRES_DB: polymarket_db
+    ports:
+      - '5482:5432'  # Host port 5482 -> Container port 5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: poly_redis
+    ports:
+      - '6429:6379'  # Host port 6429 -> Container port 6379
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: poly_clickhouse
+    environment:
+      CLICKHOUSE_DB: polymarket_db
+      CLICKHOUSE_USER: polymarket
+      CLICKHOUSE_PASSWORD: polymarket123
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ports:
+      - '8173:8123' # HTTP interface (Host port 8173 -> Container port 8123)
+      - '9050:9000' # Native protocol (Host port 9050 -> Container port 9000)
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_log:/var/log/clickhouse-server
+    restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: poly_app
+    ports:
+      - '3050:3000'  # Host port 3050 -> Container port 3000
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: polymarket
+      DB_PASSWORD: polymarket123
+      DB_DATABASE: polymarket_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CLICKHOUSE_HOST: http://clickhouse:8123
+      CLICKHOUSE_USER: polymarket
+      CLICKHOUSE_PASSWORD: polymarket123
+      CLICKHOUSE_DATABASE: polymarket_db
+    depends_on:
+      - postgres
+      - redis
+      - clickhouse
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'node', '-e', "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  postgres_data:
+  redis_data:
+  clickhouse_data:
+  clickhouse_log:
+

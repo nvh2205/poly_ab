@@ -1,0 +1,87 @@
+╔═══════════════════════════════════════════════════════════════╗
+║         Strategy Trade Poly - Helm Deployment Files          ║
+╚═══════════════════════════════════════════════════════════════╝
+
+📁 Files Created:
+─────────────────────────────────────────────────────────────────
+
+1. 📘 DEPLOYMENT_GUIDE.md (9.7K)
+   - Hướng dẫn chi tiết về deploy và upgrade app lên GKE
+   - Các bước setup ban đầu
+   - Troubleshooting và best practices
+   - Backup/restore procedures
+
+2. 📗 QUICK_REFERENCE.md (8.8K)
+   - Tham khảo nhanh các commands thường dùng
+   - Helm, kubectl, docker, gcloud commands
+   - Debugging guide
+   - Emergency procedures
+
+3. 📕 README.md (7.7K)
+   - Overview của thư mục helm
+   - Cấu trúc và architecture
+   - Quick start guide
+   - CI/CD integration examples
+
+4. 🚀 deploy.sh (10K)
+   - Script để deploy ứng dụng lần đầu
+   - Interactive mode với menu
+   - Auto build & push Docker image
+   - Dry-run support
+   - Validation và monitoring
+
+5. 🔄 upgrade.sh (14K)
+   - Script để upgrade ứng dụng
+   - Database backup option
+   - Auto-rollback on failure
+   - Health check sau upgrade
+   - Zero-downtime deployment
+
+6. ↩️  rollback.sh (8.8K)
+   - Script để rollback về version trước
+   - Show deployment history
+   - Select specific revision
+   - Verify sau rollback
+   - Health check
+
+7. ✅ status.sh (8.6K)
+   - Script để check status deployment
+   - Pods, services, ingress status
+   - Resource usage
+   - Health check
+   - Recent events và logs
+
+─────────────────────────────────────────────────────────────────
+
+🎯 Quick Usage:
+─────────────────────────────────────────────────────────────────
+
+1. Setup:
+   cd helm
+   cp strategy-trade-poly/values.production.example.yaml values.production.yaml
+   # Edit values.production.yaml
+
+2. Deploy mới:
+   ./deploy.sh
+
+3. Upgrade:
+   ./upgrade.sh
+
+4. Check status:
+   ./status.sh
+
+5. Rollback:
+   ./rollback.sh
+
+─────────────────────────────────────────────────────────────────
+
+📚 Documentation:
+─────────────────────────────────────────────────────────────────
+
+- Bắt đầu với: README.md
+- Hướng dẫn chi tiết: DEPLOYMENT_GUIDE.md
+- Commands nhanh: QUICK_REFERENCE.md
+
+─────────────────────────────────────────────────────────────────
+
+✨ All scripts are executable and ready to use!
