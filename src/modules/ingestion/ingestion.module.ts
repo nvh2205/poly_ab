@@ -5,6 +5,7 @@ import { SocketManagerService } from './socket-manager.service';
 import { BufferService } from './buffer.service';
 import { UtilService } from '../../common/services/util.service';
 import { RedisModule } from '../../common/services/redis.module';
+import { MarketDataStreamService } from './market-data-stream.service';
 
 @Module({
   imports: [RedisModule],
@@ -14,7 +15,8 @@ import { RedisModule } from '../../common/services/redis.module';
     SocketManagerService,
     BufferService,
     UtilService,
+    MarketDataStreamService,
   ],
-  exports: [IngestionService],
+  exports: [IngestionService, MarketDataStreamService],
 })
 export class IngestionModule {}

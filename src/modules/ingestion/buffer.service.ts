@@ -7,6 +7,8 @@ import { MarketData, PriceChangeData } from '../../common/interfaces/market.inte
 import { APP_CONSTANTS } from '../../common/constants/app.constants';
 import { RedisService } from '../../common/services/redis.service';
 import { ClickHouseService } from '../../common/services/clickhouse.service';
+import { MarketDataStreamService } from './market-data-stream.service';
+import { TopOfBookUpdate } from '../strategy/interfaces/top-of-book.interface';
 
 @Injectable()
 export class BufferService implements OnModuleInit {
@@ -52,6 +54,7 @@ export class BufferService implements OnModuleInit {
     private readonly marketRepository: Repository<Market>,
     private readonly redisService: RedisService,
     private readonly clickHouseService: ClickHouseService,
+    private readonly marketDataStreamService: MarketDataStreamService,
   ) {
     this.logger.log(
       `Buffer initialized with batch size: ${this.batchSize}, flush interval: ${this.flushInterval}ms`,
@@ -78,9 +81,57 @@ export class BufferService implements OnModuleInit {
    * Push price change data to buffer
    */
   pushPriceChange(data: PriceChangeData): void {
-    // TODO: Implement price change storage logic
-    // For now, just log the received data
-    this.logger.debug(`Received price change for asset ${data.asset_id}: ${data.price} ${data.side}`);
+    const bestBid = this.toNumber(data.best_bid);
+    const bestAsk = this.toNumber(data.best_ask);
+    const tsMs = this.normalizeTimestampMs(Number(data.timestamp));
+
+    const update: TopOfBookUpdate = {
+      assetId: data.asset_id,
+      marketHash: data.market,
+      bestBid,
+      bestAsk,
+      midPrice:
+        Number.isFinite(bestBid) && Number.isFinite(bestAsk)
+          ? (bestBid + bestAsk) / 2
+          : this.toNumber(data.price),
+      spread:
+        Number.isFinite(bestBid) && Number.isFinite(bestAsk)
+          ? bestAsk - bestBid
+          : undefined,
+      lastPrice: this.toNumber(data.price),
+      size: this.toNumber(data.size),
+      side: data.side,
+      timestampMs: tsMs,
+      raw: data,
+    };
+
+    void this.emitTopOfBookWithMetadata(update);
+  }
+
+  private toNumber(value: any): number {
+    if (typeof value === 'number') return value;
+    const num = parseFloat(String(value));
+    return Number.isFinite(num) ? num : Number.NaN;
+  }
+
+  private async emitTopOfBookWithMetadata(
+    update: TopOfBookUpdate,
+  ): Promise<void> {
+    try {
+      const marketSlug = await this.getSlugFromToken(update.assetId);
+      const marketId =
+        marketSlug !== null ? await this.getMarketIdFromSlug(marketSlug) : null;
+      this.marketDataStreamService.emitTopOfBook({
+        ...update,
+        marketSlug: marketSlug || undefined,
+        marketId: marketId || undefined,
+      });
+    } catch (error) {
+      this.logger.debug(
+        `Failed to enrich top-of-book for asset ${update.assetId}: ${error.message}`,
+      );
+      this.marketDataStreamService.emitTopOfBook(update);
+    }
   }
 
   /**
