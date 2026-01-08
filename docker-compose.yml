@@ -3,7 +3,7 @@ version: '3.8'
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: poly_postgres
+    container_name: poly_postgres_ab
     environment:
       POSTGRES_USER: polymarket
       POSTGRES_PASSWORD: polymarket123
@@ -17,7 +17,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: poly_redis
+    container_name: poly_redis_ab
     ports:
       - '6430:6379'  # Host port 6429 -> Container port 6379
     volumes:
@@ -27,7 +27,7 @@ services:
 
   clickhouse:
     image: clickhouse/clickhouse-server:latest
-    container_name: poly_clickhouse
+    container_name: poly_clickhouse_ab
     environment:
       CLICKHOUSE_DB: polymarket_db
       CLICKHOUSE_USER: polymarket
@@ -49,7 +49,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: poly_app
+    container_name: poly_app_ab
     ports:
       - '3051:3000'  # Host port 3050 -> Container port 3000
     environment:
