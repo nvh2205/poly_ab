@@ -38,6 +38,13 @@ interface PaperTradeResult {
   timestampMs: number;
 }
 
+export interface StrategyAggregate {
+  strategy: string;
+  tradeCount: number;
+  totalProfit: number;
+  avgProfit: number;
+}
+
 @Injectable()
 export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PaperExecutionService.name);
@@ -721,6 +728,130 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
       .orderBy('trade.created_at', 'DESC')
       .take(limit)
       .getMany();
+  }
+
+  /**
+   * Aggregate trade stats within a date range
+   */
+  async getTradeStatsByDateRange(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<{
+    tradeCount: number;
+    totalCost: number;
+    totalProfit: number;
+    maxProfit: number | null;
+    minProfit: number | null;
+    maxCost: number | null;
+    minCost: number | null;
+    bestProfitStrategy: StrategyAggregate | null;
+    mostFrequentStrategy: StrategyAggregate | null;
+  }> {
+    const [raw] = await this.arbPaperTradeRepository.query(
+      `
+      WITH filtered AS (
+        SELECT
+          trade.total_cost,
+          trade.pnl_abs,
+          trade.created_at,
+          trade.signal_id
+        FROM arb_paper_trades trade
+        WHERE trade.created_at BETWEEN $1 AND $2
+      ),
+      stats AS (
+        SELECT
+          COUNT(*) AS "tradeCount",
+          COALESCE(SUM(total_cost), 0) AS "totalCost",
+          COALESCE(SUM(pnl_abs), 0) AS "totalProfit",
+          MAX(pnl_abs) AS "maxProfit",
+          MIN(pnl_abs) AS "minProfit",
+          MAX(total_cost) AS "maxCost",
+          MIN(total_cost) AS "minCost"
+        FROM filtered
+      ),
+      strategy_agg AS (
+        SELECT
+          signal.strategy AS strategy,
+          COUNT(*) AS tradeCount,
+          COALESCE(SUM(f.pnl_abs), 0) AS totalProfit
+        FROM filtered f
+        JOIN arb_signals signal ON signal.id = f.signal_id
+        GROUP BY signal.strategy
+      )
+      SELECT
+        stats."tradeCount",
+        stats."totalCost",
+        stats."totalProfit",
+        stats."maxProfit",
+        stats."minProfit",
+        stats."maxCost",
+        stats."minCost",
+        (
+          SELECT row_to_json(s) FROM (
+            SELECT
+              strategy,
+              tradeCount,
+              totalProfit,
+              CASE WHEN tradeCount > 0 THEN totalProfit / tradeCount ELSE 0 END AS "avgProfit"
+            FROM strategy_agg
+            ORDER BY totalProfit DESC NULLS LAST
+            LIMIT 1
+          ) s
+        ) AS "bestProfitStrategy",
+        (
+          SELECT row_to_json(s) FROM (
+            SELECT
+              strategy,
+              tradeCount,
+              totalProfit,
+              CASE WHEN tradeCount > 0 THEN totalProfit / tradeCount ELSE 0 END AS "avgProfit"
+            FROM strategy_agg
+            ORDER BY tradeCount DESC NULLS LAST
+            LIMIT 1
+          ) s
+        ) AS "mostFrequentStrategy"
+      FROM stats
+      LIMIT 1;
+      `,
+      [startDate, endDate],
+    );
+
+    const toNumberOrNull = (
+      value: string | number | null | undefined,
+    ): number | null => {
+      if (value === null || value === undefined) return null;
+      const num = Number(value);
+      return Number.isFinite(num) ? num : null;
+    };
+
+    const toNumber = (value: string | number | null | undefined): number =>
+      Number(value ?? 0);
+
+    const normalizeStrategy = (
+      rawStrategy: any,
+    ): StrategyAggregate | null => {
+      if (!rawStrategy) return null;
+      const tradeCount = toNumber(rawStrategy.tradeCount);
+      const totalProfit = toNumber(rawStrategy.totalProfit);
+      return {
+        strategy: rawStrategy.strategy,
+        tradeCount,
+        totalProfit,
+        avgProfit: toNumber(rawStrategy.avgProfit),
+      };
+    };
+
+    return {
+      tradeCount: toNumber(raw?.tradeCount),
+      totalCost: toNumber(raw?.totalCost),
+      totalProfit: toNumber(raw?.totalProfit),
+      maxProfit: toNumberOrNull(raw?.maxProfit),
+      minProfit: toNumberOrNull(raw?.minProfit),
+      maxCost: toNumberOrNull(raw?.maxCost),
+      minCost: toNumberOrNull(raw?.minCost),
+      bestProfitStrategy: normalizeStrategy(raw?.bestProfitStrategy),
+      mostFrequentStrategy: normalizeStrategy(raw?.mostFrequentStrategy),
+    };
   }
 
   /**

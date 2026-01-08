@@ -6,7 +6,9 @@ import {
   Logger,
   ParseIntPipe,
   DefaultValuePipe,
+  BadRequestException,
 } from '@nestjs/common';
+import { ApiQuery } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ArbSignal } from '../../database/entities/arb-signal.entity';
@@ -184,6 +186,50 @@ export class StrategyController {
   }
 
   /**
+   * GET /strategy/paper-trades/stats?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+   * Returns cost/profit stats within a date range (defaults to today)
+   */
+  @Get('paper-trades/stats')
+  @ApiQuery({
+    name: 'start_date',
+    required: false,
+    description: 'YYYY-MM-DD start date (defaults to today)',
+  })
+  @ApiQuery({
+    name: 'end_date',
+    required: false,
+    description: 'YYYY-MM-DD end date (defaults to start_date/today)',
+  })
+  async getPaperTradeStats(
+    @Query('start_date') startDate?: string,
+    @Query('end_date') endDate?: string,
+  ) {
+    try {
+      const { startDate: rangeStart, endDate: rangeEnd } =
+        this.resolveDateRange(startDate, endDate);
+
+      const stats = await this.paperExecutionService.getTradeStatsByDateRange(
+        rangeStart,
+        rangeEnd,
+      );
+
+      return {
+        range: {
+          startDate: rangeStart.toISOString(),
+          endDate: rangeEnd.toISOString(),
+        },
+        ...stats,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to get paper trade stats: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
    * GET /strategy/signals/:groupKey/summary
    * Returns summary statistics for a specific group
    */
@@ -276,6 +322,47 @@ export class StrategyController {
       );
       throw error;
     }
+  }
+
+  /**
+   * Normalize query params to a date range.
+   * Defaults to the current day when params are omitted.
+   */
+  private resolveDateRange(
+    startDate?: string,
+    endDate?: string,
+  ): { startDate: Date; endDate: Date } {
+    const today = new Date();
+
+    const startBase = startDate
+      ? new Date(startDate)
+      : endDate
+        ? new Date(endDate)
+        : today;
+    const endBase = endDate ? new Date(endDate) : startBase;
+
+    if (Number.isNaN(startBase.getTime())) {
+      throw new BadRequestException('Invalid start_date');
+    }
+
+    if (Number.isNaN(endBase.getTime())) {
+      throw new BadRequestException('Invalid end_date');
+    }
+
+    const normalizedStart = new Date(startBase);
+    normalizedStart.setHours(0, 0, 0, 0);
+
+    const normalizedEnd = new Date(endBase);
+    normalizedEnd.setHours(23, 59, 59, 999);
+
+    if (normalizedStart > normalizedEnd) {
+      throw new BadRequestException('start_date must be before end_date');
+    }
+
+    return {
+      startDate: normalizedStart,
+      endDate: normalizedEnd,
+    };
   }
 }
 
