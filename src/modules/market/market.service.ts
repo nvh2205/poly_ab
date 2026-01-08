@@ -116,7 +116,7 @@ export class MarketService implements OnApplicationBootstrap {
    * Job runs every 5 seconds to check markets with startTime <= current
    * and subscribe to socket if not already subscribed
    */
-  @Interval(10000) // Every 5 seconds
+  @Interval(1000 * 60 * 1) // Every 5 minutes
   async crawlMarketsForSocketSubscription() {
     try {
       const now = new Date();
