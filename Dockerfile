@@ -3,26 +3,20 @@ FROM --platform=linux/amd64 node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json ./
-COPY package-lock.json* ./
-COPY yarn.lock* ./
+# Enable Corepack to use Yarn
+RUN corepack enable && corepack prepare yarn@1.22.19 --activate
 
-# Install dependencies
-# Use npm if package-lock.json exists, otherwise use yarn
-RUN if [ -f package-lock.json ]; then \
-      npm ci --legacy-peer-deps; \
-    elif [ -f yarn.lock ]; then \
-      yarn install --frozen-lockfile; \
-    else \
-      npm install --legacy-peer-deps; \
-    fi
+# Copy package files
+COPY package.json yarn.lock ./
+
+# Install dependencies with Yarn
+RUN yarn install --frozen-lockfile
 
 # Copy source code
 COPY . .
 
 # Build the application
-RUN if [ -f package-lock.json ]; then npm run build; else yarn build; fi
+RUN yarn build
 
 # Stage 2: Runtime
 FROM --platform=linux/amd64 node:20-alpine AS runtime
@@ -36,19 +30,14 @@ RUN apk add --no-cache dumb-init
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nestjs -u 1001
 
+# Enable Corepack to use Yarn
+RUN corepack enable && corepack prepare yarn@1.22.19 --activate
+
 # Copy package files
-COPY package.json ./
-COPY package-lock.json* ./
-COPY yarn.lock* ./
+COPY package.json yarn.lock ./
 
 # Install production dependencies only
-RUN if [ -f package-lock.json ]; then \
-      npm ci --omit=dev --legacy-peer-deps && npm cache clean --force; \
-    elif [ -f yarn.lock ]; then \
-      yarn install --frozen-lockfile --production && yarn cache clean; \
-    else \
-      npm install --omit=dev --legacy-peer-deps && npm cache clean --force; \
-    fi
+RUN yarn install --frozen-lockfile --production && yarn cache clean
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
