@@ -77,33 +77,6 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
     try {
 
       // Log full opportunity details for debugging
-      this.logger.debug(
-        `Opportunity received: ${JSON.stringify({
-          strategy: opportunity.strategy,
-          groupKey: opportunity.groupKey,
-          profitAbs: opportunity.profitAbs,
-          profitBps: opportunity.profitBps,
-          parent: {
-            assetId: opportunity.parent.assetId,
-            marketSlug: opportunity.parent.marketSlug,
-            bestBid: opportunity.parent.bestBid,
-            bestAsk: opportunity.parent.bestAsk,
-            bestBidSize: opportunity.parent.bestBidSize,
-            bestAskSize: opportunity.parent.bestAskSize,
-            coverage: opportunity.parent.coverage,
-          },
-          children: opportunity.children.map((child) => ({
-            index: child.index,
-            assetId: child.assetId,
-            marketSlug: child.marketSlug,
-            bestBid: child.bestBid,
-            bestAsk: child.bestAsk,
-            bestBidSize: child.bestBidSize,
-            bestAskSize: child.bestAskSize,
-          })),
-          timestampMs: opportunity.timestampMs,
-        }, null, 2)}`,
-      );
 
       // 1. Save signal to database
       const signal = await this.saveSignal(opportunity);
@@ -130,10 +103,10 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
     opportunity: ArbOpportunity,
   ): Promise<ArbSignal> {
     // Debug log opportunity sizes before save
-    this.logger.debug(
-      `Saving signal with sizes - Parent: bid=${opportunity.parent.bestBidSize}, ask=${opportunity.parent.bestAskSize}, ` +
-      `Children: ${opportunity.children.map(c => `bid=${c.bestBidSize},ask=${c.bestAskSize}`).join('; ')}`
-    );
+    // this.logger.debug(
+    //   `Saving signal with sizes - Parent: bid=${opportunity.parent.bestBidSize}, ask=${opportunity.parent.bestAskSize}, ` +
+    //   `Children: ${opportunity.children.map(c => `bid=${c.bestBidSize},ask=${c.bestAskSize}`).join('; ')}`
+    // );
 
     // Build comprehensive snapshot with YES/NO data for binary chill
     const snapshot: any = {
@@ -682,7 +655,6 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    console.log('cost:---------', cost);
     return cost;
   }
 
