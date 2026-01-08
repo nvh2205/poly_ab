@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: polymarket123
       POSTGRES_DB: polymarket_db
     ports:
-      - '5482:5432'  # Host port 5482 -> Container port 5432
+      - '5483:5432'  # Host port 5482 -> Container port 5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -19,7 +19,7 @@ services:
     image: redis:7-alpine
     container_name: poly_redis
     ports:
-      - '6429:6379'  # Host port 6429 -> Container port 6379
+      - '6430:6379'  # Host port 6429 -> Container port 6379
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -34,8 +34,8 @@ services:
       CLICKHOUSE_PASSWORD: polymarket123
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
     ports:
-      - '8173:8123' # HTTP interface (Host port 8173 -> Container port 8123)
-      - '9050:9000' # Native protocol (Host port 9050 -> Container port 9000)
+      - '8174:8123' # HTTP interface (Host port 8173 -> Container port 8123)
+      - '9051:9000' # Native protocol (Host port 9050 -> Container port 9000)
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_log:/var/log/clickhouse-server
@@ -51,7 +51,7 @@ services:
       dockerfile: Dockerfile
     container_name: poly_app
     ports:
-      - '3050:3000'  # Host port 3050 -> Container port 3000
+      - '3051:3000'  # Host port 3050 -> Container port 3000
     environment:
       NODE_ENV: production
       PORT: '3000'
