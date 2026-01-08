@@ -9,6 +9,8 @@ export interface TopOfBookUpdate {
   eventSlug?: string;
   bestBid: number;
   bestAsk: number;
+  bestBidSize?: number; // Size available at best bid
+  bestAskSize?: number; // Size available at best ask
   midPrice?: number;
   spread?: number;
   lastPrice?: number;

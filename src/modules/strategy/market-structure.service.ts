@@ -59,11 +59,23 @@ export class MarketStructureService {
   }
 
   private buildGroups(markets: Market[]): RangeGroup[] {
-    const grouped = new Map<string, RangeGroup>();
+    type DescriptorRecord = {
+      descriptor: MarketRangeDescriptor;
+      appliedOverrides: string[];
+      eventKey: string;
+    };
+
+    const grouped = new Map<
+      string,
+      { group: RangeGroup; descriptors: DescriptorRecord[] }
+    >();
 
     for (const market of markets) {
-      const groupKey = market.event?.slug || market.slug;
-      const override = RANGE_GROUP_OVERRIDES[groupKey];
+      const baseOverride = this.resolveOverride(market);
+      const symbol = this.resolveSymbol(market, baseOverride);
+      const endDateKey = this.resolveEndDateKey(market);
+      const groupKey = this.resolveGroupKey(symbol, endDateKey);
+      const override = this.resolveOverride(market, groupKey) || baseOverride;
       const { descriptor, appliedOverrides } = this.classifyMarket(
         market,
         override,
@@ -71,12 +83,12 @@ export class MarketStructureService {
 
       const existing = grouped.get(groupKey);
       const group: RangeGroup =
-        existing ||
+        existing?.group ||
         ({
           groupKey,
           eventSlug: market.event?.slug,
-          eventId: market.eventId,
-          crypto: override?.crypto || market.type || market.event?.ticker,
+          eventId: market.eventId ?? undefined,
+          crypto: symbol,
           step: override?.step,
           children: [],
           parents: [],
@@ -84,31 +96,78 @@ export class MarketStructureService {
           overridesApplied: [],
         } as RangeGroup);
 
-      if (descriptor.role === 'child') {
-        group.children.push(descriptor);
-      } else if (descriptor.role === 'parent') {
-        group.parents.push(descriptor);
-      } else {
-        group.unmatched.push(descriptor);
+      if (!group.crypto && symbol) {
+        group.crypto = symbol;
+      }
+      if (!group.eventSlug && market.event?.slug) {
+        group.eventSlug = market.event.slug;
+      }
+      if (!group.eventId && market.eventId) {
+        group.eventId = market.eventId;
+      }
+      if (!group.step && override?.step) {
+        group.step = override.step;
       }
 
-      group.overridesApplied.push(...appliedOverrides);
-      grouped.set(groupKey, group);
+      const descriptors = existing?.descriptors || [];
+      descriptors.push({
+        descriptor,
+        appliedOverrides,
+        eventKey: market.eventId || market.event?.slug || 'unknown',
+      });
+
+      grouped.set(groupKey, { group, descriptors });
     }
 
-    grouped.forEach((group) => {
+    const result: RangeGroup[] = [];
+
+    grouped.forEach(({ group, descriptors }) => {
+      const byEvent = new Map<string, DescriptorRecord[]>();
+      descriptors.forEach((record) => {
+        const bucket = byEvent.get(record.eventKey) || [];
+        bucket.push(record);
+        byEvent.set(record.eventKey, bucket);
+      });
+
+      byEvent.forEach((records) => {
+        const role = this.resolveEventRole(records.map((r) => r.descriptor));
+        records.forEach(({ descriptor, appliedOverrides }) => {
+          if (descriptor.kind !== 'unknown') {
+            descriptor.role = role === 'parent' ? 'parent' : 'child';
+          }
+
+          if (descriptor.role === 'parent') {
+            group.parents.push(descriptor);
+          } else if (descriptor.role === 'child') {
+            group.children.push(descriptor);
+          } else {
+            group.unmatched.push(descriptor);
+          }
+
+          group.overridesApplied.push(...appliedOverrides);
+        });
+      });
+
+      this.filterToCommonAnchors(group);
+
       group.children.sort(
         (a, b) => (a.bounds.lower ?? 0) - (b.bounds.lower ?? 0),
       );
+      group.parents.sort(
+        (a, b) => (a.bounds.lower ?? 0) - (b.bounds.lower ?? 0),
+      );
+
       if (!group.step) {
         const derivedStep = this.deriveStep(group.children);
         if (derivedStep) {
           group.step = derivedStep;
         }
       }
+
+      result.push(group);
     });
 
-    return Array.from(grouped.values());
+    return result;
   }
 
   private classifyMarket(
@@ -209,6 +268,146 @@ export class MarketStructureService {
     }
 
     return null;
+  }
+
+  private resolveOverride(
+    market: Market,
+    groupKey?: string,
+  ): RangeGroupOverride | undefined {
+    if (groupKey && RANGE_GROUP_OVERRIDES[groupKey]) {
+      return RANGE_GROUP_OVERRIDES[groupKey];
+    }
+    if (market.event?.slug && RANGE_GROUP_OVERRIDES[market.event.slug]) {
+      return RANGE_GROUP_OVERRIDES[market.event.slug];
+    }
+    if (market.slug && RANGE_GROUP_OVERRIDES[market.slug]) {
+      return RANGE_GROUP_OVERRIDES[market.slug];
+    }
+    return undefined;
+  }
+
+  private resolveSymbol(
+    market: Market,
+    override?: RangeGroupOverride,
+  ): string {
+    const raw =
+      override?.crypto ||
+      market.type ||
+      market.event?.ticker ||
+      market.event?.slug ||
+      market.slug ||
+      'unknown';
+    return raw.toLowerCase();
+  }
+
+  private resolveEndDateKey(market: Market): string {
+    const endDate = market.endDate || market.event?.endDate;
+    if (!endDate) return 'no-end-date';
+    return new Date(endDate).toISOString();
+  }
+
+  private resolveGroupKey(symbol: string, endDateKey: string): string {
+    const normalizedSymbol = symbol.replace(/\s+/g, '-');
+    return `${normalizedSymbol}-${endDateKey}`;
+  }
+
+  private resolveEventRole(
+    descriptors: MarketRangeDescriptor[],
+  ): 'parent' | 'child' {
+    if (descriptors.length === 0) return 'child';
+
+    const hasRangeLike = descriptors.some((descriptor) => {
+      const hasUpper = Number.isFinite(descriptor.bounds.upper);
+      return (
+        descriptor.kind === 'range' ||
+        descriptor.kind === 'below' ||
+        hasUpper
+      );
+    });
+
+    const allAboveOnly = descriptors.every(
+      (descriptor) =>
+        descriptor.kind === 'above' &&
+        Number.isFinite(descriptor.bounds.lower) &&
+        !Number.isFinite(descriptor.bounds.upper),
+    );
+
+    return allAboveOnly && !hasRangeLike ? 'parent' : 'child';
+  }
+
+  private filterToCommonAnchors(group: RangeGroup): void {
+    const parentAnchors = new Set<number>();
+    const childAnchors = new Set<number>();
+
+    group.parents.forEach((descriptor) => {
+      this.collectAnchors(descriptor).forEach((anchor) =>
+        parentAnchors.add(anchor),
+      );
+    });
+
+    group.children.forEach((descriptor) => {
+      this.collectAnchors(descriptor).forEach((anchor) =>
+        childAnchors.add(anchor),
+      );
+    });
+
+    const common = new Set<number>();
+    parentAnchors.forEach((anchor) => {
+      if (childAnchors.has(anchor)) {
+        common.add(anchor);
+      }
+    });
+
+    if (common.size === 0) return;
+
+    const keptParents: MarketRangeDescriptor[] = [];
+    const keptChildren: MarketRangeDescriptor[] = [];
+    const moved: MarketRangeDescriptor[] = [];
+
+    const shouldKeep = (descriptor: MarketRangeDescriptor): boolean => {
+      const anchors = this.collectAnchors(descriptor);
+      if (!anchors.length) return false;
+      return anchors.some((anchor) => common.has(anchor));
+    };
+
+    group.parents.forEach((descriptor) => {
+      if (shouldKeep(descriptor)) {
+        keptParents.push(descriptor);
+      } else {
+        moved.push(descriptor);
+      }
+    });
+
+    group.children.forEach((descriptor) => {
+      if (shouldKeep(descriptor)) {
+        keptChildren.push(descriptor);
+      } else {
+        moved.push(descriptor);
+      }
+    });
+
+    group.parents = keptParents;
+    group.children = keptChildren;
+    group.unmatched.push(...moved);
+  }
+
+  private collectAnchors(descriptor: MarketRangeDescriptor): number[] {
+    const anchors: number[] = [];
+    if (descriptor.kind === 'above' && Number.isFinite(descriptor.bounds.lower)) {
+      anchors.push(descriptor.bounds.lower as number);
+    }
+    if (descriptor.kind === 'below' && Number.isFinite(descriptor.bounds.upper)) {
+      anchors.push(descriptor.bounds.upper as number);
+    }
+    if (descriptor.kind === 'range') {
+      if (Number.isFinite(descriptor.bounds.lower)) {
+        anchors.push(descriptor.bounds.lower as number);
+      }
+      if (Number.isFinite(descriptor.bounds.upper)) {
+        anchors.push(descriptor.bounds.upper as number);
+      }
+    }
+    return anchors;
   }
 
   private containsRangeHint(text: string): boolean {

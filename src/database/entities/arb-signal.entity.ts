@@ -38,15 +38,42 @@ export class ArbSignal {
 
   @Column({
     type: 'enum',
-    enum: ['SELL_PARENT_BUY_CHILDREN', 'BUY_PARENT_SELL_CHILDREN'],
+    enum: [
+      'SELL_PARENT_BUY_CHILDREN',
+      'BUY_PARENT_SELL_CHILDREN',
+      'BUY_CHILD_YES_SELL_PARENT_NO',
+      'BUY_PARENT_NO_SELL_CHILD_YES',
+      'BUY_CHILD_YES_SELL_PARENT_YES',
+      'BUY_PARENT_NO_SELL_CHILD_NO',
+      'POLYMARKET_TRIANGLE',
+      'POLYMARKET_TRIANGLE_BUY',
+      'POLYMARKET_TRIANGLE_SELL',
+    ],
   })
-  strategy: 'SELL_PARENT_BUY_CHILDREN' | 'BUY_PARENT_SELL_CHILDREN';
+  strategy:
+    | 'SELL_PARENT_BUY_CHILDREN'
+    | 'BUY_PARENT_SELL_CHILDREN'
+    | 'BUY_CHILD_YES_SELL_PARENT_NO'
+    | 'BUY_PARENT_NO_SELL_CHILD_YES'
+    | 'BUY_CHILD_YES_SELL_PARENT_YES'
+    | 'BUY_PARENT_NO_SELL_CHILD_NO'
+    | 'POLYMARKET_TRIANGLE'
+    | 'POLYMARKET_TRIANGLE_BUY'
+    | 'POLYMARKET_TRIANGLE_SELL';
 
   @Column({ name: 'parent_market_id', type: 'varchar', length: 255 })
   parentMarketId: string;
 
   @Column({ name: 'parent_asset_id', type: 'varchar', length: 255 })
   parentAssetId: string;
+
+  @Column({ 
+    name: 'token_type', 
+    type: 'enum',
+    enum: ['yes', 'no'],
+    default: 'yes',
+  })
+  tokenType: 'yes' | 'no';
 
   @Column({ name: 'range_i', type: 'int' })
   rangeI: number;
@@ -60,11 +87,29 @@ export class ArbSignal {
   @Column({ name: 'parent_best_ask', type: 'decimal', precision: 18, scale: 8, nullable: true })
   parentBestAsk?: number;
 
-  @Column({ name: 'children_sum_ask', type: 'decimal', precision: 18, scale: 8 })
-  childrenSumAsk: number;
+  @Column({ name: 'parent_best_bid_size', type: 'decimal', precision: 18, scale: 8, nullable: true })
+  parentBestBidSize?: number;
 
-  @Column({ name: 'children_sum_bid', type: 'decimal', precision: 18, scale: 8 })
-  childrenSumBid: number;
+  @Column({ name: 'parent_best_ask_size', type: 'decimal', precision: 18, scale: 8, nullable: true })
+  parentBestAskSize?: number;
+
+  @Column({ name: 'parent_upper_best_bid', type: 'decimal', precision: 18, scale: 8, nullable: true })
+  parentUpperBestBid?: number;
+
+  @Column({ name: 'parent_upper_best_ask', type: 'decimal', precision: 18, scale: 8, nullable: true })
+  parentUpperBestAsk?: number;
+
+  @Column({ name: 'parent_upper_best_bid_size', type: 'decimal', precision: 18, scale: 8, nullable: true })
+  parentUpperBestBidSize?: number;
+
+  @Column({ name: 'parent_upper_best_ask_size', type: 'decimal', precision: 18, scale: 8, nullable: true })
+  parentUpperBestAskSize?: number;
+
+  @Column({ name: 'children_sum_ask', type: 'decimal', precision: 18, scale: 8, nullable: true })
+  childrenSumAsk?: number;
+
+  @Column({ name: 'children_sum_bid', type: 'decimal', precision: 18, scale: 8, nullable: true })
+  childrenSumBid?: number;
 
   @Column({ name: 'profit_abs', type: 'decimal', precision: 18, scale: 8 })
   profitAbs: number;

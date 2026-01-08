@@ -3,7 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Interval } from '@nestjs/schedule';
 import { Market } from '../../database/entities';
-import { MarketData, PriceChangeData } from '../../common/interfaces/market.interface';
+import {
+  MarketData,
+  PriceChangeData,
+} from '../../common/interfaces/market.interface';
 import { APP_CONSTANTS } from '../../common/constants/app.constants';
 import { RedisService } from '../../common/services/redis.service';
 import { ClickHouseService } from '../../common/services/clickhouse.service';
@@ -15,7 +18,8 @@ export class BufferService implements OnModuleInit {
   private readonly logger = new Logger(BufferService.name);
   private buffer: MarketData[] = [];
   private readonly batchSize: number = APP_CONSTANTS.CLICKHOUSE_BATCH_SIZE;
-  private readonly flushInterval: number = APP_CONSTANTS.CLICKHOUSE_FLUSH_INTERVAL_MS;
+  private readonly flushInterval: number =
+    APP_CONSTANTS.CLICKHOUSE_FLUSH_INTERVAL_MS;
   private isProcessing = false;
   private marketSlugToMarketIdCache: Map<string, string> = new Map();
   private readonly orderbookTable = 'market_orderbooks_analytics';
@@ -66,10 +70,42 @@ export class BufferService implements OnModuleInit {
   }
 
   /**
-   * Push new data to buffer
+   * Push new data to buffer (from event_type='book')
    */
   push(data: MarketData): void {
     this.buffer.push(data);
+    // Emit top-of-book update with orderbook size information
+    // Find best bid (highest price) and best ask (lowest price) from the orderbook
+    const { bestBid, bestAsk, bestBidSize, bestAskSize } =
+      this.findBestBidAsk(data.bids, data.asks);
+    const tsMs = this.normalizeTimestampMs(Number(data.timestamp));
+    // if (data.asset_id === '105508083447924148526783669819657180357261025688241426014197548801294535749915') {
+    //   console.log('bestBidSize socket', bestBidSize);
+    //   console.log('bestAskSize socket', bestAskSize);
+    //   console.log('data', data.asset_id);
+    // }
+
+    const update: TopOfBookUpdate = {
+      assetId: data.asset_id,
+      marketHash: data.market,
+      bestBid,
+      bestAsk,
+      bestBidSize: Number.isFinite(bestBidSize) ? bestBidSize : undefined,
+      bestAskSize: Number.isFinite(bestAskSize) ? bestAskSize : undefined,
+      midPrice:
+        Number.isFinite(bestBid) && Number.isFinite(bestAsk)
+          ? (bestBid + bestAsk) / 2
+          : undefined,
+      spread:
+        Number.isFinite(bestBid) && Number.isFinite(bestAsk)
+          ? bestAsk - bestBid
+          : undefined,
+      lastPrice: this.toNumber(data.last_trade_price),
+      timestampMs: tsMs,
+      raw: data,
+    };
+
+    void this.emitTopOfBookWithMetadata(update);
 
     // Auto-flush if buffer reaches batch size
     if (this.buffer.length >= this.batchSize) {
@@ -78,7 +114,9 @@ export class BufferService implements OnModuleInit {
   }
 
   /**
-   * Push price change data to buffer
+   * Push price change data to buffer (from event_type='price_change')
+   * Only updates best_bid and best_ask, does NOT update size as size
+   * represents user orders on the orderbook, not best bid/ask levels
    */
   pushPriceChange(data: PriceChangeData): void {
     const bestBid = this.toNumber(data.best_bid);
@@ -90,17 +128,16 @@ export class BufferService implements OnModuleInit {
       marketHash: data.market,
       bestBid,
       bestAsk,
+      // Do NOT include bestBidSize, bestAskSize, size, or side
+      // These are only available from orderbook data (event_type='book')
       midPrice:
         Number.isFinite(bestBid) && Number.isFinite(bestAsk)
           ? (bestBid + bestAsk) / 2
-          : this.toNumber(data.price),
+          : undefined,
       spread:
         Number.isFinite(bestBid) && Number.isFinite(bestAsk)
           ? bestAsk - bestBid
           : undefined,
-      lastPrice: this.toNumber(data.price),
-      size: this.toNumber(data.size),
-      side: data.side,
       timestampMs: tsMs,
       raw: data,
     };
@@ -112,6 +149,66 @@ export class BufferService implements OnModuleInit {
     if (typeof value === 'number') return value;
     const num = parseFloat(String(value));
     return Number.isFinite(num) ? num : Number.NaN;
+  }
+
+  /**
+   * Find best bid (highest price) and best ask (lowest price) with their sizes
+   * Supports both array format [[price, size]] and object format [{price, size}]
+   * Assumes bids are sorted ascending and asks are sorted descending from API
+   * Best bid = last element of bids (highest price)
+   * Best ask = last element of asks (lowest price)
+   */
+  private findBestBidAsk(
+    bids: any[] | undefined,
+    asks: any[] | undefined,
+  ): {
+    bestBid: number;
+    bestAsk: number;
+    bestBidSize: number;
+    bestAskSize: number;
+  } {
+    let bestBid = Number.NaN;
+    let bestAsk = Number.NaN;
+    let bestBidSize = Number.NaN;
+    let bestAskSize = Number.NaN;
+
+    // Best bid is the last element (highest price in ascending order)
+    if (bids && bids.length > 0) {
+      const lastBid = bids[bids.length - 1];
+      let price: any;
+      let size: any;
+
+      if (Array.isArray(lastBid)) {
+        price = lastBid[0];
+        size = lastBid[1];
+      } else if (lastBid && typeof lastBid === 'object') {
+        price = lastBid.price ?? lastBid[0];
+        size = lastBid.size ?? lastBid[1];
+      }
+
+      bestBid = this.toNumber(price);
+      bestBidSize = this.toNumber(size);
+    }
+
+    // Best ask is the last element (lowest price in descending order)
+    if (asks && asks.length > 0) {
+      const lastAsk = asks[asks.length - 1];
+      let price: any;
+      let size: any;
+
+      if (Array.isArray(lastAsk)) {
+        price = lastAsk[0];
+        size = lastAsk[1];
+      } else if (lastAsk && typeof lastAsk === 'object') {
+        price = lastAsk.price ?? lastAsk[0];
+        size = lastAsk.size ?? lastAsk[1];
+      }
+
+      bestAsk = this.toNumber(price);
+      bestAskSize = this.toNumber(size);
+    }
+
+    return { bestBid, bestAsk, bestBidSize, bestAskSize };
   }
 
   private async emitTopOfBookWithMetadata(
@@ -343,10 +440,8 @@ export class BufferService implements OnModuleInit {
           const asksArr = this.levelsToArrays(data.asks);
 
           // Calculate best bid/ask, spread, price
-          const { bestBid, bestAsk, spread, price } = this.calculateOrderbookMetrics(
-            data.bids || [],
-            data.asks || [],
-          );
+          const { bestBid, bestAsk, spread, price } =
+            this.calculateOrderbookMetrics(data.bids || [], data.asks || []);
 
           const tsMs = this.normalizeTimestampMs(Number(data.timestamp));
           const ts = this.toClickHouseDateTime64_3(tsMs);
@@ -437,7 +532,6 @@ export class BufferService implements OnModuleInit {
       throw error;
     }
   }
-
 
   /**
    * Get current buffer size

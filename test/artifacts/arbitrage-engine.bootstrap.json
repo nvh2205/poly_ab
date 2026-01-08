@@ -1,0 +1,3269 @@
+{
+  "startedAt": "2026-01-07T07:10:37.811Z",
+  "outputPath": "/Users/nguyenhieu/Documents/data/lynx/mm_poly/test/artifacts/arbitrage-engine.bootstrap.json",
+  "success": true,
+  "env": {
+    "DB_HOST": "localhost",
+    "DB_PORT": 5442,
+    "DB_USERNAME": "root",
+    "DB_DATABASE": "polymarket_orderbook_ab",
+    "DB_SSL": false,
+    "DB_SSL_REJECT_UNAUTHORIZED": true
+  },
+  "capturedLogs": [
+    "Found 44 active markets with valid end dates",
+    "Rebuilt 2 market groups",
+    "Initialized 2 binary chill pairs for group btc-2026-01-07T17:00:00.000Z",
+    "Initialized 4 binary chill pairs for group eth-2026-01-07T17:00:00.000Z",
+    "Arbitrage engine initialized for 2 groups"
+  ],
+  "summary": {
+    "groupCount": 2,
+    "groupKeysTotal": 2,
+    "marketIdIndexTotal": 38,
+    "slugIndexTotal": 38,
+    "tokenIndexTotal": 38,
+    "previewLimit": 200,
+    "includeAllKeys": false
+  },
+  "keys": {
+    "groupKeys": [
+      "btc-2026-01-07T17:00:00.000Z",
+      "eth-2026-01-07T17:00:00.000Z"
+    ],
+    "marketIdIndexKeys": [
+      "1074853",
+      "1074855",
+      "1074857",
+      "1074862",
+      "1074864",
+      "1074866",
+      "1074868",
+      "1074869",
+      "1074870",
+      "1074885",
+      "1074886",
+      "1074887",
+      "1074888",
+      "1074889",
+      "1074890",
+      "1074892",
+      "1074893",
+      "1074894",
+      "1074895",
+      "1074875",
+      "1074876",
+      "1074877",
+      "1074878",
+      "1074879",
+      "1074880",
+      "1074881",
+      "1074882",
+      "1074883",
+      "1074848",
+      "1074849",
+      "1074850",
+      "1074852",
+      "1074854",
+      "1074856",
+      "1074858",
+      "1074861",
+      "1074863",
+      "1074865"
+    ],
+    "slugIndexKeys": [
+      "will-the-price-of-bitcoin-be-between-78000-80000-on-january-7",
+      "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7",
+      "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7",
+      "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7",
+      "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7",
+      "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7",
+      "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7",
+      "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7",
+      "will-the-price-of-bitcoin-be-between-94000-96000-on-january-7",
+      "bitcoin-above-78k-on-january-7",
+      "bitcoin-above-80k-on-january-7",
+      "bitcoin-above-82k-on-january-7",
+      "bitcoin-above-84k-on-january-7",
+      "bitcoin-above-86k-on-january-7",
+      "bitcoin-above-88k-on-january-7",
+      "bitcoin-above-90k-on-january-7",
+      "bitcoin-above-92k-on-january-7",
+      "bitcoin-above-94k-on-january-7",
+      "bitcoin-above-96k-on-january-7",
+      "will-the-price-of-ethereum-be-between-2500-2600-on-january-7",
+      "will-the-price-of-ethereum-be-between-2600-2700-on-january-7",
+      "will-the-price-of-ethereum-be-between-2700-2800-on-january-7",
+      "will-the-price-of-ethereum-be-between-2800-2900-on-january-7",
+      "will-the-price-of-ethereum-be-between-2900-3000-on-january-7",
+      "will-the-price-of-ethereum-be-between-3000-3100-on-january-7",
+      "will-the-price-of-ethereum-be-between-3100-3200-on-january-7",
+      "will-the-price-of-ethereum-be-between-3200-3300-on-january-7",
+      "will-the-price-of-ethereum-be-between-3300-3400-on-january-7",
+      "ethereum-above-2500-on-january-7",
+      "ethereum-above-2600-on-january-7",
+      "ethereum-above-2700-on-january-7",
+      "ethereum-above-2800-on-january-7",
+      "ethereum-above-2900-on-january-7",
+      "ethereum-above-3000-on-january-7",
+      "ethereum-above-3100-on-january-7",
+      "ethereum-above-3200-on-january-7",
+      "ethereum-above-3300-on-january-7",
+      "ethereum-above-3400-on-january-7"
+    ],
+    "tokenIndexKeys": [
+      "60897463340269910908039868808960849942133174624434043593865713088067584774914",
+      "21162225608763205583653184578576120494358596217093340660594343452924582867089",
+      "102432831347530563632180956795534190565900298364555005464936619317581414077800",
+      "84210826132924791512559391948559659848727404564641346172433894679852166661707",
+      "30980772021794574960688545164855637863988000665793954261645464858169577143919",
+      "94476770847014566643837289883276088118351031808209742808966078189224824929941",
+      "49684759377349823894593934229634782354863866766798379758608907323447100940572",
+      "35003536022568995423993102116073779863813966172122084609479879325355033224345",
+      "107692453916693905264708319369637632077975612089038212097192181071945234023597",
+      "9741096525405804201934577177055212277707406906959762772602787149492839613687",
+      "29386989554081959480983352698057503901045136707284979292731537647119951051602",
+      "21640540020693169596332851198588440023435732927124307811559759961089634192069",
+      "87619927368516230297463749703745204707470689822437111091374464487832769878504",
+      "53184915129942709656975263485186230776038258994811992940772890608232122679174",
+      "63156990435801749517629319790964096445672994989629437329878100845680956247314",
+      "105508083447924148526783669819657180357261025688241426014197548801294535749915",
+      "2457572378679765939908564031917803371778610555546148432010627490591730178403",
+      "82116154681578349668598576376412555242879827693755304050345227671935404263960",
+      "29067390478826171131804144929842322735870161488371859589680964276801916194235",
+      "31779704284843339355039399941746594120209378550929554650521257809810580309944",
+      "88427142345882012560303990837263521885478001833206165298348090404716611970452",
+      "83805427751686359973887242003722200144470342528645372787369891562721341004959",
+      "84154989179646426251662269487851328407074223055095114474084577971977360648168",
+      "90666962012127984747115398922218179998417896447901197460894391469507402203254",
+      "34799773983967834069725364810755976477482911923121378675928848817572336101036",
+      "106923302904458362136157304847568060852032850406882816964388281806053587128084",
+      "40257777525074078051235676046777725737624879907499985744819917415094280115573",
+      "58853846508390306476759451854550111194824122781015564476761355417108684723274",
+      "52503350604236887625742039017995705822359972039301246439598286218382001155558",
+      "75443997838236308243806251780221662929011980617570130450839419824043898327825",
+      "38184844757521515277292573538520272612845951524287062646235548281150756149285",
+      "94756415968149664697054898356138619321515962908849636733091958561259236769511",
+      "67112261481003806488330810101801553136157599203578313734367510777291147925677",
+      "77278307557711226215394216416425189750608748561541041063657367004375650176458",
+      "10331511779201975028149821227780155702395953585595039412811819705211302238665",
+      "100508109713311897176608066878808756139010722912091533174519925649960480897639",
+      "104169015903209067254643617393374038117605452392565939208165166433716557160960",
+      "108283421997593249827697691340884335569967899538108555921058667985970506668603"
+    ]
+  },
+  "sampleGroup": {
+    "key": "btc-2026-01-07T17:00:00.000Z",
+    "value": {
+      "group": {
+        "groupKey": "btc-2026-01-07T17:00:00.000Z",
+        "eventSlug": "bitcoin-above-on-january-7",
+        "eventId": "135285",
+        "crypto": "btc",
+        "step": 2000,
+        "children": [
+          {
+            "marketId": "1074851",
+            "slug": "will-the-price-of-bitcoin-be-less-than-78000-on-january-7",
+            "question": "Will the price of Bitcoin be less than $78,000 on January 7?",
+            "clobTokenIds": [
+              "32723104648775035074416602487518695974978533878438369124485979367620829146700",
+              "111918924785231083857770677548504030947575060399027018272936142438035883806433"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "upper": 78000
+            },
+            "kind": "below",
+            "label": "<=78000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          {
+            "marketId": "1074853",
+            "slug": "will-the-price-of-bitcoin-be-between-78000-80000-on-january-7",
+            "question": "Will the price of Bitcoin be between $78,000 and $80,000 on January 7?",
+            "clobTokenIds": [
+              "60897463340269910908039868808960849942133174624434043593865713088067584774914",
+              "60077206983962149568941072625088877508762839008061545126389491119671057041671"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 78000,
+              "upper": 80000
+            },
+            "kind": "range",
+            "label": "78000-80000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          {
+            "marketId": "1074855",
+            "slug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7",
+            "question": "Will the price of Bitcoin be between $80,000 and $82,000 on January 7?",
+            "clobTokenIds": [
+              "21162225608763205583653184578576120494358596217093340660594343452924582867089",
+              "22395978526948824135249801353751824050560451558869995903425449763935509986309"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 80000,
+              "upper": 82000
+            },
+            "kind": "range",
+            "label": "80000-82000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          {
+            "marketId": "1074857",
+            "slug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7",
+            "question": "Will the price of Bitcoin be between $82,000 and $84,000 on January 7?",
+            "clobTokenIds": [
+              "102432831347530563632180956795534190565900298364555005464936619317581414077800",
+              "8780554280127464702179247672028971958514851477252169302304677228668229979259"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 82000,
+              "upper": 84000
+            },
+            "kind": "range",
+            "label": "82000-84000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          {
+            "marketId": "1074862",
+            "slug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7",
+            "question": "Will the price of Bitcoin be between $84,000 and $86,000 on January 7?",
+            "clobTokenIds": [
+              "84210826132924791512559391948559659848727404564641346172433894679852166661707",
+              "84134697302567991887757182654067185079136422632763145405604794745145664442443"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 84000,
+              "upper": 86000
+            },
+            "kind": "range",
+            "label": "84000-86000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          {
+            "marketId": "1074864",
+            "slug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7",
+            "question": "Will the price of Bitcoin be between $86,000 and $88,000 on January 7?",
+            "clobTokenIds": [
+              "30980772021794574960688545164855637863988000665793954261645464858169577143919",
+              "9209242067617756356975838900978127112400795138575351822897982586437259426851"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 86000,
+              "upper": 88000
+            },
+            "kind": "range",
+            "label": "86000-88000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          {
+            "marketId": "1074866",
+            "slug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7",
+            "question": "Will the price of Bitcoin be between $88,000 and $90,000 on January 7?",
+            "clobTokenIds": [
+              "94476770847014566643837289883276088118351031808209742808966078189224824929941",
+              "41623099165527347840257818986791737859366696353261405836761439838414371678539"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 88000,
+              "upper": 90000
+            },
+            "kind": "range",
+            "label": "88000-90000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          {
+            "marketId": "1074868",
+            "slug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7",
+            "question": "Will the price of Bitcoin be between $90,000 and $92,000 on January 7?",
+            "clobTokenIds": [
+              "49684759377349823894593934229634782354863866766798379758608907323447100940572",
+              "12744087777967891448712409225416439932109493231486501073925427501989519131918"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 90000,
+              "upper": 92000
+            },
+            "kind": "range",
+            "label": "90000-92000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          {
+            "marketId": "1074869",
+            "slug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7",
+            "question": "Will the price of Bitcoin be between $92,000 and $94,000 on January 7?",
+            "clobTokenIds": [
+              "35003536022568995423993102116073779863813966172122084609479879325355033224345",
+              "102441030154631129686842266875741661383925571590782412850008919384885245830522"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 92000,
+              "upper": 94000
+            },
+            "kind": "range",
+            "label": "92000-94000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          {
+            "marketId": "1074870",
+            "slug": "will-the-price-of-bitcoin-be-between-94000-96000-on-january-7",
+            "question": "Will the price of Bitcoin be between $94,000 and $96,000 on January 7?",
+            "clobTokenIds": [
+              "107692453916693905264708319369637632077975612089038212097192181071945234023597",
+              "64540584948121247963532065807263955150852120123877772184423711422014468762202"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 94000,
+              "upper": 96000
+            },
+            "kind": "range",
+            "label": "94000-96000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          {
+            "marketId": "1074871",
+            "slug": "will-the-price-of-bitcoin-be-greater-than-96000-on-january-7",
+            "question": "Will the price of Bitcoin be greater than $96,000 on January 7?",
+            "clobTokenIds": [
+              "80084379419962583473673041322412722979382252734850454358451389793830630258023",
+              "10455741079707608979787980862837515448892093879369095889249240597592976339208"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 96000
+            },
+            "kind": "above",
+            "label": ">=96000",
+            "parsedFrom": "question",
+            "role": "child"
+          }
+        ],
+        "parents": [
+          {
+            "marketId": "1074885",
+            "slug": "bitcoin-above-78k-on-january-7",
+            "question": "Will the price of Bitcoin be above $78,000 on January 7?",
+            "clobTokenIds": [
+              "9741096525405804201934577177055212277707406906959762772602787149492839613687",
+              "53207010234206370973034092491760437463623140282776961865682178205315366103463"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 78000
+            },
+            "kind": "above",
+            "label": ">=78000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          {
+            "marketId": "1074886",
+            "slug": "bitcoin-above-80k-on-january-7",
+            "question": "Will the price of Bitcoin be above $80,000 on January 7?",
+            "clobTokenIds": [
+              "29386989554081959480983352698057503901045136707284979292731537647119951051602",
+              "85185972646477089672375451437914387049425419492051316734940179437478943008753"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 80000
+            },
+            "kind": "above",
+            "label": ">=80000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          {
+            "marketId": "1074887",
+            "slug": "bitcoin-above-82k-on-january-7",
+            "question": "Will the price of Bitcoin be above $82,000 on January 7?",
+            "clobTokenIds": [
+              "21640540020693169596332851198588440023435732927124307811559759961089634192069",
+              "18154731469503284327372135306195231053040282130214126103404358041361629933322"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 82000
+            },
+            "kind": "above",
+            "label": ">=82000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          {
+            "marketId": "1074888",
+            "slug": "bitcoin-above-84k-on-january-7",
+            "question": "Will the price of Bitcoin be above $84,000 on January 7?",
+            "clobTokenIds": [
+              "87619927368516230297463749703745204707470689822437111091374464487832769878504",
+              "160352984276806078332279342999755024648365019137200990877243771121632869081"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 84000
+            },
+            "kind": "above",
+            "label": ">=84000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          {
+            "marketId": "1074889",
+            "slug": "bitcoin-above-86k-on-january-7",
+            "question": "Will the price of Bitcoin be above $86,000 on January 7?",
+            "clobTokenIds": [
+              "53184915129942709656975263485186230776038258994811992940772890608232122679174",
+              "115235677339492088662466867783470726273733578366766826254541771464174258591842"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 86000
+            },
+            "kind": "above",
+            "label": ">=86000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          {
+            "marketId": "1074890",
+            "slug": "bitcoin-above-88k-on-january-7",
+            "question": "Will the price of Bitcoin be above $88,000 on January 7?",
+            "clobTokenIds": [
+              "63156990435801749517629319790964096445672994989629437329878100845680956247314",
+              "85738021945329428248861737832659034637912074429003535295892371951379824216386"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 88000
+            },
+            "kind": "above",
+            "label": ">=88000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          {
+            "marketId": "1074892",
+            "slug": "bitcoin-above-90k-on-january-7",
+            "question": "Will the price of Bitcoin be above $90,000 on January 7?",
+            "clobTokenIds": [
+              "105508083447924148526783669819657180357261025688241426014197548801294535749915",
+              "21975432639889748033301158809385177903124720955383938920225609693870384257292"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 90000
+            },
+            "kind": "above",
+            "label": ">=90000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          {
+            "marketId": "1074893",
+            "slug": "bitcoin-above-92k-on-january-7",
+            "question": "Will the price of Bitcoin be above $92,000 on January 7?",
+            "clobTokenIds": [
+              "2457572378679765939908564031917803371778610555546148432010627490591730178403",
+              "46006054183643339330435484150457753467563469966926993799917588589000637004062"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 92000
+            },
+            "kind": "above",
+            "label": ">=92000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          {
+            "marketId": "1074894",
+            "slug": "bitcoin-above-94k-on-january-7",
+            "question": "Will the price of Bitcoin be above $94,000 on January 7?",
+            "clobTokenIds": [
+              "82116154681578349668598576376412555242879827693755304050345227671935404263960",
+              "16286264515716308732665206779187155946539917729171157844700920159126794306947"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 94000
+            },
+            "kind": "above",
+            "label": ">=94000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          {
+            "marketId": "1074895",
+            "slug": "bitcoin-above-96k-on-january-7",
+            "question": "Will the price of Bitcoin be above $96,000 on January 7?",
+            "clobTokenIds": [
+              "29067390478826171131804144929842322735870161488371859589680964276801916194235",
+              "16424191528129460163653667329586531962443105765740086202836883706783076410281"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 96000
+            },
+            "kind": "above",
+            "label": ">=96000",
+            "parsedFrom": "question",
+            "role": "parent"
+          }
+        ],
+        "unmatched": [
+          {
+            "marketId": "1074896",
+            "slug": "bitcoin-above-98k-on-january-7",
+            "question": "Will the price of Bitcoin be above $98,000 on January 7?",
+            "clobTokenIds": [
+              "103338391942484515355166463596924921994318109553455858669443766862792436452343",
+              "103499935165190617981462770112010141142859663092489678494948229181028027557973"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 98000
+            },
+            "kind": "above",
+            "label": ">=98000",
+            "parsedFrom": "question",
+            "role": "parent"
+          }
+        ],
+        "overridesApplied": []
+      },
+      "childStates": [
+        {
+          "descriptor": {
+            "marketId": "1074853",
+            "slug": "will-the-price-of-bitcoin-be-between-78000-80000-on-january-7",
+            "question": "Will the price of Bitcoin be between $78,000 and $80,000 on January 7?",
+            "clobTokenIds": [
+              "60897463340269910908039868808960849942133174624434043593865713088067584774914",
+              "60077206983962149568941072625088877508762839008061545126389491119671057041671"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 78000,
+              "upper": 80000
+            },
+            "kind": "range",
+            "label": "78000-80000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          "assetId": "60897463340269910908039868808960849942133174624434043593865713088067584774914",
+          "marketSlug": "will-the-price-of-bitcoin-be-between-78000-80000-on-january-7"
+        },
+        {
+          "descriptor": {
+            "marketId": "1074855",
+            "slug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7",
+            "question": "Will the price of Bitcoin be between $80,000 and $82,000 on January 7?",
+            "clobTokenIds": [
+              "21162225608763205583653184578576120494358596217093340660594343452924582867089",
+              "22395978526948824135249801353751824050560451558869995903425449763935509986309"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 80000,
+              "upper": 82000
+            },
+            "kind": "range",
+            "label": "80000-82000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          "assetId": "21162225608763205583653184578576120494358596217093340660594343452924582867089",
+          "marketSlug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7"
+        },
+        {
+          "descriptor": {
+            "marketId": "1074857",
+            "slug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7",
+            "question": "Will the price of Bitcoin be between $82,000 and $84,000 on January 7?",
+            "clobTokenIds": [
+              "102432831347530563632180956795534190565900298364555005464936619317581414077800",
+              "8780554280127464702179247672028971958514851477252169302304677228668229979259"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 82000,
+              "upper": 84000
+            },
+            "kind": "range",
+            "label": "82000-84000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          "assetId": "102432831347530563632180956795534190565900298364555005464936619317581414077800",
+          "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+        },
+        {
+          "descriptor": {
+            "marketId": "1074862",
+            "slug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7",
+            "question": "Will the price of Bitcoin be between $84,000 and $86,000 on January 7?",
+            "clobTokenIds": [
+              "84210826132924791512559391948559659848727404564641346172433894679852166661707",
+              "84134697302567991887757182654067185079136422632763145405604794745145664442443"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 84000,
+              "upper": 86000
+            },
+            "kind": "range",
+            "label": "84000-86000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          "assetId": "84210826132924791512559391948559659848727404564641346172433894679852166661707",
+          "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+        },
+        {
+          "descriptor": {
+            "marketId": "1074864",
+            "slug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7",
+            "question": "Will the price of Bitcoin be between $86,000 and $88,000 on January 7?",
+            "clobTokenIds": [
+              "30980772021794574960688545164855637863988000665793954261645464858169577143919",
+              "9209242067617756356975838900978127112400795138575351822897982586437259426851"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 86000,
+              "upper": 88000
+            },
+            "kind": "range",
+            "label": "86000-88000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          "assetId": "30980772021794574960688545164855637863988000665793954261645464858169577143919",
+          "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+        },
+        {
+          "descriptor": {
+            "marketId": "1074866",
+            "slug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7",
+            "question": "Will the price of Bitcoin be between $88,000 and $90,000 on January 7?",
+            "clobTokenIds": [
+              "94476770847014566643837289883276088118351031808209742808966078189224824929941",
+              "41623099165527347840257818986791737859366696353261405836761439838414371678539"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 88000,
+              "upper": 90000
+            },
+            "kind": "range",
+            "label": "88000-90000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          "assetId": "94476770847014566643837289883276088118351031808209742808966078189224824929941",
+          "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+        },
+        {
+          "descriptor": {
+            "marketId": "1074868",
+            "slug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7",
+            "question": "Will the price of Bitcoin be between $90,000 and $92,000 on January 7?",
+            "clobTokenIds": [
+              "49684759377349823894593934229634782354863866766798379758608907323447100940572",
+              "12744087777967891448712409225416439932109493231486501073925427501989519131918"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 90000,
+              "upper": 92000
+            },
+            "kind": "range",
+            "label": "90000-92000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          "assetId": "49684759377349823894593934229634782354863866766798379758608907323447100940572",
+          "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+        },
+        {
+          "descriptor": {
+            "marketId": "1074869",
+            "slug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7",
+            "question": "Will the price of Bitcoin be between $92,000 and $94,000 on January 7?",
+            "clobTokenIds": [
+              "35003536022568995423993102116073779863813966172122084609479879325355033224345",
+              "102441030154631129686842266875741661383925571590782412850008919384885245830522"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 92000,
+              "upper": 94000
+            },
+            "kind": "range",
+            "label": "92000-94000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          "assetId": "35003536022568995423993102116073779863813966172122084609479879325355033224345",
+          "marketSlug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7"
+        },
+        {
+          "descriptor": {
+            "marketId": "1074870",
+            "slug": "will-the-price-of-bitcoin-be-between-94000-96000-on-january-7",
+            "question": "Will the price of Bitcoin be between $94,000 and $96,000 on January 7?",
+            "clobTokenIds": [
+              "107692453916693905264708319369637632077975612089038212097192181071945234023597",
+              "64540584948121247963532065807263955150852120123877772184423711422014468762202"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-price-on-january-7",
+            "eventId": "135281",
+            "bounds": {
+              "lower": 94000,
+              "upper": 96000
+            },
+            "kind": "range",
+            "label": "94000-96000",
+            "parsedFrom": "question",
+            "role": "child"
+          },
+          "assetId": "107692453916693905264708319369637632077975612089038212097192181071945234023597",
+          "marketSlug": "will-the-price-of-bitcoin-be-between-94000-96000-on-january-7"
+        }
+      ],
+      "parentStates": [
+        {
+          "descriptor": {
+            "marketId": "1074885",
+            "slug": "bitcoin-above-78k-on-january-7",
+            "question": "Will the price of Bitcoin be above $78,000 on January 7?",
+            "clobTokenIds": [
+              "9741096525405804201934577177055212277707406906959762772602787149492839613687",
+              "53207010234206370973034092491760437463623140282776961865682178205315366103463"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 78000
+            },
+            "kind": "above",
+            "label": ">=78000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          "coverage": {
+            "startIndex": 0,
+            "endIndex": 8
+          },
+          "assetId": "9741096525405804201934577177055212277707406906959762772602787149492839613687",
+          "marketSlug": "bitcoin-above-78k-on-january-7"
+        },
+        {
+          "descriptor": {
+            "marketId": "1074886",
+            "slug": "bitcoin-above-80k-on-january-7",
+            "question": "Will the price of Bitcoin be above $80,000 on January 7?",
+            "clobTokenIds": [
+              "29386989554081959480983352698057503901045136707284979292731537647119951051602",
+              "85185972646477089672375451437914387049425419492051316734940179437478943008753"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 80000
+            },
+            "kind": "above",
+            "label": ">=80000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          "coverage": {
+            "startIndex": 1,
+            "endIndex": 8
+          },
+          "assetId": "29386989554081959480983352698057503901045136707284979292731537647119951051602",
+          "marketSlug": "bitcoin-above-80k-on-january-7"
+        },
+        {
+          "descriptor": {
+            "marketId": "1074887",
+            "slug": "bitcoin-above-82k-on-january-7",
+            "question": "Will the price of Bitcoin be above $82,000 on January 7?",
+            "clobTokenIds": [
+              "21640540020693169596332851198588440023435732927124307811559759961089634192069",
+              "18154731469503284327372135306195231053040282130214126103404358041361629933322"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 82000
+            },
+            "kind": "above",
+            "label": ">=82000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          "coverage": {
+            "startIndex": 2,
+            "endIndex": 8
+          },
+          "assetId": "21640540020693169596332851198588440023435732927124307811559759961089634192069",
+          "marketSlug": "bitcoin-above-82k-on-january-7"
+        },
+        {
+          "descriptor": {
+            "marketId": "1074888",
+            "slug": "bitcoin-above-84k-on-january-7",
+            "question": "Will the price of Bitcoin be above $84,000 on January 7?",
+            "clobTokenIds": [
+              "87619927368516230297463749703745204707470689822437111091374464487832769878504",
+              "160352984276806078332279342999755024648365019137200990877243771121632869081"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 84000
+            },
+            "kind": "above",
+            "label": ">=84000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          "coverage": {
+            "startIndex": 3,
+            "endIndex": 8
+          },
+          "assetId": "87619927368516230297463749703745204707470689822437111091374464487832769878504",
+          "marketSlug": "bitcoin-above-84k-on-january-7"
+        },
+        {
+          "descriptor": {
+            "marketId": "1074889",
+            "slug": "bitcoin-above-86k-on-january-7",
+            "question": "Will the price of Bitcoin be above $86,000 on January 7?",
+            "clobTokenIds": [
+              "53184915129942709656975263485186230776038258994811992940772890608232122679174",
+              "115235677339492088662466867783470726273733578366766826254541771464174258591842"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 86000
+            },
+            "kind": "above",
+            "label": ">=86000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          "coverage": {
+            "startIndex": 4,
+            "endIndex": 8
+          },
+          "assetId": "53184915129942709656975263485186230776038258994811992940772890608232122679174",
+          "marketSlug": "bitcoin-above-86k-on-january-7"
+        },
+        {
+          "descriptor": {
+            "marketId": "1074890",
+            "slug": "bitcoin-above-88k-on-january-7",
+            "question": "Will the price of Bitcoin be above $88,000 on January 7?",
+            "clobTokenIds": [
+              "63156990435801749517629319790964096445672994989629437329878100845680956247314",
+              "85738021945329428248861737832659034637912074429003535295892371951379824216386"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 88000
+            },
+            "kind": "above",
+            "label": ">=88000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          "coverage": {
+            "startIndex": 5,
+            "endIndex": 8
+          },
+          "assetId": "63156990435801749517629319790964096445672994989629437329878100845680956247314",
+          "marketSlug": "bitcoin-above-88k-on-january-7"
+        },
+        {
+          "descriptor": {
+            "marketId": "1074892",
+            "slug": "bitcoin-above-90k-on-january-7",
+            "question": "Will the price of Bitcoin be above $90,000 on January 7?",
+            "clobTokenIds": [
+              "105508083447924148526783669819657180357261025688241426014197548801294535749915",
+              "21975432639889748033301158809385177903124720955383938920225609693870384257292"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 90000
+            },
+            "kind": "above",
+            "label": ">=90000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          "coverage": {
+            "startIndex": 6,
+            "endIndex": 8
+          },
+          "assetId": "105508083447924148526783669819657180357261025688241426014197548801294535749915",
+          "marketSlug": "bitcoin-above-90k-on-january-7"
+        },
+        {
+          "descriptor": {
+            "marketId": "1074893",
+            "slug": "bitcoin-above-92k-on-january-7",
+            "question": "Will the price of Bitcoin be above $92,000 on January 7?",
+            "clobTokenIds": [
+              "2457572378679765939908564031917803371778610555546148432010627490591730178403",
+              "46006054183643339330435484150457753467563469966926993799917588589000637004062"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 92000
+            },
+            "kind": "above",
+            "label": ">=92000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          "coverage": {
+            "startIndex": 7,
+            "endIndex": 8
+          },
+          "assetId": "2457572378679765939908564031917803371778610555546148432010627490591730178403",
+          "marketSlug": "bitcoin-above-92k-on-january-7"
+        },
+        {
+          "descriptor": {
+            "marketId": "1074894",
+            "slug": "bitcoin-above-94k-on-january-7",
+            "question": "Will the price of Bitcoin be above $94,000 on January 7?",
+            "clobTokenIds": [
+              "82116154681578349668598576376412555242879827693755304050345227671935404263960",
+              "16286264515716308732665206779187155946539917729171157844700920159126794306947"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 94000
+            },
+            "kind": "above",
+            "label": ">=94000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          "coverage": {
+            "startIndex": 8,
+            "endIndex": 8
+          },
+          "assetId": "82116154681578349668598576376412555242879827693755304050345227671935404263960",
+          "marketSlug": "bitcoin-above-94k-on-january-7"
+        },
+        {
+          "descriptor": {
+            "marketId": "1074895",
+            "slug": "bitcoin-above-96k-on-january-7",
+            "question": "Will the price of Bitcoin be above $96,000 on January 7?",
+            "clobTokenIds": [
+              "29067390478826171131804144929842322735870161488371859589680964276801916194235",
+              "16424191528129460163653667329586531962443105765740086202836883706783076410281"
+            ],
+            "type": "btc",
+            "eventSlug": "bitcoin-above-on-january-7",
+            "eventId": "135285",
+            "bounds": {
+              "lower": 96000
+            },
+            "kind": "above",
+            "label": ">=96000",
+            "parsedFrom": "question",
+            "role": "parent"
+          },
+          "assetId": "29067390478826171131804144929842322735870161488371859589680964276801916194235",
+          "marketSlug": "bitcoin-above-96k-on-january-7"
+        }
+      ],
+      "triangleStates": [
+        {
+          "parentLowerIndex": 0,
+          "parentUpperIndex": 1,
+          "rangeIndices": [
+            0
+          ],
+          "lowerYes": {
+            "assetId": "9741096525405804201934577177055212277707406906959762772602787149492839613687",
+            "marketSlug": "bitcoin-above-78k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "85185972646477089672375451437914387049425419492051316734940179437478943008753",
+            "marketSlug": "bitcoin-above-80k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 0,
+              "snapshot": {
+                "assetId": "60077206983962149568941072625088877508762839008061545126389491119671057041671",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-78000-80000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 0,
+          "parentUpperIndex": 2,
+          "rangeIndices": [
+            0,
+            1
+          ],
+          "lowerYes": {
+            "assetId": "9741096525405804201934577177055212277707406906959762772602787149492839613687",
+            "marketSlug": "bitcoin-above-78k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "18154731469503284327372135306195231053040282130214126103404358041361629933322",
+            "marketSlug": "bitcoin-above-82k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 0,
+              "snapshot": {
+                "assetId": "60077206983962149568941072625088877508762839008061545126389491119671057041671",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-78000-80000-on-january-7"
+              }
+            },
+            {
+              "index": 1,
+              "snapshot": {
+                "assetId": "22395978526948824135249801353751824050560451558869995903425449763935509986309",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 0,
+          "parentUpperIndex": 3,
+          "rangeIndices": [
+            0,
+            1,
+            2
+          ],
+          "lowerYes": {
+            "assetId": "9741096525405804201934577177055212277707406906959762772602787149492839613687",
+            "marketSlug": "bitcoin-above-78k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "160352984276806078332279342999755024648365019137200990877243771121632869081",
+            "marketSlug": "bitcoin-above-84k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 0,
+              "snapshot": {
+                "assetId": "60077206983962149568941072625088877508762839008061545126389491119671057041671",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-78000-80000-on-january-7"
+              }
+            },
+            {
+              "index": 1,
+              "snapshot": {
+                "assetId": "22395978526948824135249801353751824050560451558869995903425449763935509986309",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7"
+              }
+            },
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 0,
+          "parentUpperIndex": 4,
+          "rangeIndices": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "lowerYes": {
+            "assetId": "9741096525405804201934577177055212277707406906959762772602787149492839613687",
+            "marketSlug": "bitcoin-above-78k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "115235677339492088662466867783470726273733578366766826254541771464174258591842",
+            "marketSlug": "bitcoin-above-86k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 0,
+              "snapshot": {
+                "assetId": "60077206983962149568941072625088877508762839008061545126389491119671057041671",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-78000-80000-on-january-7"
+              }
+            },
+            {
+              "index": 1,
+              "snapshot": {
+                "assetId": "22395978526948824135249801353751824050560451558869995903425449763935509986309",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7"
+              }
+            },
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            },
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 0,
+          "parentUpperIndex": 5,
+          "rangeIndices": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "lowerYes": {
+            "assetId": "9741096525405804201934577177055212277707406906959762772602787149492839613687",
+            "marketSlug": "bitcoin-above-78k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "85738021945329428248861737832659034637912074429003535295892371951379824216386",
+            "marketSlug": "bitcoin-above-88k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 0,
+              "snapshot": {
+                "assetId": "60077206983962149568941072625088877508762839008061545126389491119671057041671",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-78000-80000-on-january-7"
+              }
+            },
+            {
+              "index": 1,
+              "snapshot": {
+                "assetId": "22395978526948824135249801353751824050560451558869995903425449763935509986309",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7"
+              }
+            },
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            },
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 0,
+          "parentUpperIndex": 6,
+          "rangeIndices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "lowerYes": {
+            "assetId": "9741096525405804201934577177055212277707406906959762772602787149492839613687",
+            "marketSlug": "bitcoin-above-78k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "21975432639889748033301158809385177903124720955383938920225609693870384257292",
+            "marketSlug": "bitcoin-above-90k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 0,
+              "snapshot": {
+                "assetId": "60077206983962149568941072625088877508762839008061545126389491119671057041671",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-78000-80000-on-january-7"
+              }
+            },
+            {
+              "index": 1,
+              "snapshot": {
+                "assetId": "22395978526948824135249801353751824050560451558869995903425449763935509986309",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7"
+              }
+            },
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            },
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 0,
+          "parentUpperIndex": 7,
+          "rangeIndices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "lowerYes": {
+            "assetId": "9741096525405804201934577177055212277707406906959762772602787149492839613687",
+            "marketSlug": "bitcoin-above-78k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "46006054183643339330435484150457753467563469966926993799917588589000637004062",
+            "marketSlug": "bitcoin-above-92k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 0,
+              "snapshot": {
+                "assetId": "60077206983962149568941072625088877508762839008061545126389491119671057041671",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-78000-80000-on-january-7"
+              }
+            },
+            {
+              "index": 1,
+              "snapshot": {
+                "assetId": "22395978526948824135249801353751824050560451558869995903425449763935509986309",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7"
+              }
+            },
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            },
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            },
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 0,
+          "parentUpperIndex": 8,
+          "rangeIndices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "lowerYes": {
+            "assetId": "9741096525405804201934577177055212277707406906959762772602787149492839613687",
+            "marketSlug": "bitcoin-above-78k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "16286264515716308732665206779187155946539917729171157844700920159126794306947",
+            "marketSlug": "bitcoin-above-94k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 0,
+              "snapshot": {
+                "assetId": "60077206983962149568941072625088877508762839008061545126389491119671057041671",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-78000-80000-on-january-7"
+              }
+            },
+            {
+              "index": 1,
+              "snapshot": {
+                "assetId": "22395978526948824135249801353751824050560451558869995903425449763935509986309",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7"
+              }
+            },
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            },
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            },
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            },
+            {
+              "index": 7,
+              "snapshot": {
+                "assetId": "102441030154631129686842266875741661383925571590782412850008919384885245830522",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 0,
+          "parentUpperIndex": 9,
+          "rangeIndices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "lowerYes": {
+            "assetId": "9741096525405804201934577177055212277707406906959762772602787149492839613687",
+            "marketSlug": "bitcoin-above-78k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "16424191528129460163653667329586531962443105765740086202836883706783076410281",
+            "marketSlug": "bitcoin-above-96k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 0,
+              "snapshot": {
+                "assetId": "60077206983962149568941072625088877508762839008061545126389491119671057041671",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-78000-80000-on-january-7"
+              }
+            },
+            {
+              "index": 1,
+              "snapshot": {
+                "assetId": "22395978526948824135249801353751824050560451558869995903425449763935509986309",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7"
+              }
+            },
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            },
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            },
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            },
+            {
+              "index": 7,
+              "snapshot": {
+                "assetId": "102441030154631129686842266875741661383925571590782412850008919384885245830522",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7"
+              }
+            },
+            {
+              "index": 8,
+              "snapshot": {
+                "assetId": "64540584948121247963532065807263955150852120123877772184423711422014468762202",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-94000-96000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 1,
+          "parentUpperIndex": 2,
+          "rangeIndices": [
+            1
+          ],
+          "lowerYes": {
+            "assetId": "29386989554081959480983352698057503901045136707284979292731537647119951051602",
+            "marketSlug": "bitcoin-above-80k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "18154731469503284327372135306195231053040282130214126103404358041361629933322",
+            "marketSlug": "bitcoin-above-82k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 1,
+              "snapshot": {
+                "assetId": "22395978526948824135249801353751824050560451558869995903425449763935509986309",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 1,
+          "parentUpperIndex": 3,
+          "rangeIndices": [
+            1,
+            2
+          ],
+          "lowerYes": {
+            "assetId": "29386989554081959480983352698057503901045136707284979292731537647119951051602",
+            "marketSlug": "bitcoin-above-80k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "160352984276806078332279342999755024648365019137200990877243771121632869081",
+            "marketSlug": "bitcoin-above-84k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 1,
+              "snapshot": {
+                "assetId": "22395978526948824135249801353751824050560451558869995903425449763935509986309",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7"
+              }
+            },
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 1,
+          "parentUpperIndex": 4,
+          "rangeIndices": [
+            1,
+            2,
+            3
+          ],
+          "lowerYes": {
+            "assetId": "29386989554081959480983352698057503901045136707284979292731537647119951051602",
+            "marketSlug": "bitcoin-above-80k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "115235677339492088662466867783470726273733578366766826254541771464174258591842",
+            "marketSlug": "bitcoin-above-86k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 1,
+              "snapshot": {
+                "assetId": "22395978526948824135249801353751824050560451558869995903425449763935509986309",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7"
+              }
+            },
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            },
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 1,
+          "parentUpperIndex": 5,
+          "rangeIndices": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "lowerYes": {
+            "assetId": "29386989554081959480983352698057503901045136707284979292731537647119951051602",
+            "marketSlug": "bitcoin-above-80k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "85738021945329428248861737832659034637912074429003535295892371951379824216386",
+            "marketSlug": "bitcoin-above-88k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 1,
+              "snapshot": {
+                "assetId": "22395978526948824135249801353751824050560451558869995903425449763935509986309",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7"
+              }
+            },
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            },
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 1,
+          "parentUpperIndex": 6,
+          "rangeIndices": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "lowerYes": {
+            "assetId": "29386989554081959480983352698057503901045136707284979292731537647119951051602",
+            "marketSlug": "bitcoin-above-80k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "21975432639889748033301158809385177903124720955383938920225609693870384257292",
+            "marketSlug": "bitcoin-above-90k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 1,
+              "snapshot": {
+                "assetId": "22395978526948824135249801353751824050560451558869995903425449763935509986309",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7"
+              }
+            },
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            },
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 1,
+          "parentUpperIndex": 7,
+          "rangeIndices": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "lowerYes": {
+            "assetId": "29386989554081959480983352698057503901045136707284979292731537647119951051602",
+            "marketSlug": "bitcoin-above-80k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "46006054183643339330435484150457753467563469966926993799917588589000637004062",
+            "marketSlug": "bitcoin-above-92k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 1,
+              "snapshot": {
+                "assetId": "22395978526948824135249801353751824050560451558869995903425449763935509986309",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7"
+              }
+            },
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            },
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            },
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 1,
+          "parentUpperIndex": 8,
+          "rangeIndices": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "lowerYes": {
+            "assetId": "29386989554081959480983352698057503901045136707284979292731537647119951051602",
+            "marketSlug": "bitcoin-above-80k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "16286264515716308732665206779187155946539917729171157844700920159126794306947",
+            "marketSlug": "bitcoin-above-94k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 1,
+              "snapshot": {
+                "assetId": "22395978526948824135249801353751824050560451558869995903425449763935509986309",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7"
+              }
+            },
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            },
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            },
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            },
+            {
+              "index": 7,
+              "snapshot": {
+                "assetId": "102441030154631129686842266875741661383925571590782412850008919384885245830522",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 1,
+          "parentUpperIndex": 9,
+          "rangeIndices": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "lowerYes": {
+            "assetId": "29386989554081959480983352698057503901045136707284979292731537647119951051602",
+            "marketSlug": "bitcoin-above-80k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "16424191528129460163653667329586531962443105765740086202836883706783076410281",
+            "marketSlug": "bitcoin-above-96k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 1,
+              "snapshot": {
+                "assetId": "22395978526948824135249801353751824050560451558869995903425449763935509986309",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-80000-82000-on-january-7"
+              }
+            },
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            },
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            },
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            },
+            {
+              "index": 7,
+              "snapshot": {
+                "assetId": "102441030154631129686842266875741661383925571590782412850008919384885245830522",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7"
+              }
+            },
+            {
+              "index": 8,
+              "snapshot": {
+                "assetId": "64540584948121247963532065807263955150852120123877772184423711422014468762202",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-94000-96000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 2,
+          "parentUpperIndex": 3,
+          "rangeIndices": [
+            2
+          ],
+          "lowerYes": {
+            "assetId": "21640540020693169596332851198588440023435732927124307811559759961089634192069",
+            "marketSlug": "bitcoin-above-82k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "160352984276806078332279342999755024648365019137200990877243771121632869081",
+            "marketSlug": "bitcoin-above-84k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 2,
+          "parentUpperIndex": 4,
+          "rangeIndices": [
+            2,
+            3
+          ],
+          "lowerYes": {
+            "assetId": "21640540020693169596332851198588440023435732927124307811559759961089634192069",
+            "marketSlug": "bitcoin-above-82k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "115235677339492088662466867783470726273733578366766826254541771464174258591842",
+            "marketSlug": "bitcoin-above-86k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            },
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 2,
+          "parentUpperIndex": 5,
+          "rangeIndices": [
+            2,
+            3,
+            4
+          ],
+          "lowerYes": {
+            "assetId": "21640540020693169596332851198588440023435732927124307811559759961089634192069",
+            "marketSlug": "bitcoin-above-82k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "85738021945329428248861737832659034637912074429003535295892371951379824216386",
+            "marketSlug": "bitcoin-above-88k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            },
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 2,
+          "parentUpperIndex": 6,
+          "rangeIndices": [
+            2,
+            3,
+            4,
+            5
+          ],
+          "lowerYes": {
+            "assetId": "21640540020693169596332851198588440023435732927124307811559759961089634192069",
+            "marketSlug": "bitcoin-above-82k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "21975432639889748033301158809385177903124720955383938920225609693870384257292",
+            "marketSlug": "bitcoin-above-90k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            },
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 2,
+          "parentUpperIndex": 7,
+          "rangeIndices": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "lowerYes": {
+            "assetId": "21640540020693169596332851198588440023435732927124307811559759961089634192069",
+            "marketSlug": "bitcoin-above-82k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "46006054183643339330435484150457753467563469966926993799917588589000637004062",
+            "marketSlug": "bitcoin-above-92k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            },
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            },
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 2,
+          "parentUpperIndex": 8,
+          "rangeIndices": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "lowerYes": {
+            "assetId": "21640540020693169596332851198588440023435732927124307811559759961089634192069",
+            "marketSlug": "bitcoin-above-82k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "16286264515716308732665206779187155946539917729171157844700920159126794306947",
+            "marketSlug": "bitcoin-above-94k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            },
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            },
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            },
+            {
+              "index": 7,
+              "snapshot": {
+                "assetId": "102441030154631129686842266875741661383925571590782412850008919384885245830522",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 2,
+          "parentUpperIndex": 9,
+          "rangeIndices": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "lowerYes": {
+            "assetId": "21640540020693169596332851198588440023435732927124307811559759961089634192069",
+            "marketSlug": "bitcoin-above-82k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "16424191528129460163653667329586531962443105765740086202836883706783076410281",
+            "marketSlug": "bitcoin-above-96k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 2,
+              "snapshot": {
+                "assetId": "8780554280127464702179247672028971958514851477252169302304677228668229979259",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-82000-84000-on-january-7"
+              }
+            },
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            },
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            },
+            {
+              "index": 7,
+              "snapshot": {
+                "assetId": "102441030154631129686842266875741661383925571590782412850008919384885245830522",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7"
+              }
+            },
+            {
+              "index": 8,
+              "snapshot": {
+                "assetId": "64540584948121247963532065807263955150852120123877772184423711422014468762202",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-94000-96000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 3,
+          "parentUpperIndex": 4,
+          "rangeIndices": [
+            3
+          ],
+          "lowerYes": {
+            "assetId": "87619927368516230297463749703745204707470689822437111091374464487832769878504",
+            "marketSlug": "bitcoin-above-84k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "115235677339492088662466867783470726273733578366766826254541771464174258591842",
+            "marketSlug": "bitcoin-above-86k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 3,
+          "parentUpperIndex": 5,
+          "rangeIndices": [
+            3,
+            4
+          ],
+          "lowerYes": {
+            "assetId": "87619927368516230297463749703745204707470689822437111091374464487832769878504",
+            "marketSlug": "bitcoin-above-84k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "85738021945329428248861737832659034637912074429003535295892371951379824216386",
+            "marketSlug": "bitcoin-above-88k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 3,
+          "parentUpperIndex": 6,
+          "rangeIndices": [
+            3,
+            4,
+            5
+          ],
+          "lowerYes": {
+            "assetId": "87619927368516230297463749703745204707470689822437111091374464487832769878504",
+            "marketSlug": "bitcoin-above-84k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "21975432639889748033301158809385177903124720955383938920225609693870384257292",
+            "marketSlug": "bitcoin-above-90k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 3,
+          "parentUpperIndex": 7,
+          "rangeIndices": [
+            3,
+            4,
+            5,
+            6
+          ],
+          "lowerYes": {
+            "assetId": "87619927368516230297463749703745204707470689822437111091374464487832769878504",
+            "marketSlug": "bitcoin-above-84k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "46006054183643339330435484150457753467563469966926993799917588589000637004062",
+            "marketSlug": "bitcoin-above-92k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            },
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 3,
+          "parentUpperIndex": 8,
+          "rangeIndices": [
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "lowerYes": {
+            "assetId": "87619927368516230297463749703745204707470689822437111091374464487832769878504",
+            "marketSlug": "bitcoin-above-84k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "16286264515716308732665206779187155946539917729171157844700920159126794306947",
+            "marketSlug": "bitcoin-above-94k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            },
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            },
+            {
+              "index": 7,
+              "snapshot": {
+                "assetId": "102441030154631129686842266875741661383925571590782412850008919384885245830522",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 3,
+          "parentUpperIndex": 9,
+          "rangeIndices": [
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "lowerYes": {
+            "assetId": "87619927368516230297463749703745204707470689822437111091374464487832769878504",
+            "marketSlug": "bitcoin-above-84k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "16424191528129460163653667329586531962443105765740086202836883706783076410281",
+            "marketSlug": "bitcoin-above-96k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 3,
+              "snapshot": {
+                "assetId": "84134697302567991887757182654067185079136422632763145405604794745145664442443",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-84000-86000-on-january-7"
+              }
+            },
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            },
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            },
+            {
+              "index": 7,
+              "snapshot": {
+                "assetId": "102441030154631129686842266875741661383925571590782412850008919384885245830522",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7"
+              }
+            },
+            {
+              "index": 8,
+              "snapshot": {
+                "assetId": "64540584948121247963532065807263955150852120123877772184423711422014468762202",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-94000-96000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 4,
+          "parentUpperIndex": 5,
+          "rangeIndices": [
+            4
+          ],
+          "lowerYes": {
+            "assetId": "53184915129942709656975263485186230776038258994811992940772890608232122679174",
+            "marketSlug": "bitcoin-above-86k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "85738021945329428248861737832659034637912074429003535295892371951379824216386",
+            "marketSlug": "bitcoin-above-88k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 4,
+          "parentUpperIndex": 6,
+          "rangeIndices": [
+            4,
+            5
+          ],
+          "lowerYes": {
+            "assetId": "53184915129942709656975263485186230776038258994811992940772890608232122679174",
+            "marketSlug": "bitcoin-above-86k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "21975432639889748033301158809385177903124720955383938920225609693870384257292",
+            "marketSlug": "bitcoin-above-90k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 4,
+          "parentUpperIndex": 7,
+          "rangeIndices": [
+            4,
+            5,
+            6
+          ],
+          "lowerYes": {
+            "assetId": "53184915129942709656975263485186230776038258994811992940772890608232122679174",
+            "marketSlug": "bitcoin-above-86k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "46006054183643339330435484150457753467563469966926993799917588589000637004062",
+            "marketSlug": "bitcoin-above-92k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            },
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 4,
+          "parentUpperIndex": 8,
+          "rangeIndices": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "lowerYes": {
+            "assetId": "53184915129942709656975263485186230776038258994811992940772890608232122679174",
+            "marketSlug": "bitcoin-above-86k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "16286264515716308732665206779187155946539917729171157844700920159126794306947",
+            "marketSlug": "bitcoin-above-94k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            },
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            },
+            {
+              "index": 7,
+              "snapshot": {
+                "assetId": "102441030154631129686842266875741661383925571590782412850008919384885245830522",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 4,
+          "parentUpperIndex": 9,
+          "rangeIndices": [
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "lowerYes": {
+            "assetId": "53184915129942709656975263485186230776038258994811992940772890608232122679174",
+            "marketSlug": "bitcoin-above-86k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "16424191528129460163653667329586531962443105765740086202836883706783076410281",
+            "marketSlug": "bitcoin-above-96k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 4,
+              "snapshot": {
+                "assetId": "9209242067617756356975838900978127112400795138575351822897982586437259426851",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-86000-88000-on-january-7"
+              }
+            },
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            },
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            },
+            {
+              "index": 7,
+              "snapshot": {
+                "assetId": "102441030154631129686842266875741661383925571590782412850008919384885245830522",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7"
+              }
+            },
+            {
+              "index": 8,
+              "snapshot": {
+                "assetId": "64540584948121247963532065807263955150852120123877772184423711422014468762202",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-94000-96000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 5,
+          "parentUpperIndex": 6,
+          "rangeIndices": [
+            5
+          ],
+          "lowerYes": {
+            "assetId": "63156990435801749517629319790964096445672994989629437329878100845680956247314",
+            "marketSlug": "bitcoin-above-88k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "21975432639889748033301158809385177903124720955383938920225609693870384257292",
+            "marketSlug": "bitcoin-above-90k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 5,
+          "parentUpperIndex": 7,
+          "rangeIndices": [
+            5,
+            6
+          ],
+          "lowerYes": {
+            "assetId": "63156990435801749517629319790964096445672994989629437329878100845680956247314",
+            "marketSlug": "bitcoin-above-88k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "46006054183643339330435484150457753467563469966926993799917588589000637004062",
+            "marketSlug": "bitcoin-above-92k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            },
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 5,
+          "parentUpperIndex": 8,
+          "rangeIndices": [
+            5,
+            6,
+            7
+          ],
+          "lowerYes": {
+            "assetId": "63156990435801749517629319790964096445672994989629437329878100845680956247314",
+            "marketSlug": "bitcoin-above-88k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "16286264515716308732665206779187155946539917729171157844700920159126794306947",
+            "marketSlug": "bitcoin-above-94k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            },
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            },
+            {
+              "index": 7,
+              "snapshot": {
+                "assetId": "102441030154631129686842266875741661383925571590782412850008919384885245830522",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 5,
+          "parentUpperIndex": 9,
+          "rangeIndices": [
+            5,
+            6,
+            7,
+            8
+          ],
+          "lowerYes": {
+            "assetId": "63156990435801749517629319790964096445672994989629437329878100845680956247314",
+            "marketSlug": "bitcoin-above-88k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "16424191528129460163653667329586531962443105765740086202836883706783076410281",
+            "marketSlug": "bitcoin-above-96k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 5,
+              "snapshot": {
+                "assetId": "41623099165527347840257818986791737859366696353261405836761439838414371678539",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-88000-90000-on-january-7"
+              }
+            },
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            },
+            {
+              "index": 7,
+              "snapshot": {
+                "assetId": "102441030154631129686842266875741661383925571590782412850008919384885245830522",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7"
+              }
+            },
+            {
+              "index": 8,
+              "snapshot": {
+                "assetId": "64540584948121247963532065807263955150852120123877772184423711422014468762202",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-94000-96000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 6,
+          "parentUpperIndex": 7,
+          "rangeIndices": [
+            6
+          ],
+          "lowerYes": {
+            "assetId": "105508083447924148526783669819657180357261025688241426014197548801294535749915",
+            "marketSlug": "bitcoin-above-90k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "46006054183643339330435484150457753467563469966926993799917588589000637004062",
+            "marketSlug": "bitcoin-above-92k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 6,
+          "parentUpperIndex": 8,
+          "rangeIndices": [
+            6,
+            7
+          ],
+          "lowerYes": {
+            "assetId": "105508083447924148526783669819657180357261025688241426014197548801294535749915",
+            "marketSlug": "bitcoin-above-90k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "16286264515716308732665206779187155946539917729171157844700920159126794306947",
+            "marketSlug": "bitcoin-above-94k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            },
+            {
+              "index": 7,
+              "snapshot": {
+                "assetId": "102441030154631129686842266875741661383925571590782412850008919384885245830522",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 6,
+          "parentUpperIndex": 9,
+          "rangeIndices": [
+            6,
+            7,
+            8
+          ],
+          "lowerYes": {
+            "assetId": "105508083447924148526783669819657180357261025688241426014197548801294535749915",
+            "marketSlug": "bitcoin-above-90k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "16424191528129460163653667329586531962443105765740086202836883706783076410281",
+            "marketSlug": "bitcoin-above-96k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 6,
+              "snapshot": {
+                "assetId": "12744087777967891448712409225416439932109493231486501073925427501989519131918",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-90000-92000-on-january-7"
+              }
+            },
+            {
+              "index": 7,
+              "snapshot": {
+                "assetId": "102441030154631129686842266875741661383925571590782412850008919384885245830522",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7"
+              }
+            },
+            {
+              "index": 8,
+              "snapshot": {
+                "assetId": "64540584948121247963532065807263955150852120123877772184423711422014468762202",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-94000-96000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 7,
+          "parentUpperIndex": 8,
+          "rangeIndices": [
+            7
+          ],
+          "lowerYes": {
+            "assetId": "2457572378679765939908564031917803371778610555546148432010627490591730178403",
+            "marketSlug": "bitcoin-above-92k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "16286264515716308732665206779187155946539917729171157844700920159126794306947",
+            "marketSlug": "bitcoin-above-94k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 7,
+              "snapshot": {
+                "assetId": "102441030154631129686842266875741661383925571590782412850008919384885245830522",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 7,
+          "parentUpperIndex": 9,
+          "rangeIndices": [
+            7,
+            8
+          ],
+          "lowerYes": {
+            "assetId": "2457572378679765939908564031917803371778610555546148432010627490591730178403",
+            "marketSlug": "bitcoin-above-92k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "16424191528129460163653667329586531962443105765740086202836883706783076410281",
+            "marketSlug": "bitcoin-above-96k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 7,
+              "snapshot": {
+                "assetId": "102441030154631129686842266875741661383925571590782412850008919384885245830522",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-92000-94000-on-january-7"
+              }
+            },
+            {
+              "index": 8,
+              "snapshot": {
+                "assetId": "64540584948121247963532065807263955150852120123877772184423711422014468762202",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-94000-96000-on-january-7"
+              }
+            }
+          ]
+        },
+        {
+          "parentLowerIndex": 8,
+          "parentUpperIndex": 9,
+          "rangeIndices": [
+            8
+          ],
+          "lowerYes": {
+            "assetId": "82116154681578349668598576376412555242879827693755304050345227671935404263960",
+            "marketSlug": "bitcoin-above-94k-on-january-7",
+            "bestAsk": null,
+            "bestBid": null
+          },
+          "upperNo": {
+            "assetId": "16424191528129460163653667329586531962443105765740086202836883706783076410281",
+            "marketSlug": "bitcoin-above-96k-on-january-7"
+          },
+          "ranges": [
+            {
+              "index": 8,
+              "snapshot": {
+                "assetId": "64540584948121247963532065807263955150852120123877772184423711422014468762202",
+                "marketSlug": "will-the-price-of-bitcoin-be-between-94000-96000-on-january-7"
+              }
+            }
+          ]
+        }
+      ],
+      "askPrefix": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "bidPrefix": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "missingAskPrefix": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "missingBidPrefix": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "cooldowns": {},
+      "lastScanAt": 0
+    }
+  }
+}

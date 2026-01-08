@@ -11,10 +11,6 @@ export interface PriceChangeData {
   market: string; // market_hash
   asset_id: string;
   timestamp: number;
-  price: number;
-  size: number;
-  side: 'BUY' | 'SELL';
-  hash: string;
   best_bid: number;
   best_ask: number;
 }

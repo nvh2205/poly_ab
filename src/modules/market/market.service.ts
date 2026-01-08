@@ -116,7 +116,7 @@ export class MarketService implements OnApplicationBootstrap {
    * Job runs every 5 seconds to check markets with startTime <= current
    * and subscribe to socket if not already subscribed
    */
-  @Interval(60000) // Every 1 minute
+  @Interval(10000) // Every 5 seconds
   async crawlMarketsForSocketSubscription() {
     try {
       const now = new Date();
@@ -134,7 +134,7 @@ export class MarketService implements OnApplicationBootstrap {
         ])
         .where('market.active = :active', { active: true })
         .andWhere('market.startTime IS NOT NULL')
-        .andWhere('market.startTime <= :now', { now })
+        .andWhere('market.endDate > :now', { now })
         .getMany();
 
       if (marketsToCheck.length === 0) {

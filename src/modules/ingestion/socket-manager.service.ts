@@ -47,7 +47,12 @@ export class SocketManagerService
   /**
    * On application bootstrap, restore subscriptions from Redis
    */
-  async onApplicationBootstrap() {}
+  async onApplicationBootstrap() {
+    // await this.subscribeToTokens([
+    //   '94164450030368190400729331975351099941603993532048876081305050829912705949378',
+    //   '19694973394230695654914264856659289660682856244721407447188824491392283705947',
+    // ]);
+  }
 
   /**
    * Check if tokens are already subscribed
@@ -190,62 +195,62 @@ export class SocketManagerService
   private handleMessage(connectionId: string, data: any): void {
     try {
       const message = data.toString();
-
       // Skip ping/pong messages
       if (message === 'PONG' || message === 'PING') {
         return;
       }
 
       // Parse JSON message
-      const parsed: SocketMessage = JSON.parse(message);
-
-      // Handle different event types
-      if (parsed.event_type === 'book') {
-        // Transform to our data format
-        let bookTimestamp: number;
-        if (typeof parsed.timestamp === 'string') {
-          bookTimestamp = parseInt(parsed.timestamp, 10);
-        } else {
-          bookTimestamp = parsed.timestamp || Date.now();
-        }
-
-        const marketData: MarketData = {
-          market: parsed.market || '',
-          asset_id: parsed.asset_id || '',
-          timestamp: bookTimestamp,
-          bids: parsed.bids || null,
-          asks: parsed.asks || null,
-          last_trade_price: parsed.price ? parseFloat(parsed.price) : null,
-        };
-
-        // Push to buffer for batch processing
-        this.bufferService.push(marketData);
-      } else if (parsed.event_type === 'price_change') {
-        // Handle price_change event
-        if (parsed.price_changes && Array.isArray(parsed.price_changes)) {
-          let timestamp: number;
-          if (typeof parsed.timestamp === 'string') {
-            timestamp = parseInt(parsed.timestamp, 10);
+      const parsed = JSON.parse(message);
+      
+      // Handle both array and single object formats
+      const messages = Array.isArray(parsed) ? parsed : [parsed];
+      
+      for (const msg of messages) {
+        // Handle different event types
+        if (msg.event_type === 'book') {
+          // Transform to our data format
+          let bookTimestamp: number;
+          if (typeof msg.timestamp === 'string') {
+            bookTimestamp = parseInt(msg.timestamp, 10);
           } else {
-            timestamp = parsed.timestamp || Date.now();
+            bookTimestamp = msg.timestamp || Date.now();
           }
 
-          for (const change of parsed.price_changes) {
-            const priceChangeData = {
-              market: parsed.market || '',
-              asset_id: change.asset_id,
-              timestamp: timestamp,
-              price: parseFloat(change.price),
-              size: parseFloat(change.size),
-              side: change.side,
-              hash: change.hash,
-              best_bid: parseFloat(change.best_bid),
-              best_ask: parseFloat(change.best_ask),
-            };
+          const marketData: MarketData = {
+            market: msg.market || '',
+            asset_id: msg.asset_id || '',
+            timestamp: bookTimestamp,
+            bids: msg.bids || null,
+            asks: msg.asks || null,
+            last_trade_price: msg.last_trade_price ? parseFloat(msg.last_trade_price) : null,
+          };
 
-            // Push to price change buffer
-            this.bufferService.pushPriceChange(priceChangeData);
-          }
+          // Push to buffer for batch processing
+          this.bufferService.push(marketData);
+        } else if (msg.event_type === 'price_change') {
+          // Handle price_change event - only update best_bid and best_ask
+          // Do NOT include size/side as they represent user orders on the orderbook
+          // if (msg.price_changes && Array.isArray(msg.price_changes)) {
+          //   let timestamp: number;
+
+          //   if (typeof msg.timestamp === 'string') {
+          //     timestamp = parseInt(msg.timestamp, 10);
+          //   } else {
+          //     timestamp = msg.timestamp || Date.now();
+          //   }
+          //   for (const change of msg.price_changes) {
+          //     const priceChangeData = {
+          //       market: msg.market || '',
+          //       asset_id: change.asset_id,
+          //       timestamp: timestamp,
+          //       best_bid: parseFloat(change.best_bid),
+          //       best_ask: parseFloat(change.best_ask),
+          //     };
+          //     // Push to price change buffer
+          //     this.bufferService.pushPriceChange(priceChangeData);
+          //   }
+          // }
         }
       }
     } catch (error) {
@@ -382,14 +387,23 @@ export class SocketManagerService
       await this.redisService.del(`token_metadata:${tokenId}`);
     }
 
-    // Find and close connections that contain these tokens
+    // Find connections that contain expired tokens and collect active tokens that need to be reconnected
     const connectionsToClose: string[] = [];
+    const tokensToReconnect: string[] = [];
+
     for (const [connectionId, connection] of this.connections.entries()) {
       const hasExpiredTokens = tokenIds.some((token) =>
         connection.tokens.includes(token),
       );
+
       if (hasExpiredTokens) {
         connectionsToClose.push(connectionId);
+
+        // Collect non-expired tokens from this connection that need to be reconnected
+        const activeTokensInConnection = connection.tokens.filter(
+          (token) => !tokenIds.includes(token),
+        );
+        tokensToReconnect.push(...activeTokensInConnection);
       }
     }
 
@@ -398,7 +412,7 @@ export class SocketManagerService
       const connection = this.connections.get(connectionId);
       if (connection) {
         this.logger.log(
-          `Closing connection ${connectionId} due to expired tokens`,
+          `Closing connection ${connectionId} (had ${connection.tokens.length} tokens, ${connection.tokens.filter((t) => tokenIds.includes(t)).length} expired)`,
         );
         if (connection.pingInterval) {
           clearInterval(connection.pingInterval);
@@ -410,20 +424,14 @@ export class SocketManagerService
       }
     }
 
-    // Reconnect with remaining active tokens
-    const remainingTokens =
-      await this.redisService.smembers('active_clob_tokens');
-    if (remainingTokens && remainingTokens.length > 0) {
-      // Filter out tokens that are still subscribed
-      const tokensToReconnect = remainingTokens.filter(
-        (token) => !this.subscribedTokens.has(token),
+    // Reconnect active tokens that were in closed connections
+    if (tokensToReconnect.length > 0) {
+      this.logger.log(
+        `Reconnecting ${tokensToReconnect.length} active tokens from closed connections`,
       );
-      if (tokensToReconnect.length > 0) {
-        this.logger.log(
-          `Reconnecting ${tokensToReconnect.length} remaining tokens`,
-        );
-        await this.subscribeToTokens(tokensToReconnect);
-      }
+      // Remove from subscribedTokens first so subscribeToTokens will process them
+      tokensToReconnect.forEach((token) => this.subscribedTokens.delete(token));
+      await this.subscribeToTokens(tokensToReconnect);
     }
 
     this.logger.log(`Successfully unsubscribed from ${tokenIds.length} tokens`);
