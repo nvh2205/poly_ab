@@ -31,6 +31,7 @@ interface PaperTradeResult {
     timestampMs: number;
   };
   fills: PaperFill[];
+  totalCost: number;
   pnlAbs: number;
   pnlBps: number;
   latencyMs: number;
@@ -563,6 +564,9 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
       fill.size = filledSize;
     });
 
+    // Tổng cost (chỉ buy side) sau khi chuẩn hóa filled size
+    const totalCost = this.calculateTotalCost(fills, opportunity.strategy);
+
     // Với polymarket triangle, thêm leg settlement giả định payout
     if (
       (opportunity.strategy === 'POLYMARKET_TRIANGLE' ||
@@ -609,6 +613,7 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
         timestampMs: opportunity.timestampMs,
       },
       fills,
+      totalCost,
       pnlAbs,
       pnlBps,
       latencyMs,
@@ -646,6 +651,41 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
     return { pnlAbs, pnlBps };
   }
 
+  /**
+   * Tổng cost (chỉ tính các leg buy)
+   */
+  /**
+   * Tổng cost:
+   * - Buy: price * size
+   * - Polymarket sell: mint rồi bán => cost = (1 - price) * size
+   * - Triangle sell (Polymarket triangle): cost = size (payout 1)
+   * - Bỏ qua synthetic-payout leg
+   */
+  private calculateTotalCost(fills: PaperFill[], strategy: string): number {
+    const isTriangle =
+      strategy === 'POLYMARKET_TRIANGLE' ||
+      strategy === 'POLYMARKET_TRIANGLE_BUY' ||
+      strategy === 'POLYMARKET_TRIANGLE_SELL';
+
+    let cost = 0;
+    for (const f of fills) {
+      if (f.assetId === 'synthetic-payout') continue; // không tính leg giả định
+      const price = Number.isFinite(f.price) ? f.price : 0;
+      if (f.side === 'buy') {
+        cost += price * f.size;
+      } else if (f.side === 'sell') {
+        if (isTriangle) {
+          cost += f.size; // payoff = 1 cho triangle sell
+        } else {
+          cost += (1 - price) * f.size; // mint NO/YES rồi bán
+        }
+      }
+    }
+
+    console.log('cost:---------', cost);
+    return cost;
+  }
+
   private async savePaperTrade(
     result: PaperTradeResult,
   ): Promise<ArbPaperTrade> {
@@ -654,6 +694,7 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
       filledSize: result.filledSize,
       entry: result.entry,
       fills: result.fills,
+      totalCost: this.toFiniteOrNull(result.totalCost) ?? 0,
       pnlAbs: result.pnlAbs,
       pnlBps: result.pnlBps,
       latencyMs: result.latencyMs,

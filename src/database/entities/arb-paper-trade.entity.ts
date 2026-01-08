@@ -52,6 +52,15 @@ export class ArbPaperTrade {
   @Column({ name: 'latency_ms', type: 'int', nullable: true })
   latencyMs?: number;
 
+  @Column({
+    name: 'total_cost',
+    type: 'decimal',
+    precision: 18,
+    scale: 8,
+    nullable: true,
+  })
+  totalCost?: number;
+
   @Column({ name: 'timestamp_ms', type: 'bigint' })
   timestampMs: number;
 }

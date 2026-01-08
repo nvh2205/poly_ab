@@ -947,7 +947,11 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
 
     const parentBestBid = this.toFinite(parentLower.bestBid);
     const parentBestAsk = this.toFinite(parentLower.bestAsk);
-    const now = Date.now();
+    let bestCandidate: {
+      profitAbs: number;
+      emitKey: string;
+      opportunity: ArbOpportunity;
+    } | null = null;
 
     const startIndex = parentLower.coverage.startIndex;
 
@@ -966,7 +970,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
 
       // Tính Chiều A: Unbundling (Short Parent Lower, Long Children + Long Parent Upper)
       // Profit = Bid(>i) - [Sum(Ask(Range_k→k+step)) + Ask(>j)]
-      this.evaluateUnbundling(
+      const unbundling = this.evaluateUnbundling(
         state,
         parentLowerWithCoverage,
         parentUpper,
@@ -974,12 +978,11 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
         endIndex,
         parentBestBid,
         parentBestAsk,
-        now,
       );
 
       // Tính Chiều B: Bundling (Long Parent Lower, Short Children + Short Parent Upper)
       // Profit = [Sum(Bid(Range_k→k+step)) + Bid(>j)] - Ask(>i)
-      this.evaluateBundling(
+      const bundling = this.evaluateBundling(
         state,
         parentLowerWithCoverage,
         parentUpper,
@@ -987,8 +990,26 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
         endIndex,
         parentBestBid,
         parentBestAsk,
-        now,
       );
+
+      // Keep only the best profit among unbundling/bundling for this parentLower
+      const candidates = [unbundling, bundling];
+      for (const c of candidates) {
+        if (!c) continue;
+        if (!bestCandidate || c.profitAbs > bestCandidate.profitAbs) {
+          bestCandidate = c;
+        }
+      }
+    }
+
+    // Emit only the best candidate for this parentLower
+    if (bestCandidate) {
+      const now = Date.now();
+      const lastEmitted = state.cooldowns.get(bestCandidate.emitKey) || 0;
+      if (now - lastEmitted >= this.cooldownMs) {
+        state.cooldowns.set(bestCandidate.emitKey, now);
+        this.opportunity$.next(bestCandidate.opportunity);
+      }
     }
   }
 
@@ -1004,15 +1025,18 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     endIndex: number,
     parentLowerBestBid: number | null,
     parentLowerBestAsk: number | null,
-    now: number,
-  ): void {
-    if (parentLowerBestBid === null) return;
+  ): {
+    profitAbs: number;
+    emitKey: string;
+    opportunity: ArbOpportunity;
+  } | null {
+    if (parentLowerBestBid === null) return null;
 
     const parentUpperBestAsk = this.toFinite(parentUpper.bestAsk);
-    if (parentUpperBestAsk === null) return;
+    if (parentUpperBestAsk === null) return null;
 
     const rangesSumAsk = this.sumRange(state, 'ask', startIndex, endIndex);
-    if (!Number.isFinite(rangesSumAsk)) return;
+    if (!Number.isFinite(rangesSumAsk)) return null;
 
     const children = state.childStates.slice(startIndex, endIndex + 1);
     const totalCost = (rangesSumAsk as number) + parentUpperBestAsk;
@@ -1020,7 +1044,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     const profitAbs = parentLowerBestBid - totalCost;
     const profitBps = totalCost > 0 ? (profitAbs / totalCost) * 10_000 : 0;
 
-    this.maybeEmitOpportunity(state, parentLower, parentUpper, children, {
+    return this.buildRangeOpportunity(state, parentLower, parentUpper, children, {
       strategy: 'SELL_PARENT_BUY_CHILDREN',
       profitAbs,
       profitBps,
@@ -1030,7 +1054,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       parentBestBid: parentLowerBestBid,
       parentUpperBestAsk,
       parentUpperBestBid: this.toFinite(parentUpper.bestBid),
-      timestampMs: parentLower.timestampMs || now,
+      timestampMs: parentLower.timestampMs || Date.now(),
     });
   }
 
@@ -1046,15 +1070,18 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     endIndex: number,
     parentLowerBestBid: number | null,
     parentLowerBestAsk: number | null,
-    now: number,
-  ): void {
-    if (parentLowerBestAsk === null) return;
+  ): {
+    profitAbs: number;
+    emitKey: string;
+    opportunity: ArbOpportunity;
+  } | null {
+    if (parentLowerBestAsk === null) return null;
 
     const parentUpperBestBid = this.toFinite(parentUpper.bestBid);
-    if (parentUpperBestBid === null) return;
+    if (parentUpperBestBid === null) return null;
 
     const rangesSumBid = this.sumRange(state, 'bid', startIndex, endIndex);
-    if (!Number.isFinite(rangesSumBid)) return;
+    if (!Number.isFinite(rangesSumBid)) return null;
 
     const children = state.childStates.slice(startIndex, endIndex + 1);
     const totalRevenue = (rangesSumBid as number) + parentUpperBestBid;
@@ -1063,7 +1090,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     const profitBps =
       parentLowerBestAsk > 0 ? (profitAbs / parentLowerBestAsk) * 10_000 : 0;
 
-    this.maybeEmitOpportunity(state, parentLower, parentUpper, children, {
+    return this.buildRangeOpportunity(state, parentLower, parentUpper, children, {
       strategy: 'BUY_PARENT_SELL_CHILDREN',
       profitAbs,
       profitBps,
@@ -1073,7 +1100,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       parentBestBid: parentLowerBestBid,
       parentUpperBestAsk: this.toFinite(parentUpper.bestAsk),
       parentUpperBestBid,
-      timestampMs: parentLower.timestampMs || now,
+      timestampMs: parentLower.timestampMs || Date.now(),
     });
   }
 
@@ -1092,7 +1119,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     return prefix[end + 1] - prefix[start];
   }
 
-  private maybeEmitOpportunity(
+  private buildRangeOpportunity(
     state: GroupState,
     parent: ParentState & { coverage: RangeCoverage },
     parentUpper: ParentState | null,
@@ -1109,7 +1136,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       parentUpperBestAsk?: number | null;
       timestampMs: number;
     },
-  ): void {
+  ): { profitAbs: number; emitKey: string; opportunity: ArbOpportunity } | null {
     const { strategy, profitAbs, profitBps } = context;
     const key = parentUpper
       ? `${parent.descriptor.marketId || parent.descriptor.slug}:${parentUpper.descriptor.marketId || parentUpper.descriptor.slug}:${strategy}`
@@ -1117,7 +1144,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
 
     // Block execution when any price is missing or zero
     if (this.hasInvalidPrices(parent, parentUpper, children)) {
-      return;
+      return null;
     }
 
     const isExecutable =
@@ -1126,16 +1153,8 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       profitAbs >= this.minProfitAbs;
 
     if (!isExecutable) {
-      return;
+      return null;
     }
-
-    const lastEmitted = state.cooldowns.get(key) || 0;
-    const now = Date.now();
-    if (now - lastEmitted < this.cooldownMs) {
-      return;
-    }
-
-    state.cooldowns.set(key, now);
 
     const opportunity: ArbOpportunity = {
       groupKey: state.group.groupKey,
@@ -1171,7 +1190,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       isExecutable: true,
     };
 
-    this.opportunity$.next(opportunity);
+    return { profitAbs, emitKey: key, opportunity };
   }
 
   private toFinite(value: number | undefined): number | null {
