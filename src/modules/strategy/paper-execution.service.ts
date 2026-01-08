@@ -45,6 +45,17 @@ export interface StrategyAggregate {
   avgProfit: number;
 }
 
+export interface TopProfitTrade {
+  tradeId: string;
+  signalId: string;
+  strategy: string;
+  groupKey: string | null;
+  eventSlug: string | null;
+  profitAbs: number;
+  totalCost: number;
+  createdAt: Date | string;
+}
+
 @Injectable()
 export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PaperExecutionService.name);
@@ -746,11 +757,15 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
     minCost: number | null;
     bestProfitStrategy: StrategyAggregate | null;
     mostFrequentStrategy: StrategyAggregate | null;
+  strategyByFrequency: StrategyAggregate[];
+  strategyByProfit: StrategyAggregate[];
+    topProfitTrade: TopProfitTrade | null;
   }> {
     const [raw] = await this.arbPaperTradeRepository.query(
       `
       WITH filtered AS (
         SELECT
+          trade.id,
           trade.total_cost,
           trade.pnl_abs,
           trade.created_at,
@@ -777,6 +792,21 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
         FROM filtered f
         JOIN arb_signals signal ON signal.id = f.signal_id
         GROUP BY signal.strategy
+      ),
+      top_trade AS (
+        SELECT
+          f.id AS "tradeId",
+          f.pnl_abs AS "profitAbs",
+          f.total_cost AS "totalCost",
+          f.created_at AS "createdAt",
+          s.id AS "signalId",
+          s.strategy AS strategy,
+          s.group_key AS "groupKey",
+          s.event_slug AS "eventSlug"
+        FROM filtered f
+        JOIN arb_signals s ON s.id = f.signal_id
+        ORDER BY f.pnl_abs DESC NULLS LAST
+        LIMIT 1
       )
       SELECT
         stats."tradeCount",
@@ -810,6 +840,26 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
             LIMIT 1
           ) s
         ) AS "mostFrequentStrategy"
+        ,
+        (
+          SELECT row_to_json(t) FROM top_trade t
+        ) AS "topProfitTrade"
+        ,
+        (
+          SELECT COALESCE(
+            json_agg(row_to_json(s) ORDER BY s.tradeCount DESC NULLS LAST),
+            '[]'::json
+          )
+          FROM strategy_agg s
+        ) AS "strategyByFrequency"
+        ,
+        (
+          SELECT COALESCE(
+            json_agg(row_to_json(s) ORDER BY s.totalProfit DESC NULLS LAST),
+            '[]'::json
+          )
+          FROM strategy_agg s
+        ) AS "strategyByProfit"
       FROM stats
       LIMIT 1;
       `,
@@ -833,11 +883,26 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
       if (!rawStrategy) return null;
       const tradeCount = toNumber(rawStrategy.tradeCount);
       const totalProfit = toNumber(rawStrategy.totalProfit);
+      if (tradeCount <= 0) return null;
       return {
         strategy: rawStrategy.strategy,
         tradeCount,
         totalProfit,
-        avgProfit: toNumber(rawStrategy.avgProfit),
+        avgProfit: tradeCount > 0 ? totalProfit / tradeCount : 0,
+      };
+    };
+
+    const normalizeTopTrade = (row: any): TopProfitTrade | null => {
+      if (!row) return null;
+      return {
+        tradeId: row.tradeId,
+        signalId: row.signalId,
+        strategy: row.strategy,
+        groupKey: row.groupKey ?? null,
+        eventSlug: row.eventSlug ?? null,
+        profitAbs: toNumber(row.profitAbs),
+        totalCost: toNumber(row.totalCost),
+        createdAt: row.createdAt,
       };
     };
 
@@ -851,6 +916,17 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
       minCost: toNumberOrNull(raw?.minCost),
       bestProfitStrategy: normalizeStrategy(raw?.bestProfitStrategy),
       mostFrequentStrategy: normalizeStrategy(raw?.mostFrequentStrategy),
+      strategyByFrequency: Array.isArray(raw?.strategyByFrequency)
+        ? (raw.strategyByFrequency as any[])
+            .map((r) => normalizeStrategy(r))
+            .filter((r): r is StrategyAggregate => r !== null)
+        : [],
+      strategyByProfit: Array.isArray(raw?.strategyByProfit)
+        ? (raw.strategyByProfit as any[])
+            .map((r) => normalizeStrategy(r))
+            .filter((r): r is StrategyAggregate => r !== null)
+        : [],
+      topProfitTrade: normalizeTopTrade(raw?.topProfitTrade),
     };
   }
 
