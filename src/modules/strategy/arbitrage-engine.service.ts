@@ -89,7 +89,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
 
   private readonly minProfitBps = this.numFromEnv('ARB_MIN_PROFIT_BPS', 5);
   private readonly minProfitAbs = this.numFromEnv('ARB_MIN_PROFIT_ABS', 0);
-  private readonly throttleMs = this.numFromEnv('ARB_SCAN_THROTTLE_MS', 200);
+  private readonly throttleMs = this.numFromEnv('ARB_SCAN_THROTTLE_MS', 50);
   private readonly cooldownMs = this.numFromEnv('ARB_COOLDOWN_MS', 1000);
 
   constructor(
@@ -544,6 +544,9 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     const locators = this.triangleTokenIndex.get(update.assetId || '');
     if (!locators || locators.length === 0) return false;
 
+    // Track triangles that need evaluation per group
+    const trianglesToEvaluate = new Map<string, Set<number>>();
+
     // Use for loop for better performance
     for (let i = 0; i < locators.length; i++) {
       const locator = locators[i];
@@ -579,30 +582,85 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       target.marketSlug = update.marketSlug ?? target.marketSlug;
       target.timestampMs = update.timestampMs;
 
-    //   if (
-    //     update.assetId ===
-    //       '94164450030368190400729331975351099941603993532048876081305050829912705949378' 
-    //   ) {
-    //     console.log('target111111', target);
-    //   }
-      // Debug log for triangle size updates
-      //   if (update.bestBidSize || update.bestAskSize) {
-      //     this.logger.debug(
-      //       `Triangle ${locator.role} updated: bidSize=${update.bestBidSize}, askSize=${update.bestAskSize}, assetId=${update.assetId?.slice(0, 10)}...`
-      //     );
-      //   }
-
-      this.evaluateTriangle(state, triangle);
+      // Mark this triangle for evaluation
+      if (!trianglesToEvaluate.has(locator.groupKey)) {
+        trianglesToEvaluate.set(locator.groupKey, new Set());
+      }
+      trianglesToEvaluate.get(locator.groupKey)!.add(locator.triangleIndex);
     }
+
+    // Evaluate all affected triangles and emit only the best one per group
+    trianglesToEvaluate.forEach((triangleIndices, groupKey) => {
+      const state = this.groups.get(groupKey);
+      if (!state) return;
+
+      this.evaluateAndEmitBestTriangle(state, Array.from(triangleIndices));
+    });
 
     return true;
   }
 
-  private evaluateTriangle(state: GroupState, triangle: TriangleState): void {
+  /**
+   * Evaluate all affected triangles and emit only the best opportunity (highest profit)
+   */
+  private evaluateAndEmitBestTriangle(
+    state: GroupState,
+    triangleIndices: number[],
+  ): void {
+    let bestOpportunity: {
+      profitAbs: number;
+      opportunity: ArbOpportunity;
+      emitKey: string;
+    } | null = null;
+
+    // Evaluate all triangles and find the best one
+    for (const triangleIndex of triangleIndices) {
+      const triangle = state.triangleStates[triangleIndex];
+      if (!triangle) continue;
+
+      const result = this.calculateTriangleProfit(state, triangle);
+      if (!result) continue;
+
+      // Only one of BUY or SELL can be profitable at a time
+      // Compare with current best and update if better
+      if (
+        !bestOpportunity ||
+        result.profitAbs > bestOpportunity.profitAbs
+      ) {
+        bestOpportunity = result;
+      }
+    }
+
+    // No profitable opportunities
+    if (!bestOpportunity) return;
+
+    // Check cooldown and emit
+    const now = Date.now();
+    const lastEmitted = state.cooldowns.get(bestOpportunity.emitKey) || 0;
+    if (now - lastEmitted < this.cooldownMs) return;
+
+    state.cooldowns.set(bestOpportunity.emitKey, now);
+    this.opportunity$.next(bestOpportunity.opportunity);
+  }
+
+  /**
+   * Calculate triangle profit without emitting
+   * Returns the profitable opportunity (BUY or SELL, only one can be profitable at a time)
+   */
+  private calculateTriangleProfit(
+    state: GroupState,
+    triangle: TriangleState,
+  ): {
+    profitAbs: number;
+    profitBps: number;
+    opportunity: ArbOpportunity;
+    emitKey: string;
+    mode: 'BUY' | 'SELL';
+  } | null {
     const parentLower = state.parentStates[triangle.parentLowerIndex];
     const parentUpper = state.parentStates[triangle.parentUpperIndex];
-    if (!parentLower || !parentUpper) return;
-    if (!parentLower.coverage) return;
+    if (!parentLower || !parentUpper) return null;
+    if (!parentLower.coverage) return null;
 
     // Triangle legs are updated independently via handleTriangleTopOfBook()
     // lowerYes: YES token of parent lower (index 0)
@@ -624,7 +682,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       bidsLowerYes <= 0 ||
       bidsUpperNo <= 0
     ) {
-      return;
+      return null;
     }
 
     let totalAskRanges = 0;
@@ -641,7 +699,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
 
       // Early exit on missing price or zero price
       if (ask === null || bid === null || ask <= 0 || bid <= 0) {
-        return;
+        return null;
       }
 
       totalAskRanges += ask;
@@ -681,29 +739,16 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     }
     emitKeyBase += ':POLYMARKET_TRIANGLE';
 
-    const emitIfProfitable = (
+    const buildOpportunity = (
       mode: 'BUY' | 'SELL',
       profitAbs: number,
       profitBps: number,
-      totalAskOrBid: number,
       usedParentAsk: number | null,
       usedParentBid: number | null,
       usedUpperAsk: number | null,
       usedUpperBid: number | null,
-    ) => {
-      const meetsProfit =
-        profitAbs > 0 &&
-        profitBps >= this.minProfitBps &&
-        profitAbs >= this.minProfitAbs;
-      if (!meetsProfit) return;
-
-      const key = `${emitKeyBase}:${mode}`;
-      const now = Date.now();
-      const lastEmitted = state.cooldowns.get(key) || 0;
-      if (now - lastEmitted < this.cooldownMs) return;
-      state.cooldowns.set(key, now);
-
-      const opportunity: ArbOpportunity = {
+    ): ArbOpportunity => {
+      return {
         groupKey: state.group.groupKey,
         eventSlug: state.group.eventSlug,
         crypto: state.group.crypto,
@@ -766,37 +811,67 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
             ? 'POLYMARKET_TRIANGLE_BUY_COST_LT_PAYOUT'
             : 'POLYMARKET_TRIANGLE_SELL_BID_GT_PAYOUT',
       };
-
-      this.opportunity$.next(opportunity);
     };
 
+    // Calculate both sides
     // Buy side: pay asks, receive payout
     const profitBuyAbs = payout - totalAsk;
     const profitBuyBps = totalAsk > 0 ? (profitBuyAbs / totalAsk) * 10_000 : 0;
-    emitIfProfitable(
-      'BUY',
-      profitBuyAbs,
-      profitBuyBps,
-      totalAsk,
-      askLowerYes,
-      bidsLowerYes,
-      askUpperNo,
-      bidsUpperNo,
-    );
 
     // Sell side: collect bids, owe payout
     const profitSellAbs = totalBid - payout;
     const profitSellBps = payout > 0 ? (profitSellAbs / payout) * 10_000 : 0;
-    emitIfProfitable(
-      'SELL',
-      profitSellAbs,
-      profitSellBps,
-      totalBid,
-      askLowerYes,
-      bidsLowerYes,
-      askUpperNo,
-      bidsUpperNo,
-    );
+
+    // Only one side can be profitable at a time
+    // Choose the side with positive profit that meets thresholds
+    const meetsProfitBuy =
+      profitBuyAbs > 0 &&
+      profitBuyBps >= this.minProfitBps &&
+      profitBuyAbs >= this.minProfitAbs;
+
+    const meetsProfitSell =
+      profitSellAbs > 0 &&
+      profitSellBps >= this.minProfitBps &&
+      profitSellAbs >= this.minProfitAbs;
+
+    // Return the profitable side (should only be one)
+    if (meetsProfitBuy) {
+      return {
+        profitAbs: profitBuyAbs,
+        profitBps: profitBuyBps,
+        opportunity: buildOpportunity(
+          'BUY',
+          profitBuyAbs,
+          profitBuyBps,
+          askLowerYes,
+          bidsLowerYes,
+          askUpperNo,
+          bidsUpperNo,
+        ),
+        emitKey: `${emitKeyBase}:BUY`,
+        mode: 'BUY',
+      };
+    }
+
+    if (meetsProfitSell) {
+      return {
+        profitAbs: profitSellAbs,
+        profitBps: profitSellBps,
+        opportunity: buildOpportunity(
+          'SELL',
+          profitSellAbs,
+          profitSellBps,
+          askLowerYes,
+          bidsLowerYes,
+          askUpperNo,
+          bidsUpperNo,
+        ),
+        emitKey: `${emitKeyBase}:SELL`,
+        mode: 'SELL',
+      };
+    }
+
+    return null;
   }
 
   private recalculatePrefixes(state: GroupState, fromIndex: number): void {
@@ -1073,6 +1148,8 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
             descriptor: parentUpper.descriptor,
             bestBid: parentUpper.bestBid,
             bestAsk: parentUpper.bestAsk,
+            bestBidSize: parentUpper.bestBidSize,
+            bestAskSize: parentUpper.bestAskSize,
             assetId: parentUpper.assetId,
             marketSlug: parentUpper.marketSlug,
             timestampMs: parentUpper.timestampMs,
