@@ -108,9 +108,9 @@ export class BufferService implements OnModuleInit {
     void this.emitTopOfBookWithMetadata(update);
 
     // Auto-flush if buffer reaches batch size
-    if (this.buffer.length >= this.batchSize) {
-      this.flush();
-    }
+    // if (this.buffer.length >= this.batchSize) {
+    //   this.flush();
+    // }
   }
 
   /**
@@ -234,7 +234,7 @@ export class BufferService implements OnModuleInit {
   /**
    * Flush buffer every interval (time-based)
    */
-  @Interval(APP_CONSTANTS.CLICKHOUSE_FLUSH_INTERVAL_MS)
+  // @Interval(APP_CONSTANTS.CLICKHOUSE_FLUSH_INTERVAL_MS)
   async handleInterval() {
     if (this.buffer.length > 0 && !this.isProcessing) {
       await this.flush();
