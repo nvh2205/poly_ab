@@ -64,7 +64,7 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
   private readonly defaultSize = this.numFromEnv('PAPER_TRADE_SIZE', 100);
   private readonly simulatedLatencyMs = this.numFromEnv(
     'PAPER_TRADE_LATENCY_MS',
-    150,
+    160,
   );
 
   constructor(
