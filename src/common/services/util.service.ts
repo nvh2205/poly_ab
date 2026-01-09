@@ -9,7 +9,7 @@ export class UtilService {
    * Generate slug based on pattern and configuration
    */
   generateSlug(config: SlugConfig): string {
-    return this.generateSlugWithOffset(config, 0);
+    return this.generateSlugWithOffset(config);
   }
 
   /**
@@ -127,10 +127,22 @@ export class UtilService {
     offset: number,
   ): string {
     const now = new Date();
-    // Start from current day at midnight, then apply offset
-    const targetTime = new Date(now);
-    targetTime.setDate(targetTime.getDate() + offset);
-    targetTime.setHours(0, 0, 0, 0);
+    // For "daily", use a 17:00 UTC day boundary.
+    // If current time is >= 17:00 UTC, we consider it the "next day".
+    // This is deterministic across server timezones and matches the desired 5pm UTC cutoff.
+    //
+    const todayBoundaryUtcMs = Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      17,
+      0,
+      0,
+      0,
+    );
+    const dayShift = now.getTime() >= todayBoundaryUtcMs ? 1 : 0;
+    const targetTime = new Date(todayBoundaryUtcMs);
+    targetTime.setUTCDate(targetTime.getUTCDate() + dayShift + offset);
 
     const monthNames = [
       'january',
@@ -147,8 +159,8 @@ export class UtilService {
       'december',
     ];
 
-    const month = monthNames[targetTime.getMonth()];
-    const day = targetTime.getDate();
+    const month = monthNames[targetTime.getUTCMonth()];
+    const day = targetTime.getUTCDate();
 
     return `${config.baseSlug}-${month}-${day}`;
   }
