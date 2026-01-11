@@ -9,12 +9,11 @@ export class EventController {
 
   @Get('slug/:slug')
   @ApiOperation({
-    summary: 'Fetch an event by slug from Polymarket and persist it (also upserts markets)',
+    summary:
+      'Fetch an event by slug from Polymarket and persist it (also upserts markets)',
   })
   @ApiOkResponse({ description: 'Saved event entity' })
   async getEventBySlug(@Param('slug') slug: string) {
     return await this.eventCrawlerService.fetchAndSaveEventBySlug(slug);
   }
 }
-
-

@@ -73,18 +73,14 @@ export class RetentionCleanupService {
       createdAt: LessThan(cutoffDate),
     });
 
-    this.logger.log(
-      `Deleted ${deletedTrades.affected || 0} old paper trades`,
-    );
+    this.logger.log(`Deleted ${deletedTrades.affected || 0} old paper trades`);
 
     // Delete old signals
     const deletedSignals = await this.arbSignalRepository.delete({
       createdAt: LessThan(cutoffDate),
     });
 
-    this.logger.log(
-      `Deleted ${deletedSignals.affected || 0} old signals`,
-    );
+    this.logger.log(`Deleted ${deletedSignals.affected || 0} old signals`);
   }
 
   /**
@@ -111,7 +107,7 @@ export class RetentionCleanupService {
 
       if (count > this.maxRecordsPerGroup) {
         const toDelete = count - this.maxRecordsPerGroup;
-        
+
         // Get IDs of oldest signals to delete
         const oldestSignals = await this.arbSignalRepository.find({
           where: { groupKey },
@@ -164,10 +160,7 @@ export class RetentionCleanupService {
         message: 'Manual cleanup completed successfully',
       };
     } catch (error) {
-      this.logger.error(
-        `Manual cleanup failed: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error(`Manual cleanup failed: ${error.message}`, error.stack);
       return {
         success: false,
         message: `Cleanup failed: ${error.message}`,
@@ -224,4 +217,3 @@ export class RetentionCleanupService {
     return raw.toLowerCase() === 'true' || raw === '1';
   }
 }
-

@@ -5,12 +5,15 @@ import { ArbitrageEngineService } from '../src/modules/strategy/arbitrage-engine
 import { MarketStructureService } from '../src/modules/strategy/market-structure.service';
 import { MarketDataStreamService } from '../src/modules/ingestion/market-data-stream.service';
 import { TopOfBookUpdate } from '../src/modules/strategy/interfaces/top-of-book.interface';
-import { RangeGroup, MarketRangeDescriptor } from '../src/modules/strategy/interfaces/range-group.interface';
+import {
+  RangeGroup,
+  MarketRangeDescriptor,
+} from '../src/modules/strategy/interfaces/range-group.interface';
 import { ArbOpportunity } from '../src/modules/strategy/interfaces/arbitrage.interface';
 
 /**
  * Test suite for ArbitrageEngineService.handleTopOfBook method
- * 
+ *
  * This test simulates real-world scenarios by:
  * 1. Mocking the MarketStructureService and MarketDataStreamService
  * 2. Creating mock range groups with parent/child markets
@@ -193,7 +196,11 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
   describe('Range Market Arbitrage - Unbundling (SELL_PARENT_BUY_CHILDREN)', () => {
     it('should detect unbundling arbitrage opportunity when parent bid > sum of children asks + upper parent ask', async () => {
       // Setup
-      const group = createMockRangeGroup('BTC-2026-01-31', 'BTC', 'btc-price-jan-31-2026');
+      const group = createMockRangeGroup(
+        'BTC-2026-01-31',
+        'BTC',
+        'btc-price-jan-31-2026',
+      );
       marketStructureService.rebuild.mockResolvedValue([group]);
 
       // Initialize the service
@@ -221,7 +228,7 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
           'child-market-1',
           group.children[0].slug,
           0.19,
-          0.20, // Ask = 0.20
+          0.2, // Ask = 0.20
         ),
       );
 
@@ -231,7 +238,7 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
           'child-market-2',
           group.children[1].slug,
           0.19,
-          0.20, // Ask = 0.20
+          0.2, // Ask = 0.20
         ),
       );
 
@@ -241,7 +248,7 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
           'child-market-3',
           group.children[2].slug,
           0.19,
-          0.20, // Ask = 0.20
+          0.2, // Ask = 0.20
         ),
       );
 
@@ -264,19 +271,19 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
       // Revenue = 0.75 (parent bid)
       // Profit = 0.75 - 0.65 = 0.10 = 10 cents
       // Profit BPS = (0.10 / 0.65) * 10000 = 1538.46 bps ≈ 15.38%
-      
+
       expect(opportunities.length).toBeGreaterThan(0);
-      
+
       const unbundlingOpp = opportunities.find(
         (opp) => opp.strategy === 'SELL_PARENT_BUY_CHILDREN',
       );
-      
+
       expect(unbundlingOpp).toBeDefined();
-      expect(unbundlingOpp!.profitAbs).toBeCloseTo(0.10, 2);
+      expect(unbundlingOpp!.profitAbs).toBeCloseTo(0.1, 2);
       expect(unbundlingOpp!.profitBps).toBeGreaterThan(1500);
       expect(unbundlingOpp!.isExecutable).toBe(true);
       expect(unbundlingOpp!.parentBestBid).toBe(0.75);
-      expect(unbundlingOpp!.childrenSumAsk).toBeCloseTo(0.60, 2);
+      expect(unbundlingOpp!.childrenSumAsk).toBeCloseTo(0.6, 2);
       expect(unbundlingOpp!.parentUpperBestAsk).toBe(0.05);
       expect(unbundlingOpp!.children.length).toBe(3);
     });
@@ -285,7 +292,11 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
   describe('Range Market Arbitrage - Bundling (BUY_PARENT_SELL_CHILDREN)', () => {
     it('should detect bundling arbitrage opportunity when children bids + upper parent bid > parent ask', async () => {
       // Setup
-      const group = createMockRangeGroup('ETH-2026-01-31', 'ETH', 'eth-price-jan-31-2026');
+      const group = createMockRangeGroup(
+        'ETH-2026-01-31',
+        'ETH',
+        'eth-price-jan-31-2026',
+      );
       marketStructureService.rebuild.mockResolvedValue([group]);
 
       // Initialize the service
@@ -312,7 +323,7 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
           'child-token-1',
           'child-market-1',
           group.children[0].slug,
-          0.20, // Bid = 0.20
+          0.2, // Bid = 0.20
           0.21,
         ),
       );
@@ -322,7 +333,7 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
           'child-token-2',
           'child-market-2',
           group.children[1].slug,
-          0.20, // Bid = 0.20
+          0.2, // Bid = 0.20
           0.21,
         ),
       );
@@ -332,7 +343,7 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
           'child-token-3',
           'child-market-3',
           group.children[2].slug,
-          0.20, // Bid = 0.20
+          0.2, // Bid = 0.20
           0.21,
         ),
       );
@@ -356,19 +367,19 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
       // Cost = 0.65 (parent ask)
       // Profit = 0.75 - 0.65 = 0.10 = 10 cents
       // Profit BPS = (0.10 / 0.65) * 10000 = 1538.46 bps ≈ 15.38%
-      
+
       expect(opportunities.length).toBeGreaterThan(0);
-      
+
       const bundlingOpp = opportunities.find(
         (opp) => opp.strategy === 'BUY_PARENT_SELL_CHILDREN',
       );
-      
+
       expect(bundlingOpp).toBeDefined();
-      expect(bundlingOpp!.profitAbs).toBeCloseTo(0.10, 2);
+      expect(bundlingOpp!.profitAbs).toBeCloseTo(0.1, 2);
       expect(bundlingOpp!.profitBps).toBeGreaterThan(1500);
       expect(bundlingOpp!.isExecutable).toBe(true);
       expect(bundlingOpp!.parentBestAsk).toBe(0.65);
-      expect(bundlingOpp!.childrenSumBid).toBeCloseTo(0.60, 2);
+      expect(bundlingOpp!.childrenSumBid).toBeCloseTo(0.6, 2);
       expect(bundlingOpp!.parentUpperBestBid).toBe(0.15);
       expect(bundlingOpp!.children.length).toBe(3);
     });
@@ -376,7 +387,11 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
 
   describe('Market Indexing and Lookup', () => {
     it('should correctly index and lookup markets by token ID', async () => {
-      const group = createMockRangeGroup('BTC-2026-01-31', 'BTC', 'btc-price-jan-31-2026');
+      const group = createMockRangeGroup(
+        'BTC-2026-01-31',
+        'BTC',
+        'btc-price-jan-31-2026',
+      );
       marketStructureService.rebuild.mockResolvedValue([group]);
 
       await service.onModuleInit();
@@ -400,7 +415,11 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
     });
 
     it('should correctly index and lookup markets by slug', async () => {
-      const group = createMockRangeGroup('BTC-2026-01-31', 'BTC', 'btc-price-jan-31-2026');
+      const group = createMockRangeGroup(
+        'BTC-2026-01-31',
+        'BTC',
+        'btc-price-jan-31-2026',
+      );
       marketStructureService.rebuild.mockResolvedValue([group]);
 
       await service.onModuleInit();
@@ -424,7 +443,11 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
     });
 
     it('should correctly index and lookup markets by market ID', async () => {
-      const group = createMockRangeGroup('BTC-2026-01-31', 'BTC', 'btc-price-jan-31-2026');
+      const group = createMockRangeGroup(
+        'BTC-2026-01-31',
+        'BTC',
+        'btc-price-jan-31-2026',
+      );
       marketStructureService.rebuild.mockResolvedValue([group]);
 
       await service.onModuleInit();
@@ -448,7 +471,11 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
     });
 
     it('should handle updates for unknown markets gracefully', async () => {
-      const group = createMockRangeGroup('BTC-2026-01-31', 'BTC', 'btc-price-jan-31-2026');
+      const group = createMockRangeGroup(
+        'BTC-2026-01-31',
+        'BTC',
+        'btc-price-jan-31-2026',
+      );
       marketStructureService.rebuild.mockResolvedValue([group]);
 
       await service.onModuleInit();
@@ -474,7 +501,11 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
 
   describe('Prefix Sum Recalculation', () => {
     it('should correctly recalculate prefix sums after child updates', async () => {
-      const group = createMockRangeGroup('BTC-2026-01-31', 'BTC', 'btc-price-jan-31-2026');
+      const group = createMockRangeGroup(
+        'BTC-2026-01-31',
+        'BTC',
+        'btc-price-jan-31-2026',
+      );
       marketStructureService.rebuild.mockResolvedValue([group]);
 
       await service.onModuleInit();
@@ -493,16 +524,16 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
           'child-token-1',
           'child-market-1',
           group.children[0].slug,
-          0.10,
-          0.20,
+          0.1,
+          0.2,
         ),
       );
 
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       // Verify prefix sums updated
-      expect(state.askPrefix[1]).toBe(0.20); // First child ask
-      expect(state.bidPrefix[1]).toBe(0.10); // First child bid
+      expect(state.askPrefix[1]).toBe(0.2); // First child ask
+      expect(state.bidPrefix[1]).toBe(0.1); // First child bid
 
       // Update second child
       topOfBookSubject.next(
@@ -529,7 +560,11 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
       process.env.ARB_COOLDOWN_MS = '500';
       process.env.ARB_SCAN_THROTTLE_MS = '50';
 
-      const group = createMockRangeGroup('BTC-2026-01-31', 'BTC', 'btc-price-jan-31-2026');
+      const group = createMockRangeGroup(
+        'BTC-2026-01-31',
+        'BTC',
+        'btc-price-jan-31-2026',
+      );
       marketStructureService.rebuild.mockResolvedValue([group]);
 
       // Recreate service with new env vars
@@ -564,7 +599,7 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
             'child-market-1',
             group.children[0].slug,
             0.19,
-            0.20,
+            0.2,
           ),
         );
 
@@ -574,7 +609,7 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
             'child-market-2',
             group.children[1].slug,
             0.19,
-            0.20,
+            0.2,
           ),
         );
 
@@ -584,7 +619,7 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
             'child-market-3',
             group.children[2].slug,
             0.19,
-            0.20,
+            0.2,
           ),
         );
 
@@ -633,7 +668,11 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
       process.env.ARB_MIN_PROFIT_BPS = '5000'; // 50%
       process.env.ARB_MIN_PROFIT_ABS = '0';
 
-      const group = createMockRangeGroup('BTC-2026-01-31', 'BTC', 'btc-price-jan-31-2026');
+      const group = createMockRangeGroup(
+        'BTC-2026-01-31',
+        'BTC',
+        'btc-price-jan-31-2026',
+      );
       marketStructureService.rebuild.mockResolvedValue([group]);
 
       const testService = new ArbitrageEngineService(
@@ -655,7 +694,7 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
           'parent-token-yes',
           'parent-market-1',
           group.parents[0].slug,
-          0.70,
+          0.7,
           0.71,
         ),
       );
@@ -666,7 +705,7 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
           'child-market-1',
           group.children[0].slug,
           0.19,
-          0.20,
+          0.2,
         ),
       );
 
@@ -676,7 +715,7 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
           'child-market-2',
           group.children[1].slug,
           0.19,
-          0.20,
+          0.2,
         ),
       );
 
@@ -686,7 +725,7 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
           'child-market-3',
           group.children[2].slug,
           0.19,
-          0.20,
+          0.2,
         ),
       );
 
@@ -713,8 +752,16 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
 
   describe('Multiple Groups', () => {
     it('should handle updates for multiple independent groups', async () => {
-      const btcGroup = createMockRangeGroup('BTC-2026-01-31', 'BTC', 'btc-price-jan-31-2026');
-      const ethGroup = createMockRangeGroup('ETH-2026-01-31', 'ETH', 'eth-price-jan-31-2026');
+      const btcGroup = createMockRangeGroup(
+        'BTC-2026-01-31',
+        'BTC',
+        'btc-price-jan-31-2026',
+      );
+      const ethGroup = createMockRangeGroup(
+        'ETH-2026-01-31',
+        'ETH',
+        'eth-price-jan-31-2026',
+      );
 
       marketStructureService.rebuild.mockResolvedValue([btcGroup, ethGroup]);
 
@@ -755,7 +802,11 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
 
   describe('Edge Cases', () => {
     it('should handle missing bid/ask values gracefully', async () => {
-      const group = createMockRangeGroup('BTC-2026-01-31', 'BTC', 'btc-price-jan-31-2026');
+      const group = createMockRangeGroup(
+        'BTC-2026-01-31',
+        'BTC',
+        'btc-price-jan-31-2026',
+      );
       marketStructureService.rebuild.mockResolvedValue([group]);
 
       await service.onModuleInit();
@@ -779,7 +830,11 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
     });
 
     it('should handle NaN and Infinity values', async () => {
-      const group = createMockRangeGroup('BTC-2026-01-31', 'BTC', 'btc-price-jan-31-2026');
+      const group = createMockRangeGroup(
+        'BTC-2026-01-31',
+        'BTC',
+        'btc-price-jan-31-2026',
+      );
       marketStructureService.rebuild.mockResolvedValue([group]);
 
       await service.onModuleInit();
@@ -801,14 +856,18 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
       // Should handle gracefully without throwing
       const internals = service as any;
       const state = internals.groups.get(group.groupKey);
-      
+
       // Verify that NaN and Infinity are converted to null
       expect(state.childStates[0].bestBid).toBeNull();
       expect(state.childStates[0].bestAsk).toBeNull();
     });
 
     it('should not emit opportunity when children have missing prices', async () => {
-      const group = createMockRangeGroup('BTC-2026-01-31', 'BTC', 'btc-price-jan-31-2026');
+      const group = createMockRangeGroup(
+        'BTC-2026-01-31',
+        'BTC',
+        'btc-price-jan-31-2026',
+      );
       marketStructureService.rebuild.mockResolvedValue([group]);
 
       await service.onModuleInit();
@@ -832,7 +891,7 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
           'child-market-1',
           group.children[0].slug,
           0.19,
-          0.20,
+          0.2,
         ),
       );
 
@@ -854,4 +913,3 @@ describe('ArbitrageEngineService - handleTopOfBook', () => {
     });
   });
 });
-

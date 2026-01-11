@@ -39,7 +39,7 @@ export class StrategyController {
   async getStats() {
     try {
       const paperStats = await this.paperExecutionService.getStats();
-      
+
       // Get signal stats
       const totalSignals = await this.arbSignalRepository.count();
       const executableSignals = await this.arbSignalRepository.count({
@@ -75,14 +75,14 @@ export class StrategyController {
   async getGroups() {
     try {
       const groups = await this.marketStructureService.getAllGroups();
-      
+
       // Enrich with signal counts
       const enrichedGroups = await Promise.all(
         groups.map(async (group) => {
           const signalCount = await this.arbSignalRepository.count({
             where: { groupKey: group.groupKey },
           });
-          
+
           return {
             groupKey: group.groupKey,
             eventSlug: group.eventSlug,
@@ -157,7 +157,7 @@ export class StrategyController {
           groupKey,
           Math.min(limit, 1000),
         );
-        
+
         return {
           total: trades.length,
           limit,
@@ -168,7 +168,7 @@ export class StrategyController {
         const trades = await this.paperExecutionService.getRecentTrades(
           Math.min(limit, 1000),
         );
-        
+
         return {
           total: trades.length,
           limit,
@@ -259,15 +259,18 @@ export class StrategyController {
       );
 
       // Group by strategy
-      const strategies = signals.reduce((acc, signal) => {
-        const strategy = signal.strategy;
-        if (!acc[strategy]) {
-          acc[strategy] = { count: 0, totalProfitBps: 0 };
-        }
-        acc[strategy].count++;
-        acc[strategy].totalProfitBps += Number(signal.profitBps || 0);
-        return acc;
-      }, {} as Record<string, { count: number; totalProfitBps: number }>);
+      const strategies = signals.reduce(
+        (acc, signal) => {
+          const strategy = signal.strategy;
+          if (!acc[strategy]) {
+            acc[strategy] = { count: 0, totalProfitBps: 0 };
+          }
+          acc[strategy].count++;
+          acc[strategy].totalProfitBps += Number(signal.profitBps || 0);
+          return acc;
+        },
+        {} as Record<string, { count: number; totalProfitBps: number }>,
+      );
 
       return {
         groupKey,
@@ -365,4 +368,3 @@ export class StrategyController {
     };
   }
 }
-

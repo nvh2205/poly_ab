@@ -121,4 +121,3 @@ export interface ArbOpportunity {
     rangesCount?: number;
   };
 }
-

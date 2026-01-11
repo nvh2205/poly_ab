@@ -27,7 +27,8 @@ process.env.ARB_SCAN_THROTTLE_MS = process.env.ARB_SCAN_THROTTLE_MS || '50';
 process.env.ARB_COOLDOWN_MS = process.env.ARB_COOLDOWN_MS || '200';
 
 // Global test utilities
-global.sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+global.sleep = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 // Add custom matchers if needed
 expect.extend({
@@ -56,9 +57,8 @@ declare global {
       toBeWithinRange(floor: number, ceiling: number): R;
     }
   }
-  
+
   function sleep(ms: number): Promise<void>;
 }
 
 export {};
-

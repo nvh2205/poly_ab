@@ -17,7 +17,8 @@ function buildDataSource(): DataSource {
     database: process.env.DB_DATABASE || 'polymarket_orderbook_ab',
     ssl: sslEnabled
       ? {
-          rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
+          rejectUnauthorized:
+            process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
         }
       : undefined,
     entities: [Market, Event],
@@ -59,4 +60,3 @@ async function main(): Promise<void> {
 }
 
 void main();
-

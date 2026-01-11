@@ -27,36 +27,32 @@ interface TokenLocator {
 
 /**
  * BinaryChillManager
- * 
+ *
  * Quản lý riêng binary chill arbitrage pairs với tracking đầy đủ cả YES và NO tokens.
  * Tách biệt khỏi GroupState để tránh complexity và theo dõi chính xác giá NO token.
  */
 @Injectable()
 export class BinaryChillManager {
   private readonly logger = new Logger(BinaryChillManager.name);
-  
+
   // Map pairId -> BinaryChillPair
   private readonly pairs = new Map<string, BinaryChillPair>();
-  
+
   // Map tokenId -> TokenLocator để route updates
   private readonly tokenIndex = new Map<string, TokenLocator>();
-  
+
   // Cooldowns per strategy
   private readonly cooldowns = new Map<string, number>();
-  
+
   // Output stream
   private readonly opportunity$ = new Subject<ArbOpportunity>();
-  
+
   // Configuration
   private readonly minProfitBps: number;
   private readonly minProfitAbs: number;
   private readonly cooldownMs: number;
 
-  constructor(
-    minProfitBps = 5,
-    minProfitAbs = 0,
-    cooldownMs = 1000,
-  ) {
+  constructor(minProfitBps = 5, minProfitAbs = 0, cooldownMs = 1000) {
     this.minProfitBps = minProfitBps;
     this.minProfitAbs = minProfitAbs;
     this.cooldownMs = cooldownMs;
@@ -73,8 +69,11 @@ export class BinaryChillManager {
     binaryChildren: Array<{ descriptor: MarketRangeDescriptor; index: number }>,
   ): void {
     // Build map of parent anchor -> parent info
-    const parentByAnchor = new Map<number, { descriptor: MarketRangeDescriptor; index: number }>();
-    
+    const parentByAnchor = new Map<
+      number,
+      { descriptor: MarketRangeDescriptor; index: number }
+    >();
+
     parents.forEach((parent) => {
       const anchor = this.extractAnchor(parent.descriptor);
       if (anchor !== null) {
@@ -86,7 +85,7 @@ export class BinaryChillManager {
     binaryChildren.forEach((child) => {
       const anchor = this.extractAnchor(child.descriptor);
       if (anchor === null) return;
-      
+
       const parent = parentByAnchor.get(anchor);
       if (!parent) return;
 
@@ -104,9 +103,17 @@ export class BinaryChillManager {
 
       // Create pair
       const pairId = `${groupKey}:${child.descriptor.marketId}:${parent.descriptor.marketId}`;
-      
-      const childSnapshot = this.createSnapshot(child.descriptor, parent.index, strategy);
-      const parentSnapshot = this.createSnapshot(parent.descriptor, parent.index, strategy);
+
+      const childSnapshot = this.createSnapshot(
+        child.descriptor,
+        parent.index,
+        strategy,
+      );
+      const parentSnapshot = this.createSnapshot(
+        parent.descriptor,
+        parent.index,
+        strategy,
+      );
 
       this.pairs.set(pairId, {
         child: childSnapshot,
@@ -123,7 +130,9 @@ export class BinaryChillManager {
       this.indexTokens(pairId, parent.descriptor, 'parent');
     });
 
-    this.logger.log(`Initialized ${this.pairs.size} binary chill pairs for group ${groupKey}`);
+    this.logger.log(
+      `Initialized ${this.pairs.size} binary chill pairs for group ${groupKey}`,
+    );
   }
 
   /**
@@ -138,7 +147,7 @@ export class BinaryChillManager {
 
     // Update the appropriate snapshot
     const snapshot = locator.role === 'child' ? pair.child : pair.parent;
-    
+
     if (locator.tokenType === 'yes') {
       snapshot.bestBidYes = this.toFinite(update.bestBid);
       snapshot.bestAskYes = this.toFinite(update.bestAsk);
@@ -153,7 +162,7 @@ export class BinaryChillManager {
       snapshot.bestBidSizeNo = update.bestBidSize ?? 0;
       snapshot.bestAskSizeNo = update.bestAskSize ?? 0;
     }
-    
+
     snapshot.timestampMs = update.timestampMs;
 
     // Evaluate arbitrage for this pair
@@ -226,10 +235,16 @@ export class BinaryChillManager {
   }
 
   private extractAnchor(descriptor: MarketRangeDescriptor): number | null {
-    if (descriptor.kind === 'above' && Number.isFinite(descriptor.bounds.lower)) {
+    if (
+      descriptor.kind === 'above' &&
+      Number.isFinite(descriptor.bounds.lower)
+    ) {
       return descriptor.bounds.lower as number;
     }
-    if (descriptor.kind === 'below' && Number.isFinite(descriptor.bounds.upper)) {
+    if (
+      descriptor.kind === 'below' &&
+      Number.isFinite(descriptor.bounds.upper)
+    ) {
       return descriptor.bounds.upper as number;
     }
     return null;
@@ -256,8 +271,12 @@ export class BinaryChillManager {
     const { child, parent } = pair;
 
     // Strategy A: Buy YES(child), Sell NO(parent)
-    if (child.bestAskYes !== null && child.bestAskYes !== undefined &&
-        parent.bestBidNo !== null && parent.bestBidNo !== undefined) {
+    if (
+      child.bestAskYes !== null &&
+      child.bestAskYes !== undefined &&
+      parent.bestBidNo !== null &&
+      parent.bestBidNo !== undefined
+    ) {
       const buyPrice = child.bestAskYes;
       const sellPrice = parent.bestBidNo;
       const profitAbs = sellPrice - buyPrice;
@@ -278,8 +297,12 @@ export class BinaryChillManager {
     }
 
     // Strategy B: Buy NO(parent), Sell YES(child)
-    if (child.bestBidYes !== null && child.bestBidYes !== undefined &&
-        parent.bestAskNo !== null && parent.bestAskNo !== undefined) {
+    if (
+      child.bestBidYes !== null &&
+      child.bestBidYes !== undefined &&
+      parent.bestAskNo !== null &&
+      parent.bestAskNo !== undefined
+    ) {
       const buyPrice = parent.bestAskNo;
       const sellPrice = child.bestBidYes;
       const profitAbs = sellPrice - buyPrice;
@@ -308,8 +331,12 @@ export class BinaryChillManager {
     const { child, parent } = pair;
 
     // Strategy A: Buy YES(child), Sell YES(parent)
-    if (child.bestAskYes !== null && child.bestAskYes !== undefined &&
-        parent.bestBidYes !== null && parent.bestBidYes !== undefined) {
+    if (
+      child.bestAskYes !== null &&
+      child.bestAskYes !== undefined &&
+      parent.bestBidYes !== null &&
+      parent.bestBidYes !== undefined
+    ) {
       const buyPrice = child.bestAskYes;
       const sellPrice = parent.bestBidYes;
       const profitAbs = sellPrice - buyPrice;
@@ -330,8 +357,12 @@ export class BinaryChillManager {
     }
 
     // Strategy B: Buy NO(parent), Sell NO(child)
-    if (child.bestBidNo !== null && child.bestBidNo !== undefined &&
-        parent.bestAskNo !== null && parent.bestAskNo !== undefined) {
+    if (
+      child.bestBidNo !== null &&
+      child.bestBidNo !== undefined &&
+      parent.bestAskNo !== null &&
+      parent.bestAskNo !== undefined
+    ) {
       const buyPrice = parent.bestAskNo;
       const sellPrice = child.bestBidNo;
       const profitAbs = sellPrice - buyPrice;
@@ -461,12 +492,12 @@ export class BinaryChillManager {
     };
 
     this.opportunity$.next(opportunity);
-    
+
     this.logger.debug(
       `Binary chill opportunity: ${strategy} (${tokenType.toUpperCase()}) | ` +
-      `Profit: ${profitAbs.toFixed(4)} (${profitBps.toFixed(2)} bps) | ` +
-      `Child: ${pair.child.descriptor.slug} | ` +
-      `Parent: ${pair.parent.descriptor.slug}`,
+        `Profit: ${profitAbs.toFixed(4)} (${profitBps.toFixed(2)} bps) | ` +
+        `Child: ${pair.child.descriptor.slug} | ` +
+        `Parent: ${pair.parent.descriptor.slug}`,
     );
   }
 
@@ -495,4 +526,3 @@ export class BinaryChillManager {
     }
   }
 }
-

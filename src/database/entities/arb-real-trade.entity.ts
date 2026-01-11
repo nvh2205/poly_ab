@@ -10,13 +10,14 @@ import {
 import { ArbSignal } from './arb-signal.entity';
 
 /**
- * ArbPaperTrade Entity
- * Stores paper-trade simulation results for arbitrage signals
+ * ArbRealTrade Entity
+ * Stores real trade execution results for arbitrage signals
  */
-@Entity('arb_paper_trades')
+@Entity('arb_real_trades')
 @Index(['signalId'])
 @Index(['createdAt'])
-export class ArbPaperTrade {
+@Index(['success'])
+export class ArbRealTrade {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -34,35 +35,14 @@ export class ArbPaperTrade {
   @JoinColumn({ name: 'signal_id' })
   signal: ArbSignal;
 
-  @Column({ name: 'filled_size', type: 'decimal', precision: 18, scale: 8 })
-  filledSize: number;
+  @Column({ type: 'boolean', default: false })
+  success: boolean;
 
-  @Column({ type: 'jsonb', nullable: true })
-  entry?: any;
+  @Column({ name: 'order_ids', type: 'jsonb', nullable: true })
+  orderIds?: string[];
 
-  @Column({ type: 'jsonb', nullable: true })
-  fills?: any;
-
-  @Column({
-    name: 'pnl_abs',
-    type: 'decimal',
-    precision: 18,
-    scale: 8,
-    nullable: true,
-  })
-  pnlAbs?: number;
-
-  @Column({
-    name: 'pnl_bps',
-    type: 'decimal',
-    precision: 18,
-    scale: 4,
-    nullable: true,
-  })
-  pnlBps?: number;
-
-  @Column({ name: 'latency_ms', type: 'int', nullable: true })
-  latencyMs?: number;
+  @Column({ type: 'text', nullable: true })
+  error?: string;
 
   @Column({
     name: 'total_cost',
@@ -72,6 +52,15 @@ export class ArbPaperTrade {
     nullable: true,
   })
   totalCost?: number;
+
+  @Column({
+    name: 'expected_pnl',
+    type: 'decimal',
+    precision: 18,
+    scale: 8,
+    nullable: true,
+  })
+  expectedPnl?: number;
 
   @Column({ name: 'timestamp_ms', type: 'bigint' })
   timestampMs: number;

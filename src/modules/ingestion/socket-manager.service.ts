@@ -202,10 +202,10 @@ export class SocketManagerService
 
       // Parse JSON message
       const parsed = JSON.parse(message);
-      
+
       // Handle both array and single object formats
       const messages = Array.isArray(parsed) ? parsed : [parsed];
-      
+
       for (const msg of messages) {
         // Handle different event types
         if (msg.event_type === 'book') {
@@ -223,7 +223,9 @@ export class SocketManagerService
             timestamp: bookTimestamp,
             bids: msg.bids || null,
             asks: msg.asks || null,
-            last_trade_price: msg.last_trade_price ? parseFloat(msg.last_trade_price) : null,
+            last_trade_price: msg.last_trade_price
+              ? parseFloat(msg.last_trade_price)
+              : null,
           };
 
           // Push to buffer for batch processing
@@ -233,7 +235,6 @@ export class SocketManagerService
           // Do NOT include size/side as they represent user orders on the orderbook
           // if (msg.price_changes && Array.isArray(msg.price_changes)) {
           //   let timestamp: number;
-
           //   if (typeof msg.timestamp === 'string') {
           //     timestamp = parseInt(msg.timestamp, 10);
           //   } else {

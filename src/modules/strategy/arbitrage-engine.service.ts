@@ -623,10 +623,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
 
       // Only one of BUY or SELL can be profitable at a time
       // Compare with current best and update if better
-      if (
-        !bestOpportunity ||
-        result.profitAbs > bestOpportunity.profitAbs
-      ) {
+      if (!bestOpportunity || result.profitAbs > bestOpportunity.profitAbs) {
         bestOpportunity = result;
       }
     }
@@ -1044,18 +1041,24 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     const profitAbs = parentLowerBestBid - totalCost;
     const profitBps = totalCost > 0 ? (profitAbs / totalCost) * 10_000 : 0;
 
-    return this.buildRangeOpportunity(state, parentLower, parentUpper, children, {
-      strategy: 'SELL_PARENT_BUY_CHILDREN',
-      profitAbs,
-      profitBps,
-      childrenSumAsk: rangesSumAsk as number,
-      childrenSumBid: Number.NaN,
-      parentBestAsk: parentLowerBestAsk,
-      parentBestBid: parentLowerBestBid,
-      parentUpperBestAsk,
-      parentUpperBestBid: this.toFinite(parentUpper.bestBid),
-      timestampMs: parentLower.timestampMs || Date.now(),
-    });
+    return this.buildRangeOpportunity(
+      state,
+      parentLower,
+      parentUpper,
+      children,
+      {
+        strategy: 'SELL_PARENT_BUY_CHILDREN',
+        profitAbs,
+        profitBps,
+        childrenSumAsk: rangesSumAsk as number,
+        childrenSumBid: Number.NaN,
+        parentBestAsk: parentLowerBestAsk,
+        parentBestBid: parentLowerBestBid,
+        parentUpperBestAsk,
+        parentUpperBestBid: this.toFinite(parentUpper.bestBid),
+        timestampMs: parentLower.timestampMs || Date.now(),
+      },
+    );
   }
 
   /**
@@ -1090,18 +1093,24 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     const profitBps =
       parentLowerBestAsk > 0 ? (profitAbs / parentLowerBestAsk) * 10_000 : 0;
 
-    return this.buildRangeOpportunity(state, parentLower, parentUpper, children, {
-      strategy: 'BUY_PARENT_SELL_CHILDREN',
-      profitAbs,
-      profitBps,
-      childrenSumAsk: Number.NaN,
-      childrenSumBid: rangesSumBid as number,
-      parentBestAsk: parentLowerBestAsk,
-      parentBestBid: parentLowerBestBid,
-      parentUpperBestAsk: this.toFinite(parentUpper.bestAsk),
-      parentUpperBestBid,
-      timestampMs: parentLower.timestampMs || Date.now(),
-    });
+    return this.buildRangeOpportunity(
+      state,
+      parentLower,
+      parentUpper,
+      children,
+      {
+        strategy: 'BUY_PARENT_SELL_CHILDREN',
+        profitAbs,
+        profitBps,
+        childrenSumAsk: Number.NaN,
+        childrenSumBid: rangesSumBid as number,
+        parentBestAsk: parentLowerBestAsk,
+        parentBestBid: parentLowerBestBid,
+        parentUpperBestAsk: this.toFinite(parentUpper.bestAsk),
+        parentUpperBestBid,
+        timestampMs: parentLower.timestampMs || Date.now(),
+      },
+    );
   }
 
   private sumRange(
@@ -1136,7 +1145,11 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       parentUpperBestAsk?: number | null;
       timestampMs: number;
     },
-  ): { profitAbs: number; emitKey: string; opportunity: ArbOpportunity } | null {
+  ): {
+    profitAbs: number;
+    emitKey: string;
+    opportunity: ArbOpportunity;
+  } | null {
     const { strategy, profitAbs, profitBps } = context;
     const key = parentUpper
       ? `${parent.descriptor.marketId || parent.descriptor.slug}:${parentUpper.descriptor.marketId || parentUpper.descriptor.slug}:${strategy}`

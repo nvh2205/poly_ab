@@ -13,5 +13,3 @@ import { Event, Market } from '../../database/entities';
   exports: [EventCrawlerService],
 })
 export class EventModule {}
-
-

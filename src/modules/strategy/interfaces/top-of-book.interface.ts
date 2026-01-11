@@ -25,4 +25,3 @@ export interface TopOfBookUpdate {
    */
   raw?: any;
 }
-

@@ -43,7 +43,9 @@ export class MarketStructureService {
       .andWhere('(market.endDate IS NULL OR market.endDate > :now)', { now })
       .getMany();
 
-    this.logger.log(`Found ${markets.length} active markets with valid end dates`);
+    this.logger.log(
+      `Found ${markets.length} active markets with valid end dates`,
+    );
     const groups = this.buildGroups(markets);
     this.cache = new Map(groups.map((group) => [group.groupKey, group]));
     this.logger.log(`Rebuilt ${groups.length} market groups`);
@@ -286,10 +288,7 @@ export class MarketStructureService {
     return undefined;
   }
 
-  private resolveSymbol(
-    market: Market,
-    override?: RangeGroupOverride,
-  ): string {
+  private resolveSymbol(market: Market, override?: RangeGroupOverride): string {
     const raw =
       override?.crypto ||
       market.type ||
@@ -319,9 +318,7 @@ export class MarketStructureService {
     const hasRangeLike = descriptors.some((descriptor) => {
       const hasUpper = Number.isFinite(descriptor.bounds.upper);
       return (
-        descriptor.kind === 'range' ||
-        descriptor.kind === 'below' ||
-        hasUpper
+        descriptor.kind === 'range' || descriptor.kind === 'below' || hasUpper
       );
     });
 
@@ -393,10 +390,16 @@ export class MarketStructureService {
 
   private collectAnchors(descriptor: MarketRangeDescriptor): number[] {
     const anchors: number[] = [];
-    if (descriptor.kind === 'above' && Number.isFinite(descriptor.bounds.lower)) {
+    if (
+      descriptor.kind === 'above' &&
+      Number.isFinite(descriptor.bounds.lower)
+    ) {
       anchors.push(descriptor.bounds.lower as number);
     }
-    if (descriptor.kind === 'below' && Number.isFinite(descriptor.bounds.upper)) {
+    if (
+      descriptor.kind === 'below' &&
+      Number.isFinite(descriptor.bounds.upper)
+    ) {
       anchors.push(descriptor.bounds.upper as number);
     }
     if (descriptor.kind === 'range') {
@@ -494,7 +497,8 @@ export class MarketStructureService {
         Number.isFinite(prev.bounds.lower) &&
         Number.isFinite(curr.bounds.lower)
       ) {
-        const diff = (curr.bounds.lower as number) - (prev.bounds.lower as number);
+        const diff =
+          (curr.bounds.lower as number) - (prev.bounds.lower as number);
         if (diff > 0) {
           diffs.push(diff);
         }
@@ -505,4 +509,3 @@ export class MarketStructureService {
     return Math.min(...diffs);
   }
 }
-

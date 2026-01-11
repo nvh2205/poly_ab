@@ -18,4 +18,3 @@ export class MarketDataStreamService implements OnModuleDestroy {
     this.topOfBookSubject.complete();
   }
 }
-

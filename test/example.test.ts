@@ -10,7 +10,7 @@ import { ArbOpportunity } from '../src/modules/strategy/interfaces/arbitrage.int
 
 /**
  * Example test demonstrating how to test handleTopOfBook
- * 
+ *
  * Use this as a template for writing your own tests
  */
 
@@ -119,7 +119,7 @@ describe('Example Test - Template', () => {
     // ASSERT: Verify update was processed
     const internals = service as any;
     const state = internals.groups.get('BTC-TEST');
-    
+
     expect(state).toBeDefined();
     expect(state.parentStates[0].bestBid).toBe(0.75);
     expect(state.parentStates[0].bestAsk).toBe(0.76);
@@ -179,7 +179,7 @@ describe('Example Test - Template', () => {
       assetId: 'parent-yes',
       marketHash: 'hash-1',
       marketId: 'parent-1',
-      bestBid: 0.80,
+      bestBid: 0.8,
       bestAsk: 0.81,
       timestampMs: Date.now(),
     });
@@ -190,7 +190,7 @@ describe('Example Test - Template', () => {
       marketHash: 'hash-2',
       marketId: 'child-1',
       bestBid: 0.29,
-      bestAsk: 0.30,
+      bestAsk: 0.3,
       timestampMs: Date.now(),
     });
 
@@ -200,7 +200,7 @@ describe('Example Test - Template', () => {
       marketHash: 'hash-3',
       marketId: 'parent-2',
       bestBid: 0.39,
-      bestAsk: 0.40,
+      bestAsk: 0.4,
       timestampMs: Date.now(),
     });
 
@@ -210,10 +210,12 @@ describe('Example Test - Template', () => {
     // ASSERT: Verify opportunity
     // Profit = 0.80 (parent bid) - (0.30 + 0.40) = 0.10
     expect(opportunities.length).toBeGreaterThan(0);
-    
-    const opp = opportunities.find(o => o.strategy === 'SELL_PARENT_BUY_CHILDREN');
+
+    const opp = opportunities.find(
+      (o) => o.strategy === 'SELL_PARENT_BUY_CHILDREN',
+    );
     expect(opp).toBeDefined();
-    expect(opp!.profitAbs).toBeCloseTo(0.10, 2);
+    expect(opp!.profitAbs).toBeCloseTo(0.1, 2);
   });
 
   /**
@@ -256,8 +258,8 @@ describe('Example Test - Template', () => {
 
     // ACT: Send multiple updates
     for (let i = 0; i < 10; i++) {
-      const price = 0.70 + i * 0.01; // Gradually increasing price
-      
+      const price = 0.7 + i * 0.01; // Gradually increasing price
+
       topOfBookSubject.next({
         assetId: 'parent-yes',
         marketHash: 'hash-1',
@@ -287,15 +289,17 @@ describe('Example Test - Template', () => {
       groupKey: 'BTC-TEST',
       eventSlug: 'btc-test',
       crypto: 'BTC',
-      parents: [{
-        marketId: 'parent-1',
-        slug: 'test',
-        question: 'Test?',
-        clobTokenIds: ['token-1'],
-        bounds: { lower: 80000 },
-        kind: 'above',
-        role: 'parent',
-      }],
+      parents: [
+        {
+          marketId: 'parent-1',
+          slug: 'test',
+          question: 'Test?',
+          clobTokenIds: ['token-1'],
+          bounds: { lower: 80000 },
+          kind: 'above',
+          role: 'parent',
+        },
+      ],
       children: [],
       unmatched: [],
       overridesApplied: [],
@@ -329,7 +333,7 @@ describe('Example Test - Template', () => {
   it('example 5 - should respect custom profit thresholds', async () => {
     // ARRANGE: Set high profit threshold
     process.env.ARB_MIN_PROFIT_BPS = '10000'; // 100%
-    
+
     // Create new service with new env vars
     const testService = new ArbitrageEngineService(
       marketStructureService,
@@ -345,15 +349,17 @@ describe('Example Test - Template', () => {
       groupKey: 'BTC-TEST',
       eventSlug: 'btc-test',
       crypto: 'BTC',
-      parents: [{
-        marketId: 'p1',
-        slug: 's1',
-        question: 'q1',
-        clobTokenIds: ['t1'],
-        bounds: { lower: 80000 },
-        kind: 'above',
-        role: 'parent',
-      }],
+      parents: [
+        {
+          marketId: 'p1',
+          slug: 's1',
+          question: 'q1',
+          clobTokenIds: ['t1'],
+          bounds: { lower: 80000 },
+          kind: 'above',
+          role: 'parent',
+        },
+      ],
       children: [],
       unmatched: [],
       overridesApplied: [],
@@ -368,7 +374,7 @@ describe('Example Test - Template', () => {
       marketHash: 'h1',
       marketId: 'p1',
       bestBid: 0.51,
-      bestAsk: 0.50,
+      bestAsk: 0.5,
       timestampMs: Date.now(),
     });
 
@@ -382,4 +388,3 @@ describe('Example Test - Template', () => {
     delete process.env.ARB_MIN_PROFIT_BPS;
   });
 });
-

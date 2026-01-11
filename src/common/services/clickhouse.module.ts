@@ -7,4 +7,3 @@ import { ClickHouseService } from './clickhouse.service';
   exports: [ClickHouseService],
 })
 export class ClickHouseModule {}
-

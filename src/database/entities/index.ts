@@ -8,6 +8,7 @@ export * from './event.entity';
 // Strategy Entities
 export * from './arb-signal.entity';
 export * from './arb-paper-trade.entity';
+export * from './arb-real-trade.entity';
 
 // Export thêm entities khác ở đây khi có
 // export * from './user.entity';

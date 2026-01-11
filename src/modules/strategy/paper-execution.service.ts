@@ -89,11 +89,8 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async handleOpportunity(
-    opportunity: ArbOpportunity,
-  ): Promise<void> {
+  private async handleOpportunity(opportunity: ArbOpportunity): Promise<void> {
     try {
-
       // Log full opportunity details for debugging
 
       // 1. Save signal to database
@@ -117,9 +114,7 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async saveSignal(
-    opportunity: ArbOpportunity,
-  ): Promise<ArbSignal> {
+  private async saveSignal(opportunity: ArbOpportunity): Promise<ArbSignal> {
     // Debug log opportunity sizes before save
     // this.logger.debug(
     //   `Saving signal with sizes - Parent: bid=${opportunity.parent.bestBidSize}, ask=${opportunity.parent.bestAskSize}, ` +
@@ -244,8 +239,12 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
       parentBestAskSize: this.toFiniteOrNull(opportunity.parent.bestAskSize),
       parentUpperBestBid: this.toFiniteOrNull(opportunity.parentUpperBestBid),
       parentUpperBestAsk: this.toFiniteOrNull(opportunity.parentUpperBestAsk),
-      parentUpperBestBidSize: this.toFiniteOrNull(opportunity.parentUpper?.bestBidSize),
-      parentUpperBestAskSize: this.toFiniteOrNull(opportunity.parentUpper?.bestAskSize),
+      parentUpperBestBidSize: this.toFiniteOrNull(
+        opportunity.parentUpper?.bestBidSize,
+      ),
+      parentUpperBestAskSize: this.toFiniteOrNull(
+        opportunity.parentUpper?.bestAskSize,
+      ),
       childrenSumAsk: this.toFiniteOrNull(opportunity.childrenSumAsk),
       childrenSumBid: this.toFiniteOrNull(opportunity.childrenSumBid),
       profitAbs: this.toFiniteOrNull(opportunity.profitAbs) ?? 0,
@@ -299,7 +298,10 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
       });
 
       // Buy parent upper at ask (if exists)
-      if (opportunity.parentUpper?.bestAsk && opportunity.parentUpper.bestAsk > 0) {
+      if (
+        opportunity.parentUpper?.bestAsk &&
+        opportunity.parentUpper.bestAsk > 0
+      ) {
         fills.push({
           assetId: opportunity.parentUpper.assetId || '',
           marketSlug: opportunity.parentUpper.marketSlug,
@@ -336,7 +338,10 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
       });
 
       // Sell parent upper at bid (if exists)
-      if (opportunity.parentUpper?.bestBid && opportunity.parentUpper.bestBid > 0) {
+      if (
+        opportunity.parentUpper?.bestBid &&
+        opportunity.parentUpper.bestBid > 0
+      ) {
         fills.push({
           assetId: opportunity.parentUpper.assetId || '',
           marketSlug: opportunity.parentUpper.marketSlug,
@@ -358,11 +363,15 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
             : opportunity.polymarketTriangleContext?.mode || 'BUY';
       const payoutPerUnit =
         opportunity.polymarketTriangleContext?.payout ??
-        (opportunity.children.length + 1);
+        opportunity.children.length + 1;
 
       if (mode === 'BUY') {
         // Buy all legs at ask, receive synthetic payout
-        if (opportunity.parent.bestAsk && opportunity.parent.bestAsk > 0 && opportunity.parent.bestAskSize) {
+        if (
+          opportunity.parent.bestAsk &&
+          opportunity.parent.bestAsk > 0 &&
+          opportunity.parent.bestAskSize
+        ) {
           fills.push({
             assetId: opportunity.parent.assetId || '',
             marketSlug: opportunity.parent.marketSlug,
@@ -372,7 +381,11 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
           });
         }
 
-        if (opportunity.parentUpper?.bestAsk && opportunity.parentUpper.bestAsk > 0 && opportunity.parentUpper.bestAskSize) {
+        if (
+          opportunity.parentUpper?.bestAsk &&
+          opportunity.parentUpper.bestAsk > 0 &&
+          opportunity.parentUpper.bestAskSize
+        ) {
           fills.push({
             assetId: opportunity.parentUpper.assetId || '',
             marketSlug: opportunity.parentUpper.marketSlug,
@@ -401,7 +414,11 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
         }
       } else {
         // SELL mode: short all legs at bid, pay synthetic payout
-        if (opportunity.parent.bestBid && opportunity.parent.bestBid > 0 && opportunity.parent.bestBidSize) {
+        if (
+          opportunity.parent.bestBid &&
+          opportunity.parent.bestBid > 0 &&
+          opportunity.parent.bestBidSize
+        ) {
           fills.push({
             assetId: opportunity.parent.assetId || '',
             marketSlug: opportunity.parent.marketSlug,
@@ -411,7 +428,11 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
           });
         }
 
-        if (opportunity.parentUpper?.bestBid && opportunity.parentUpper.bestBid > 0 && opportunity.parentUpper.bestBidSize) {
+        if (
+          opportunity.parentUpper?.bestBid &&
+          opportunity.parentUpper.bestBid > 0 &&
+          opportunity.parentUpper.bestBidSize
+        ) {
           fills.push({
             assetId: opportunity.parentUpper.assetId || '',
             marketSlug: opportunity.parentUpper.marketSlug,
@@ -454,7 +475,8 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
             marketSlug: child.marketSlug,
             side: 'buy',
             price: child.bestAsk,
-            size: ctx?.childBestAskSizeYes || child.bestAskSize || this.defaultSize,
+            size:
+              ctx?.childBestAskSizeYes || child.bestAskSize || this.defaultSize,
             index: child.index,
           });
         }
@@ -489,7 +511,8 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
             marketSlug: child.marketSlug,
             side: 'sell',
             price: child.bestBid,
-            size: ctx?.childBestBidSizeYes || child.bestBidSize || this.defaultSize,
+            size:
+              ctx?.childBestBidSizeYes || child.bestBidSize || this.defaultSize,
             index: child.index,
           });
         }
@@ -502,7 +525,8 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
             marketSlug: child.marketSlug,
             side: 'buy',
             price: child.bestAsk,
-            size: ctx?.childBestAskSizeYes || child.bestAskSize || this.defaultSize,
+            size:
+              ctx?.childBestAskSizeYes || child.bestAskSize || this.defaultSize,
             index: child.index,
           });
         }
@@ -514,7 +538,10 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
             marketSlug: opportunity.parent.marketSlug,
             side: 'sell',
             price: opportunity.parent.bestBid,
-            size: ctx?.parentBestBidSizeYes || opportunity.parent.bestBidSize || this.defaultSize,
+            size:
+              ctx?.parentBestBidSizeYes ||
+              opportunity.parent.bestBidSize ||
+              this.defaultSize,
           });
         }
       } else if (opportunity.strategy === 'BUY_PARENT_NO_SELL_CHILD_NO') {
@@ -546,12 +573,11 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
 
     // Tính filled size = min size của tất cả fills
     // Trong arbitrage, nếu một leg không fill đủ, toàn bộ position phải giảm
-    const filledSize = fills.length > 0
-      ? Math.min(...fills.map(f => f.size))
-      : 0;
+    const filledSize =
+      fills.length > 0 ? Math.min(...fills.map((f) => f.size)) : 0;
 
     // Adjust tất cả fills về filledSize
-    fills.forEach(fill => {
+    fills.forEach((fill) => {
       fill.size = filledSize;
     });
 
@@ -567,7 +593,7 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
     ) {
       const payoutPerUnit =
         opportunity.polymarketTriangleContext?.payout ??
-        (opportunity.children.length + 1);
+        opportunity.children.length + 1;
       const mode =
         opportunity.strategy === 'POLYMARKET_TRIANGLE_SELL'
           ? 'SELL'
@@ -623,7 +649,7 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
 
     fills.forEach((fill) => {
       const amount = fill.price * fill.size;
-      
+
       if (fill.side === 'sell') {
         cashFlow += amount; // Nhận tiền khi bán
       } else if (fill.side === 'buy') {
@@ -633,8 +659,8 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
 
     // Tính total invested (tổng số tiền đầu tư vào - chỉ tính buy side)
     const totalInvested = fills
-      .filter(f => f.side === 'buy')
-      .reduce((sum, f) => sum + (f.price * f.size), 0);
+      .filter((f) => f.side === 'buy')
+      .reduce((sum, f) => sum + f.price * f.size, 0);
 
     const pnlAbs = cashFlow;
     const pnlBps = totalInvested > 0 ? (pnlAbs / totalInvested) * 10_000 : 0;
@@ -757,8 +783,8 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
     minCost: number | null;
     bestProfitStrategy: StrategyAggregate | null;
     mostFrequentStrategy: StrategyAggregate | null;
-  strategyByFrequency: StrategyAggregate[];
-  strategyByProfit: StrategyAggregate[];
+    strategyByFrequency: StrategyAggregate[];
+    strategyByProfit: StrategyAggregate[];
     topProfitTrade: TopProfitTrade | null;
   }> {
     const [raw] = await this.arbPaperTradeRepository.query(
@@ -877,9 +903,7 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
     const toNumber = (value: string | number | null | undefined): number =>
       Number(value ?? 0);
 
-    const normalizeStrategy = (
-      rawStrategy: any,
-    ): StrategyAggregate | null => {
+    const normalizeStrategy = (rawStrategy: any): StrategyAggregate | null => {
       if (!rawStrategy) return null;
       const tradeCount = toNumber(rawStrategy.tradeCount);
       const totalProfit = toNumber(rawStrategy.totalProfit);
@@ -957,8 +981,7 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
       0,
     );
     const avgPnlBps =
-      trades.reduce((sum, t) => sum + Number(t.pnlBps || 0), 0) /
-      trades.length;
+      trades.reduce((sum, t) => sum + Number(t.pnlBps || 0), 0) / trades.length;
     const winningTrades = trades.filter((t) => Number(t.pnlAbs || 0) > 0);
     const winRate = winningTrades.length / trades.length;
     const avgLatencyMs =
@@ -974,4 +997,3 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
     };
   }
 }
-

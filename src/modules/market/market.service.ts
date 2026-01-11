@@ -46,7 +46,7 @@ export class MarketService implements OnApplicationBootstrap {
   /**
    * Cron job runs every 15 minutes to check and remove expired markets
    */
-  @Cron('0 */15 * * * *') // Every 15 minutes
+  @Cron('0 */4 * * * *') // Every 15 minutes
   async handleExpiredMarketsCleanup() {
     this.logger.log('Starting expired markets cleanup...');
     try {
@@ -134,7 +134,7 @@ export class MarketService implements OnApplicationBootstrap {
         ])
         .where('market.active = :active', { active: true })
         .andWhere('market.startTime IS NOT NULL')
-        .andWhere('market.endDate > :now', { now })
+        // .andWhere('market.endDate > :now', { now })
         .getMany();
 
       if (marketsToCheck.length === 0) {
@@ -166,9 +166,8 @@ export class MarketService implements OnApplicationBootstrap {
       const uniqueTokens = [...new Set(allTokens)];
 
       // Filter out already subscribed tokens
-      const subscriptionStatus = this.ingestionService.areTokensSubscribed(
-        uniqueTokens,
-      );
+      const subscriptionStatus =
+        this.ingestionService.areTokensSubscribed(uniqueTokens);
       const tokensToSubscribe = uniqueTokens.filter(
         (_, index) => !subscriptionStatus[index],
       );
@@ -202,7 +201,6 @@ export class MarketService implements OnApplicationBootstrap {
   async fetchMarketBySlug(slug: string): Promise<MarketApiResponse | null> {
     return this.polymarketApi.fetchMarketBySlug(slug);
   }
-
 
   /**
    * Get all active tokens

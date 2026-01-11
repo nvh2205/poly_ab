@@ -117,7 +117,6 @@ export class MarketController {
     };
   }
 
-
   @Delete('redis/clear')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -203,5 +202,4 @@ export class MarketController {
       timestamp: new Date().toISOString(),
     };
   }
-
 }

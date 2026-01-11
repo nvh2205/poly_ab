@@ -1,4 +1,11 @@
-import { Entity, Column, Index, JoinColumn, ManyToOne, RelationId } from 'typeorm';
+import {
+  Entity,
+  Column,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  RelationId,
+} from 'typeorm';
 import { BaseEntity } from './base.entity';
 import { Event } from './event.entity';
 

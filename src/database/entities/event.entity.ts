@@ -51,5 +51,3 @@ export class Event extends BaseEntity {
   @OneToMany(() => Market, (market) => market.event)
   markets: Market[];
 }
-
-

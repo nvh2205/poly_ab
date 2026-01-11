@@ -21,7 +21,8 @@ function buildDataSource(): DataSource {
     database: process.env.DB_DATABASE || 'polymarket_orderbook_ab',
     ssl: sslEnabled
       ? {
-          rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
+          rejectUnauthorized:
+            process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
         }
       : undefined,
     entities: [Market, Event],
@@ -51,7 +52,8 @@ async function main(): Promise<void> {
       DB_USERNAME: process.env.DB_USERNAME || 'root',
       DB_DATABASE: process.env.DB_DATABASE || 'polymarket_orderbook_ab',
       DB_SSL: process.env.DB_SSL === 'true',
-      DB_SSL_REJECT_UNAUTHORIZED: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
+      DB_SSL_REJECT_UNAUTHORIZED:
+        process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
     },
     capturedLogs: [],
   };
@@ -87,11 +89,15 @@ async function main(): Promise<void> {
     const tokenKeys = Array.from(internals.tokenIndex?.keys?.() ?? []);
     const groupKeys = Array.from(internals.groups?.keys?.() ?? []);
 
-    const takeMaybe = <T,>(arr: T[]): T[] =>
-      includeAllKeys ? arr : arr.slice(0, Number.isFinite(previewLimit) ? previewLimit : 200);
+    const takeMaybe = <T>(arr: T[]): T[] =>
+      includeAllKeys
+        ? arr
+        : arr.slice(0, Number.isFinite(previewLimit) ? previewLimit : 200);
 
     const sampleGroupKey = groupKeys[0];
-    const sampleGroup = sampleGroupKey ? internals.groups.get(sampleGroupKey) : undefined;
+    const sampleGroup = sampleGroupKey
+      ? internals.groups.get(sampleGroupKey)
+      : undefined;
 
     console.log('--- Captured Logger output ---');
     console.log(capturedLogs.join('\n') || '(no logs)');
@@ -102,9 +108,15 @@ async function main(): Promise<void> {
     console.log(`slugIndex size: ${slugKeys.length}`);
     console.log(`tokenIndex size: ${tokenKeys.length}`);
     console.log('\nSample keys:');
-    console.log(`marketIdIndex keys: ${marketIdKeys.slice(0, 10).join(', ') || '(none)'}`);
-    console.log(`slugIndex keys: ${slugKeys.slice(0, 10).join(', ') || '(none)'}`);
-    console.log(`tokenIndex keys: ${tokenKeys.slice(0, 10).join(', ') || '(none)'}`);
+    console.log(
+      `marketIdIndex keys: ${marketIdKeys.slice(0, 10).join(', ') || '(none)'}`,
+    );
+    console.log(
+      `slugIndex keys: ${slugKeys.slice(0, 10).join(', ') || '(none)'}`,
+    );
+    console.log(
+      `tokenIndex keys: ${tokenKeys.slice(0, 10).join(', ') || '(none)'}`,
+    );
     if (sampleGroupKey) {
       console.log('\n--- Sample group (first) ---');
       console.log(JSON.stringify(sampleGroup, null, 2));
@@ -161,4 +173,3 @@ async function main(): Promise<void> {
 }
 
 void main();
-

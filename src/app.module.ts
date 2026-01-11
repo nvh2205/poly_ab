@@ -8,6 +8,7 @@ import { MarketModule } from './modules/market/market.module';
 import { IngestionModule } from './modules/ingestion/ingestion.module';
 import { RedisModule } from './common/services/redis.module';
 import { ClickHouseModule } from './common/services/clickhouse.module';
+import { PolymarketOnchainModule } from './common/services/polymarket-onchain.module';
 import { APP_CONSTANTS } from './common/constants/app.constants';
 import { Market } from './database/entities/market.entity';
 import { Event } from './database/entities/event.entity';
@@ -44,6 +45,7 @@ import { StrategyModule } from './modules/strategy/strategy.module';
     DatabaseModule, // Global database module
     RedisModule,
     ClickHouseModule,
+    PolymarketOnchainModule,
     MarketModule,
     EventModule,
     IngestionModule,

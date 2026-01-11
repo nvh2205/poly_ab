@@ -5,12 +5,15 @@ import { ArbitrageEngineService } from '../src/modules/strategy/arbitrage-engine
 import { MarketStructureService } from '../src/modules/strategy/market-structure.service';
 import { MarketDataStreamService } from '../src/modules/ingestion/market-data-stream.service';
 import { TopOfBookUpdate } from '../src/modules/strategy/interfaces/top-of-book.interface';
-import { RangeGroup, MarketRangeDescriptor } from '../src/modules/strategy/interfaces/range-group.interface';
+import {
+  RangeGroup,
+  MarketRangeDescriptor,
+} from '../src/modules/strategy/interfaces/range-group.interface';
 import { ArbOpportunity } from '../src/modules/strategy/interfaces/arbitrage.interface';
 
 /**
  * Advanced simulation tests for ArbitrageEngineService
- * 
+ *
  * This test suite simulates realistic market scenarios including:
  * 1. Market volatility with rapid price changes
  * 2. Multiple concurrent arbitrage opportunities
@@ -196,13 +199,13 @@ describe('ArbitrageEngineService - Advanced Simulations', () => {
         group,
         [
           { bid: 0.72, ask: 0.74 }, // >80k: high probability
-          { bid: 0.08, ask: 0.10 }, // >90k: low probability
+          { bid: 0.08, ask: 0.1 }, // >90k: low probability
         ],
         [
-          { bid: 0.08, ask: 0.10 }, // 80-82k: low prob (price likely higher)
+          { bid: 0.08, ask: 0.1 }, // 80-82k: low prob (price likely higher)
           { bid: 0.15, ask: 0.17 }, // 82-84k: medium-low prob
           { bid: 0.22, ask: 0.24 }, // 84-86k: highest prob (current range)
-          { bid: 0.18, ask: 0.20 }, // 86-88k: medium prob
+          { bid: 0.18, ask: 0.2 }, // 86-88k: medium prob
           { bid: 0.09, ask: 0.11 }, // 88-90k: low prob
         ],
       );
@@ -238,7 +241,7 @@ describe('ArbitrageEngineService - Advanced Simulations', () => {
       // Parent >80k bid (0.85) vs sum of ranges + >90k
       const rallyOppCount = opportunities.length;
       console.log(`Rally opportunities detected: ${rallyOppCount}`);
-      
+
       expect(opportunities.length).toBeGreaterThan(0);
     });
   });
@@ -254,19 +257,19 @@ describe('ArbitrageEngineService - Advanced Simulations', () => {
       // Parent >80k is priced at 0.90 (90% probability)
       // But sum of all ranges 80-90k is only 0.50 (50%)
       // This creates arbitrage: buy all ranges + sell parent
-      
+
       simulateMarketState(
         group,
         [
-          { bid: 0.90, ask: 0.92 }, // >80k: overpriced
-          { bid: 0.08, ask: 0.10 }, // >90k: reasonably priced
+          { bid: 0.9, ask: 0.92 }, // >80k: overpriced
+          { bid: 0.08, ask: 0.1 }, // >90k: reasonably priced
         ],
         [
-          { bid: 0.08, ask: 0.10 }, // 80-82k: underpriced
-          { bid: 0.08, ask: 0.10 }, // 82-84k: underpriced
-          { bid: 0.08, ask: 0.10 }, // 84-86k: underpriced
-          { bid: 0.08, ask: 0.10 }, // 86-88k: underpriced
-          { bid: 0.08, ask: 0.10 }, // 88-90k: underpriced
+          { bid: 0.08, ask: 0.1 }, // 80-82k: underpriced
+          { bid: 0.08, ask: 0.1 }, // 82-84k: underpriced
+          { bid: 0.08, ask: 0.1 }, // 84-86k: underpriced
+          { bid: 0.08, ask: 0.1 }, // 86-88k: underpriced
+          { bid: 0.08, ask: 0.1 }, // 88-90k: underpriced
         ],
       );
 
@@ -278,18 +281,22 @@ describe('ArbitrageEngineService - Advanced Simulations', () => {
       );
 
       expect(unbundlingOpps.length).toBeGreaterThan(0);
-      
+
       if (unbundlingOpps.length > 0) {
-        const bestOpp = unbundlingOpps.reduce((prev, current) => 
-          current.profitAbs > prev.profitAbs ? current : prev
+        const bestOpp = unbundlingOpps.reduce((prev, current) =>
+          current.profitAbs > prev.profitAbs ? current : prev,
         );
 
         console.log(`Best unbundling opportunity:`);
-        console.log(`  Profit: $${bestOpp.profitAbs.toFixed(4)} (${bestOpp.profitBps.toFixed(2)} bps)`);
+        console.log(
+          `  Profit: $${bestOpp.profitAbs.toFixed(4)} (${bestOpp.profitBps.toFixed(2)} bps)`,
+        );
         console.log(`  Parent bid: ${bestOpp.parentBestBid}`);
         console.log(`  Children sum ask: ${bestOpp.childrenSumAsk}`);
         console.log(`  Parent upper ask: ${bestOpp.parentUpperBestAsk}`);
-        console.log(`  Total cost: ${(bestOpp.childrenSumAsk + (bestOpp.parentUpperBestAsk || 0)).toFixed(4)}`);
+        console.log(
+          `  Total cost: ${(bestOpp.childrenSumAsk + (bestOpp.parentUpperBestAsk || 0)).toFixed(4)}`,
+        );
 
         expect(bestOpp.profitAbs).toBeGreaterThan(0.25); // At least 25 cent profit
         expect(bestOpp.profitBps).toBeGreaterThan(1000); // At least 10%
@@ -351,19 +358,19 @@ describe('ArbitrageEngineService - Advanced Simulations', () => {
 
       for (let i = 0; i < updateCount; i++) {
         const variance = 0.02; // 2% variance
-        const basePrice = 0.20;
+        const basePrice = 0.2;
         const randomFactor = 1 + (Math.random() - 0.5) * variance;
 
         simulateMarketState(
           group,
           [
-            { 
-              bid: 0.75 * randomFactor, 
-              ask: 0.76 * randomFactor 
+            {
+              bid: 0.75 * randomFactor,
+              ask: 0.76 * randomFactor,
             },
-            { 
-              bid: 0.10 * randomFactor, 
-              ask: 0.11 * randomFactor 
+            {
+              bid: 0.1 * randomFactor,
+              ask: 0.11 * randomFactor,
             },
           ],
           group.children.map(() => ({
@@ -380,7 +387,9 @@ describe('ArbitrageEngineService - Advanced Simulations', () => {
       // Wait for all scans to complete
       await new Promise((resolve) => setTimeout(resolve, 200));
 
-      console.log(`Processed ${updateCount} updates, detected ${opportunities.length} opportunities`);
+      console.log(
+        `Processed ${updateCount} updates, detected ${opportunities.length} opportunities`,
+      );
 
       // Should have detected some opportunities despite rapid updates
       expect(opportunities.length).toBeGreaterThan(0);
@@ -398,12 +407,12 @@ describe('ArbitrageEngineService - Advanced Simulations', () => {
       // Parent >80k covers all ranges 80k+
       // Parent >90k covers ranges beyond 90k
       // We'll make arbitrage profitable for ranges 80-90k only
-      
+
       simulateMarketState(
         group,
         [
-          { bid: 0.80, ask: 0.82 }, // >80k
-          { bid: 0.10, ask: 0.12 }, // >90k
+          { bid: 0.8, ask: 0.82 }, // >80k
+          { bid: 0.1, ask: 0.12 }, // >90k
         ],
         [
           { bid: 0.13, ask: 0.15 }, // 80-82k
@@ -420,7 +429,9 @@ describe('ArbitrageEngineService - Advanced Simulations', () => {
       // Profit = 0.80 (parent bid) - (5 * 0.15 + 0.12) = 0.80 - 0.87 = -0.07 (not profitable for all 5)
       // But should try different combinations
 
-      console.log(`Detected ${opportunities.length} opportunities with partial coverage`);
+      console.log(
+        `Detected ${opportunities.length} opportunities with partial coverage`,
+      );
       expect(opportunities.length).toBeGreaterThanOrEqual(0); // May or may not find profitable combination
     });
   });
@@ -465,7 +476,7 @@ describe('ArbitrageEngineService - Advanced Simulations', () => {
       // Verify sizes are tracked
       const internals = service as any;
       const state = internals.groups.get(group.groupKey);
-      
+
       expect(state.parentStates[0].bestBidSize).toBe(10);
       expect(state.parentStates[0].bestAskSize).toBe(10);
     });
@@ -525,7 +536,7 @@ describe('ArbitrageEngineService - Advanced Simulations', () => {
       );
 
       console.log(`Significant opportunities (>5¢): ${significantOpps.length}`);
-      
+
       // Realistic markets should have few/no large arbitrage opportunities
       expect(significantOpps.length).toBeLessThanOrEqual(2);
     });
@@ -545,7 +556,7 @@ describe('ArbitrageEngineService - Advanced Simulations', () => {
       for (let i = 0; i < updateCount; i++) {
         const marketIdx = i % (group.children.length + group.parents.length);
         const isParent = marketIdx >= group.children.length;
-        const price = 0.10 + Math.random() * 0.70; // Random between 0.10 and 0.80
+        const price = 0.1 + Math.random() * 0.7; // Random between 0.10 and 0.80
         const spread = 0.01 + Math.random() * 0.02; // 1-3% spread
 
         if (isParent) {
@@ -586,8 +597,12 @@ describe('ArbitrageEngineService - Advanced Simulations', () => {
       console.log(`Performance metrics:`);
       console.log(`  Total updates: ${updateCount}`);
       console.log(`  Total time: ${totalTime}ms`);
-      console.log(`  Average time per update: ${avgTimePerUpdate.toFixed(2)}ms`);
-      console.log(`  Updates per second: ${((updateCount / totalTime) * 1000).toFixed(2)}`);
+      console.log(
+        `  Average time per update: ${avgTimePerUpdate.toFixed(2)}ms`,
+      );
+      console.log(
+        `  Updates per second: ${((updateCount / totalTime) * 1000).toFixed(2)}`,
+      );
       console.log(`  Opportunities detected: ${opportunities.length}`);
 
       // Performance check: should handle at least 100 updates per second
@@ -595,4 +610,3 @@ describe('ArbitrageEngineService - Advanced Simulations', () => {
     });
   });
 });
-

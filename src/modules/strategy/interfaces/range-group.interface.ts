@@ -31,4 +31,3 @@ export interface RangeGroup {
   unmatched: MarketRangeDescriptor[];
   overridesApplied: string[];
 }
-

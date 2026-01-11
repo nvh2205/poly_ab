@@ -2,7 +2,10 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { APP_CONSTANTS, SlugConfig } from '../../common/constants/app.constants';
+import {
+  APP_CONSTANTS,
+  SlugConfig,
+} from '../../common/constants/app.constants';
 import { UtilService } from '../../common/services/util.service';
 import { PolymarketApiService } from '../../common/services/polymarket-api.service';
 import { Event, Market } from '../../database/entities';
@@ -26,7 +29,8 @@ type PolymarketEventResponse = {
 @Injectable()
 export class EventCrawlerService implements OnApplicationBootstrap {
   private readonly logger = new Logger(EventCrawlerService.name);
-  private readonly eventSlugConfigs: SlugConfig[] = APP_CONSTANTS.EVENT_SLUG_CONFIGS;
+  private readonly eventSlugConfigs: SlugConfig[] =
+    APP_CONSTANTS.EVENT_SLUG_CONFIGS;
 
   constructor(
     private readonly utilService: UtilService,
@@ -57,13 +61,14 @@ export class EventCrawlerService implements OnApplicationBootstrap {
       try {
         await this.fetchAndSaveEventBySlug(slug, config.crypto);
       } catch (error) {
-        this.logger.error(`Failed to crawl event slug=${slug}:`, error?.message);
+        this.logger.error(
+          `Failed to crawl event slug=${slug}:`,
+          error?.message,
+        );
       }
     }
 
-    this.logger.log(
-      `Event crawl finished in ${Date.now() - startedAt}ms`,
-    );
+    this.logger.log(`Event crawl finished in ${Date.now() - startedAt}ms`);
   }
 
   /**
@@ -76,11 +81,17 @@ export class EventCrawlerService implements OnApplicationBootstrap {
         return config.crypto;
       }
       // For timestamp patterns, slug format is baseSlug-timestamp (e.g., 'btc-updown-15m-1764612000')
-      if (config.pattern === 'timestamp' && slug.startsWith(config.baseSlug + '-')) {
+      if (
+        config.pattern === 'timestamp' &&
+        slug.startsWith(config.baseSlug + '-')
+      ) {
         return config.crypto;
       }
       // For datetime patterns, slug format is baseSlug-datetime (e.g., 'bitcoin-up-or-down-december-1-11am-et')
-      if (config.pattern === 'datetime' && slug.startsWith(config.baseSlug + '-')) {
+      if (
+        config.pattern === 'datetime' &&
+        slug.startsWith(config.baseSlug + '-')
+      ) {
         return config.crypto;
       }
     }
@@ -91,7 +102,9 @@ export class EventCrawlerService implements OnApplicationBootstrap {
     // If crypto not provided, try to find it from slug
     const cryptoValue = crypto || this.findCryptoFromSlug(slug);
     if (!cryptoValue) {
-      this.logger.warn(`Could not determine crypto from slug=${slug}, using 'btc' as default`);
+      this.logger.warn(
+        `Could not determine crypto from slug=${slug}, using 'btc' as default`,
+      );
     }
 
     const eventData = await this.polymarketApi.fetchEventBySlug(slug);
@@ -100,10 +113,13 @@ export class EventCrawlerService implements OnApplicationBootstrap {
     }
 
     const savedEvent = await this.upsertEvent(eventData);
-    await this.upsertMarketsFromEvent(savedEvent, eventData?.markets, cryptoValue || 'btc');
+    await this.upsertMarketsFromEvent(
+      savedEvent,
+      eventData?.markets,
+      cryptoValue || 'btc',
+    );
     return savedEvent;
   }
-
 
   private async upsertEvent(payload: PolymarketEventResponse): Promise<Event> {
     if (!payload?.id) {
@@ -173,10 +189,7 @@ export class EventCrawlerService implements OnApplicationBootstrap {
     }
 
     const existing = await this.marketRepository.findOne({
-      where: [
-        ...(marketId ? [{ marketId }] : []),
-        ...(slug ? [{ slug }] : []),
-      ],
+      where: [...(marketId ? [{ marketId }] : []), ...(slug ? [{ slug }] : [])],
     });
 
     const market = existing || this.marketRepository.create();
@@ -194,17 +207,20 @@ export class EventCrawlerService implements OnApplicationBootstrap {
       market.conditionId ??
       null;
     market.questionID =
-      marketData?.questionID ?? marketData?.question_id ?? market.questionID ?? null;
+      marketData?.questionID ??
+      marketData?.question_id ??
+      market.questionID ??
+      null;
 
     // Set status flags
     market.active =
       marketData?.active !== undefined
         ? Boolean(marketData.active)
-        : market.active ?? true;
+        : (market.active ?? true);
     market.closed =
       marketData?.closed !== undefined
         ? Boolean(marketData.closed)
-        : market.closed ?? false;
+        : (market.closed ?? false);
 
     // Set dates
     market.creationDate =
@@ -258,5 +274,3 @@ export class EventCrawlerService implements OnApplicationBootstrap {
     await this.marketRepository.save(market);
   }
 }
-
-

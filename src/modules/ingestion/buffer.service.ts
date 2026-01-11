@@ -76,8 +76,10 @@ export class BufferService implements OnModuleInit {
     this.buffer.push(data);
     // Emit top-of-book update with orderbook size information
     // Find best bid (highest price) and best ask (lowest price) from the orderbook
-    const { bestBid, bestAsk, bestBidSize, bestAskSize } =
-      this.findBestBidAsk(data.bids, data.asks);
+    const { bestBid, bestAsk, bestBidSize, bestAskSize } = this.findBestBidAsk(
+      data.bids,
+      data.asks,
+    );
     const tsMs = this.normalizeTimestampMs(Number(data.timestamp));
     // if (data.asset_id === '105508083447924148526783669819657180357261025688241426014197548801294535749915') {
     //   console.log('bestBidSize socket', bestBidSize);
