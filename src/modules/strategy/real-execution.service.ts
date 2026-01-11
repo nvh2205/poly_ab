@@ -30,7 +30,7 @@ interface RealTradeResult {
 /**
  * Real Execution Service
  * Executes real trades on Polymarket when arbitrage opportunities meet PnL threshold
- * 
+ *
  * Key Features:
  * - PnL threshold check: only execute if PnL >= 2% of total_cost
  * - Batch order execution for speed optimization
@@ -60,12 +60,12 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    if (!this.enabled) {
-      this.logger.warn(
-        'Real trading is DISABLED. Set REAL_TRADING_ENABLED=true to enable.',
-      );
-      return;
-    }
+    // if (!this.enabled) {
+    //   this.logger.warn(
+    //     'Real trading is DISABLED. Set REAL_TRADING_ENABLED=true to enable.',
+    //   );
+    //   return;
+    // }
 
     this.logger.log('Real Execution Service initializing...');
     this.logger.log(
@@ -107,24 +107,34 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
         `🎯 Signal meets threshold! PnL: ${pnlPercent.toFixed(2)}% (${opportunity.profitAbs.toFixed(4)} USDC) - Strategy: ${opportunity.strategy}`,
       );
 
-      // Save signal first
-      const signal = await this.saveSignal(opportunity);
+      // SPEED OPTIMIZATION: Execute trade IMMEDIATELY, save to DB later (async)
+      const tradeStartTime = Date.now();
 
-      // Execute real trade
-      const tradeResult = await this.executeRealTrade(opportunity, signal.id);
+      // Execute real trade WITHOUT waiting for DB save
+      const tradeResult = await this.executeRealTrade(
+        opportunity,
+        'pending', // Temporary ID, will be updated after DB save
+      );
 
-      // Save trade result to database
-      await this.saveRealTrade(tradeResult);
+      const tradeLatency = Date.now() - tradeStartTime;
 
       if (tradeResult.success) {
         this.logger.log(
-          `✅ Real trade executed successfully! Orders: ${tradeResult.orderIds?.join(', ')}`,
+          `✅ Real trade executed in ${tradeLatency}ms! Orders: ${tradeResult.orderIds?.join(', ')}`,
         );
       } else {
         this.logger.error(
-          `❌ Real trade failed: ${tradeResult.error}`,
+          `❌ Real trade failed after ${tradeLatency}ms: ${tradeResult.error}`,
         );
       }
+
+      // Save to database AFTER trade execution (async, non-blocking for next signal)
+      this.saveSignalAndTradeAsync(opportunity, tradeResult).catch((error) => {
+        this.logger.error(
+          `Failed to save signal/trade to DB: ${error.message}`,
+          error.stack,
+        );
+      });
     } catch (error) {
       this.logger.error(
         `Failed to handle opportunity: ${error.message}`,
@@ -136,23 +146,46 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   /**
    * Calculate total cost for the arbitrage opportunity
    */
+  /**
+   * Calculate total cost for the arbitrage opportunity
+   * Updated to include Minting Cost (Collateral) for Sell/Short orders
+   */
   private calculateTotalCost(opportunity: ArbOpportunity): number {
     const strategy = opportunity.strategy;
-
-    // For range arbitrage strategies
+    // 1. Range Strategy: SELL_PARENT_BUY_CHILDREN
+    // Logic: Short Parent (Cost: 1 - Bid) + Long Children (Cost: Ask) + Long Upper (Cost: Ask)
     if (strategy === 'SELL_PARENT_BUY_CHILDREN') {
-      // Cost = sum of children asks + parent upper ask
-      const childrenCost = opportunity.childrenSumAsk || 0;
-      const parentUpperCost = opportunity.parentUpperBestAsk || 0;
-      return childrenCost + parentUpperCost;
+      const childrenBuyCost = opportunity.childrenSumAsk || 0;
+      const parentUpperBuyCost = opportunity.parentUpperBestAsk || 0;
+
+      // Sell Parent Cost = 1 - Bid
+      const parentBid = opportunity.parent.bestBid || 0;
+      const parentSellCost = 1 - parentBid;
+
+      return childrenBuyCost + parentUpperBuyCost + parentSellCost;
     }
 
+    // 2. Range Strategy: BUY_PARENT_SELL_CHILDREN
+    // Logic: Long Parent (Cost: Ask) + Short Children (Cost: 1 - Bid) + Short Upper (Cost: 1 - Bid)
     if (strategy === 'BUY_PARENT_SELL_CHILDREN') {
-      // Cost = parent lower ask
-      return opportunity.parentBestAsk || 0;
+      const parentBuyCost = opportunity.parentBestAsk || 0;
+
+      // Sell Children Cost
+      let childrenSellCost = 0;
+      for (const child of opportunity.children) {
+        const bid = child.bestBid || 0;
+        childrenSellCost += 1 - bid;
+      }
+
+      // Sell Parent Upper Cost
+      const parentUpperBid = opportunity.parentUpper?.bestBid || 0;
+      const parentUpperSellCost = 1 - parentUpperBid;
+
+      return parentBuyCost + childrenSellCost + parentUpperSellCost;
     }
 
-    // For polymarket triangle strategies
+    // 3. Polymarket Triangle: BUY
+    // Logic: Buy all legs -> Cost is simply Sum of Asks
     if (
       strategy === 'POLYMARKET_TRIANGLE_BUY' ||
       strategy === 'POLYMARKET_TRIANGLE'
@@ -160,29 +193,49 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       return opportunity.polymarketTriangleContext?.totalCost || 0;
     }
 
+    // 4. Polymarket Triangle: SELL
+    // Logic: Must mint all legs first (cost = payout), then sell them (revenue = totalBid)
+    // Cost = payout (collateral to mint)
+    // Revenue = totalBid (already reflected in profitAbs)
     if (strategy === 'POLYMARKET_TRIANGLE_SELL') {
-      // For sell, cost is the payout we need to cover
-      const payout = opportunity.polymarketTriangleContext?.payout || 0;
+      const ctx = opportunity.polymarketTriangleContext;
+      const payout = ctx?.payout || 0; // Total Collateral needed to mint all legs
+
+      // Cost is the payout (amount needed to mint)
+      // The revenue (totalBid) is already calculated in profitAbs
       return payout;
     }
 
-    // For binary chill strategies
-    if (
-      strategy === 'BUY_CHILD_YES_SELL_PARENT_NO' ||
-      strategy === 'BUY_CHILD_YES_SELL_PARENT_YES'
-    ) {
-      // Cost = child YES ask
-      return opportunity.childrenSumAsk || 0;
-    }
+    // 5. Binary Chill Strategies (Đã fix trước đó)
+    // Logic: Cost = Buy Ask + (1 - Sell Bid)
 
-    if (
-      strategy === 'BUY_PARENT_NO_SELL_CHILD_YES' ||
-      strategy === 'BUY_PARENT_NO_SELL_CHILD_NO'
-    ) {
-      // Cost = parent NO ask
-      const ctx = opportunity.binaryChillContext;
-      return ctx?.parentBestAskNo || 0;
-    }
+    // if (strategy === 'BUY_CHILD_YES_SELL_PARENT_NO') {
+    //   const buyCost = opportunity.childrenSumAsk || 0;
+    //   const ctx = opportunity.binaryChillContext;
+    //   const sellProceeds = ctx?.parentBestBidNo || 0;
+    //   return buyCost + (1 - sellProceeds);
+    // }
+
+    // if (strategy === 'BUY_CHILD_YES_SELL_PARENT_YES') {
+    //   const buyCost = opportunity.childrenSumAsk || 0;
+    //   const sellProceeds = opportunity.parent.bestBid || 0;
+    //   return buyCost + (1 - sellProceeds);
+    // }
+
+    // if (strategy === 'BUY_PARENT_NO_SELL_CHILD_YES') {
+    //   const ctx = opportunity.binaryChillContext;
+    //   const buyCost = ctx?.parentBestAskNo || 0;
+    //   const child = opportunity.children[0];
+    //   const sellProceeds = child?.bestBid || 0;
+    //   return buyCost + (1 - sellProceeds);
+    // }
+
+    // if (strategy === 'BUY_PARENT_NO_SELL_CHILD_NO') {
+    //   const ctx = opportunity.binaryChillContext;
+    //   const buyCost = ctx?.parentBestAskNo || 0;
+    //   const sellProceeds = ctx?.childBestBidNo || 0;
+    //   return buyCost + (1 - sellProceeds);
+    // }
 
     return 0;
   }
@@ -317,10 +370,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       }
 
       // Buy parent upper at ask
-      if (
-        opportunity.parentUpper?.assetId &&
-        opportunity.parentUpper.bestAsk
-      ) {
+      if (opportunity.parentUpper?.assetId && opportunity.parentUpper.bestAsk) {
         orders.push({
           tokenID: opportunity.parentUpper.assetId,
           price: opportunity.parentUpper.bestAsk,
@@ -361,10 +411,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       }
 
       // Sell parent upper at bid
-      if (
-        opportunity.parentUpper?.assetId &&
-        opportunity.parentUpper.bestBid
-      ) {
+      if (opportunity.parentUpper?.assetId && opportunity.parentUpper.bestBid) {
         orders.push({
           tokenID: opportunity.parentUpper.assetId,
           price: opportunity.parentUpper.bestBid,
@@ -394,10 +441,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       }
 
       // Buy parent upper NO at ask
-      if (
-        opportunity.parentUpper?.assetId &&
-        opportunity.parentUpper.bestAsk
-      ) {
+      if (opportunity.parentUpper?.assetId && opportunity.parentUpper.bestAsk) {
         orders.push({
           tokenID: opportunity.parentUpper.assetId,
           price: opportunity.parentUpper.bestAsk,
@@ -438,10 +482,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       }
 
       // Sell parent upper NO at bid
-      if (
-        opportunity.parentUpper?.assetId &&
-        opportunity.parentUpper.bestBid
-      ) {
+      if (opportunity.parentUpper?.assetId && opportunity.parentUpper.bestBid) {
         orders.push({
           tokenID: opportunity.parentUpper.assetId,
           price: opportunity.parentUpper.bestBid,
@@ -464,124 +505,6 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
             orderType: 'GTC',
           });
         }
-      }
-    }
-
-    // Binary Chill: BUY_CHILD_YES_SELL_PARENT_NO
-    else if (strategy === 'BUY_CHILD_YES_SELL_PARENT_NO') {
-      const child = opportunity.children[0];
-      const ctx = opportunity.binaryChillContext;
-
-      // Buy child YES at ask
-      if (child?.assetId && child.bestAsk) {
-        orders.push({
-          tokenID: child.assetId,
-          price: child.bestAsk,
-          size,
-          side: 'BUY',
-          feeRateBps: 0,
-          orderType: 'GTC',
-        });
-      }
-
-      // Sell parent NO at bid
-      if (ctx?.parentNoTokenId && ctx.parentBestBidNo) {
-        orders.push({
-          tokenID: ctx.parentNoTokenId,
-          price: ctx.parentBestBidNo,
-          size,
-          side: 'SELL',
-          feeRateBps: 0,
-          orderType: 'GTC',
-        });
-      }
-    }
-
-    // Binary Chill: BUY_PARENT_NO_SELL_CHILD_YES
-    else if (strategy === 'BUY_PARENT_NO_SELL_CHILD_YES') {
-      const child = opportunity.children[0];
-      const ctx = opportunity.binaryChillContext;
-
-      // Buy parent NO at ask
-      if (ctx?.parentNoTokenId && ctx.parentBestAskNo) {
-        orders.push({
-          tokenID: ctx.parentNoTokenId,
-          price: ctx.parentBestAskNo,
-          size,
-          side: 'BUY',
-          feeRateBps: 0,
-          orderType: 'GTC',
-        });
-      }
-
-      // Sell child YES at bid
-      if (child?.assetId && child.bestBid) {
-        orders.push({
-          tokenID: child.assetId,
-          price: child.bestBid,
-          size,
-          side: 'SELL',
-          feeRateBps: 0,
-          orderType: 'GTC',
-        });
-      }
-    }
-
-    // Binary Chill: BUY_CHILD_YES_SELL_PARENT_YES
-    else if (strategy === 'BUY_CHILD_YES_SELL_PARENT_YES') {
-      const child = opportunity.children[0];
-
-      // Buy child YES at ask
-      if (child?.assetId && child.bestAsk) {
-        orders.push({
-          tokenID: child.assetId,
-          price: child.bestAsk,
-          size,
-          side: 'BUY',
-          feeRateBps: 0,
-          orderType: 'GTC',
-        });
-      }
-
-      // Sell parent YES at bid
-      if (opportunity.parent.assetId && opportunity.parent.bestBid) {
-        orders.push({
-          tokenID: opportunity.parent.assetId,
-          price: opportunity.parent.bestBid,
-          size,
-          side: 'SELL',
-          feeRateBps: 0,
-          orderType: 'GTC',
-        });
-      }
-    }
-
-    // Binary Chill: BUY_PARENT_NO_SELL_CHILD_NO
-    else if (strategy === 'BUY_PARENT_NO_SELL_CHILD_NO') {
-      const ctx = opportunity.binaryChillContext;
-
-      // Buy parent NO at ask
-      if (ctx?.parentNoTokenId && ctx.parentBestAskNo) {
-        orders.push({
-          tokenID: ctx.parentNoTokenId,
-          price: ctx.parentBestAskNo,
-          size,
-          side: 'BUY',
-          feeRateBps: 0,
-          orderType: 'GTC',
-        });
-      }
-
-      // Sell child NO at bid
-      if (ctx?.childNoTokenId && ctx.childBestBidNo) {
-        orders.push({
-          tokenID: ctx.childNoTokenId,
-          price: ctx.childBestBidNo,
-          size,
-          side: 'SELL',
-          feeRateBps: 0,
-          orderType: 'GTC',
-        });
       }
     }
 
@@ -683,11 +606,39 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Save signal and trade result to database asynchronously (non-blocking)
+   * This runs AFTER trade execution to optimize speed
+   */
+  private async saveSignalAndTradeAsync(
+    opportunity: ArbOpportunity,
+    tradeResult: RealTradeResult,
+  ): Promise<void> {
+    try {
+      // Save signal first
+      const signal = await this.saveSignal(opportunity);
+
+      // Update trade result with real signal ID
+      tradeResult.signalId = signal.id;
+
+      // Save trade result
+      await this.saveRealTrade(tradeResult);
+
+      this.logger.debug(
+        `Saved signal ${signal.id} and trade result to database`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error in saveSignalAndTradeAsync: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Save real trade result to database
    */
-  private async saveRealTrade(
-    result: RealTradeResult,
-  ): Promise<ArbRealTrade> {
+  private async saveRealTrade(result: RealTradeResult): Promise<ArbRealTrade> {
     const realTrade = this.arbRealTradeRepository.create({
       signalId: result.signalId,
       success: result.success,

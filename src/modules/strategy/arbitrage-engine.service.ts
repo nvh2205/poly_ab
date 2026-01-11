@@ -482,7 +482,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
 
     // ALWAYS forward to binary chill manager first
     // Binary chill needs parent token updates too, and it has its own tokenIndex
-    this.binaryChillManager.handleTopOfBook(update);
+    // this.binaryChillManager.handleTopOfBook(update);
 
     // Handle polymarket triangle arbitrage tokens (YES/NO mix)
     this.handleTriangleTopOfBook(update);

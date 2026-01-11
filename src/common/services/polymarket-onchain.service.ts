@@ -6,6 +6,7 @@ import type {
   ClobClient as ClobClientType,
 } from '@polymarket/clob-client';
 import { loadPolymarketConfig } from './polymarket-onchain.config';
+import { RedisService } from './redis.service';
 
 /**
  * Interface for Polymarket configuration
@@ -81,7 +82,10 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
   // Default config loaded from environment variables
   private defaultConfig?: PolymarketConfig;
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly redisService: RedisService,
+  ) {}
 
   // Contract addresses (Fixed for Polygon)
   private readonly CTF_EXCHANGE_ADDR =
@@ -516,7 +520,67 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
   }
 
   /**
-   * Mint tokens (split position) by depositing USDC
+   * Save mint position to Redis for position management
+   */
+  private async saveMintPositionToRedis(
+    walletAddress: string,
+    conditionId: string,
+    positionIds: string[],
+    amountUSDC: string,
+    txHash: string,
+    transferTxHash?: string,
+    parentCollectionId?: string,
+    partition?: number[],
+  ): Promise<void> {
+    try {
+      const positionData = {
+        walletAddress,
+        conditionId,
+        positionIds,
+        amountUSDC,
+        txHash,
+        transferTxHash,
+        parentCollectionId: parentCollectionId || constants.HashZero,
+        partition: partition || [1, 2],
+        timestamp: new Date().toISOString(),
+      };
+
+      // TTL: 1 day (86400 seconds)
+      const ttlSeconds = 86400;
+
+      // Save individual position record with TTL
+      const positionKey = `mint:position:${conditionId}:${walletAddress}`;
+      await this.redisService.set(
+        positionKey,
+        JSON.stringify(positionData),
+        ttlSeconds,
+      );
+
+      // Add to wallet's position set for easy lookup
+      const walletPositionsKey = `mint:positions:${walletAddress}`;
+      await this.redisService.sadd(walletPositionsKey, conditionId);
+      // Set TTL for the set key
+      await this.redisService.getClient().expire(walletPositionsKey, ttlSeconds);
+
+      // Add to condition's wallet set for tracking all wallets with this position
+      const conditionWalletsKey = `mint:condition:${conditionId}:wallets`;
+      await this.redisService.sadd(conditionWalletsKey, walletAddress);
+      // Set TTL for the set key
+      await this.redisService.getClient().expire(conditionWalletsKey, ttlSeconds);
+
+      this.logger.log(
+        `Mint position saved to Redis with TTL 1d: ${positionKey}`,
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to save mint position to Redis: ${error.message}`,
+      );
+      // Don't throw - Redis save failure shouldn't break the mint operation
+    }
+  }
+
+  /**
+   *   tokens (split position) by depositing USDC
    */
   async mintTokens(
     config: PolymarketConfig,
@@ -589,10 +653,22 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
 
       this.logger.log(`Mint successful! Tokens minted to ${wallet.address}`);
 
-      // Transfer freshly minted tokens to proxy wallet if configured
-      const proxyAddress = config.proxyAddress;
+      // Get position IDs for Redis tracking
       const parentCollectionId =
         marketCondition.parentCollectionId || constants.HashZero;
+      const positionIds = await Promise.all(
+        resolvedPartition.map(async (indexSet) => {
+          const collectionId = await ctfContract.getCollectionId(
+            parentCollectionId,
+            marketCondition.conditionId,
+            indexSet,
+          );
+          return ctfContract.getPositionId(this.USDC_ADDR, collectionId);
+        }),
+      );
+
+      // Transfer freshly minted tokens to proxy wallet if configured
+      const proxyAddress = config.proxyAddress;
       let transferTxHash: string | undefined;
 
       if (proxyAddress) {
@@ -601,17 +677,6 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
             'Proxy address matches signer wallet, skipping transfer',
           );
         } else {
-          const positionIds = await Promise.all(
-            resolvedPartition.map(async (indexSet) => {
-              const collectionId = await ctfContract.getCollectionId(
-                parentCollectionId,
-                marketCondition.conditionId,
-                indexSet,
-              );
-              return ctfContract.getPositionId(this.USDC_ADDR, collectionId);
-            }),
-          );
-
           const transferAmounts = positionIds.map(() => amountWei);
 
           this.logger.log(
@@ -639,6 +704,18 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
           'proxyAddress not provided; minted tokens remain in signer wallet',
         );
       }
+
+      // Save mint position to Redis for position management
+      await this.saveMintPositionToRedis(
+        wallet.address,
+        marketCondition.conditionId,
+        positionIds.map((id) => id.toString()),
+        amountUSDC.toString(),
+        txSplit.hash,
+        transferTxHash,
+        parentCollectionId,
+        resolvedPartition,
+      );
 
       return { success: true, txHash: txSplit.hash, transferTxHash };
     } catch (error: any) {
