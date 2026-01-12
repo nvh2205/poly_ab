@@ -75,4 +75,15 @@ export class Market extends BaseEntity {
 
   @Column({ name: 'type', type: 'varchar', length: 255, nullable: true })
   type: string; // crypto from config (e.g., 'btc', 'eth', 'solana')
+
+  @Column({ name: 'neg_risk', type: 'boolean', nullable: true })
+  negRisk: boolean | null;
+
+  @Column({
+    name: 'neg_risk_market_id',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
+  negRiskMarketID: string | null;
 }

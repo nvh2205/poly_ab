@@ -65,6 +65,8 @@ export interface MarketCondition {
   conditionId: string;
   parentCollectionId?: string;
   partition?: number[];
+  negRisk?: boolean;
+  negRiskMarketID?: string; // Group ID for NegRisk adapter
 }
 
 /**
@@ -92,6 +94,8 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
     '0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E';
   private readonly CTF_ADDR = '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045';
   private readonly USDC_ADDR = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174';
+  private readonly NEGRISK_ADAPTER_ADDR =
+    '0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296';
 
   // ABIs
   private readonly ABIS = {
@@ -111,6 +115,24 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       'function getPositionId(address collateralToken, bytes32 collectionId) view returns (uint256)',
       'function payoutNumerators(bytes32 conditionId, uint256 index) view returns (uint256)',
       'function safeBatchTransferFrom(address from, address to, uint256[] ids, uint256[] amounts, bytes data)',
+    
+    // --- BỔ SUNG 2 DÒNG NÀY ---
+    'function isApprovedForAll(address owner, address operator) view returns (bool)',
+    'function setApprovalForAll(address operator, bool approved)',
+    ],
+    GNOSIS_SAFE: [
+      'function execTransaction(address to, uint256 value, bytes data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes signatures) payable returns (bool success)',
+      'function nonce() view returns (uint256)',
+    ],
+    NEGRISK_ADAPTER: [
+      // Sửa 'split' -> 'splitPosition'
+      'function splitPosition(bytes32 conditionId, uint256 amount)',
+      // Hàm chuyển đổi No -> Các Yes còn lại
+      'function convertPositions(bytes32 marketId, uint256 indexSet, uint256 amount)',
+      // Helper để tính toán Index (Optional, có thể tính off-chain)
+      'function getPositionId(bytes32 questionId, bool outcome) view returns (uint256)',
+      'function wcol() view returns (address)', // <--- THÊM HÀM NÀY
+      'function mergePositions(bytes32 conditionId, uint256 amount)',
     ],
   };
 
@@ -520,62 +542,52 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
   }
 
   /**
-   * Save mint position to Redis for position management
+   * Save mint position to Redis grouped by groupKey (arbitrage signal key)
+   * Key Format: mint:inventory:{groupKey}:{walletAddress}
    */
   private async saveMintPositionToRedis(
     walletAddress: string,
-    conditionId: string,
+    groupKey: string,
     positionIds: string[],
     amountUSDC: string,
     txHash: string,
     transferTxHash?: string,
-    parentCollectionId?: string,
-    partition?: number[],
   ): Promise<void> {
     try {
-      const positionData = {
+      const mintedAmount = Number(amountUSDC) || 0;
+      const ttlSeconds = 3024000; // 35 days
+      const timestamp = new Date().toISOString();
+
+      const pipeline = this.redisService.getClient().pipeline();
+      const inventoryKey = `mint:inventory:${groupKey}:${walletAddress}`;
+
+      positionIds.forEach((tokenId) => {
+        pipeline.hincrbyfloat(inventoryKey, tokenId, mintedAmount);
+      });
+      pipeline.expire(inventoryKey, ttlSeconds);
+
+      // Audit history per groupKey
+      const positionHistoryKey = `mint:history:${groupKey}:${walletAddress}`;
+      const positionEvent = {
+        type: 'MINT',
         walletAddress,
-        conditionId,
+        groupKey,
         positionIds,
         amountUSDC,
         txHash,
         transferTxHash,
-        parentCollectionId: parentCollectionId || constants.HashZero,
-        partition: partition || [1, 2],
-        timestamp: new Date().toISOString(),
+        timestamp,
       };
+      pipeline.rpush(positionHistoryKey, JSON.stringify(positionEvent));
+      pipeline.expire(positionHistoryKey, ttlSeconds);
 
-      // TTL: 1 day (86400 seconds)
-      const ttlSeconds = 86400;
-
-      // Save individual position record with TTL
-      const positionKey = `mint:position:${conditionId}:${walletAddress}`;
-      await this.redisService.set(
-        positionKey,
-        JSON.stringify(positionData),
-        ttlSeconds,
-      );
-
-      // Add to wallet's position set for easy lookup
-      const walletPositionsKey = `mint:positions:${walletAddress}`;
-      await this.redisService.sadd(walletPositionsKey, conditionId);
-      // Set TTL for the set key
-      await this.redisService.getClient().expire(walletPositionsKey, ttlSeconds);
-
-      // Add to condition's wallet set for tracking all wallets with this position
-      const conditionWalletsKey = `mint:condition:${conditionId}:wallets`;
-      await this.redisService.sadd(conditionWalletsKey, walletAddress);
-      // Set TTL for the set key
-      await this.redisService.getClient().expire(conditionWalletsKey, ttlSeconds);
+      await pipeline.exec();
 
       this.logger.log(
-        `Mint position saved to Redis with TTL 1d: ${positionKey}`,
+        `Mint inventory cached for ${groupKey}. Added ${mintedAmount} to balances.`,
       );
     } catch (error: any) {
-      this.logger.error(
-        `Failed to save mint position to Redis: ${error.message}`,
-      );
-      // Don't throw - Redis save failure shouldn't break the mint operation
+      this.logger.error(`Failed to save mint position: ${error.message}`);
     }
   }
 
@@ -586,6 +598,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
     config: PolymarketConfig,
     marketCondition: MarketCondition,
     amountUSDC: number,
+    groupKey: string,
   ): Promise<{
     success: boolean;
     txHash?: string;
@@ -695,9 +708,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
           this.logger.log(`Transfer tx sent: ${transferTx.hash}`);
           await transferTx.wait();
           transferTxHash = transferTx.hash;
-          this.logger.log(
-            `Tokens transferred to proxy wallet ${proxyAddress}`,
-          );
+          this.logger.log(`Tokens transferred to proxy wallet ${proxyAddress}`);
         }
       } else {
         this.logger.warn(
@@ -708,13 +719,11 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       // Save mint position to Redis for position management
       await this.saveMintPositionToRedis(
         wallet.address,
-        marketCondition.conditionId,
+        groupKey,
         positionIds.map((id) => id.toString()),
         amountUSDC.toString(),
         txSplit.hash,
         transferTxHash,
-        parentCollectionId,
-        resolvedPartition,
       );
 
       return { success: true, txHash: txSplit.hash, transferTxHash };
@@ -740,6 +749,75 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
     try {
       const wallet = this.buildWallet(config);
       this.logger.log(`Starting merge operation for wallet: ${wallet.address}`);
+
+      // --- LOGIC MỚI CHO NEGRISK ---
+      if (marketCondition.negRisk && marketCondition.negRiskMarketID) {
+        this.logger.log(`🚀 NegRisk Merge Strategy Detected`);
+        const adapterAddress = this.NEGRISK_ADAPTER_ADDR;
+        const adapterInterface = new utils.Interface(this.ABIS.NEGRISK_ADAPTER);
+        const ctfContract = new Contract(this.CTF_ADDR, this.ABIS.CTF, wallet);
+        const proxyAddress = config.proxyAddress;
+        const amountWei = utils.parseUnits(amount?.toString() || '0', 6);
+        // 1. Kiểm tra Approve trên CTF
+        // Adapter cần quyền để "rút" token YES/NO từ ví Proxy về để merge
+        const isApproved = await ctfContract.isApprovedForAll(
+          proxyAddress,
+          adapterAddress,
+        );
+        if (!isApproved) {
+          this.logger.log(`Approving Adapter on CTF...`);
+          const ctfInterface = new utils.Interface(this.ABIS.CTF);
+          const approveData = ctfInterface.encodeFunctionData(
+            'setApprovalForAll',
+            [adapterAddress, true],
+          );
+          const txApprove = await this.execProxyTx(
+            wallet,
+            proxyAddress,
+            this.CTF_ADDR,
+            approveData,
+          );
+          await txApprove.wait();
+          this.logger.log(`Adapter approved on CTF.`);
+        }
+
+        // 2. Xác định số lượng cần Merge
+        // Nếu user không truyền amount, ta cần check balance của token YES/NO (WCOL based)
+        let mergeAmountWei = amountWei;
+
+        if (!mergeAmountWei) {
+          // Logic lấy balance hơi phức tạp vì cần tính TokenID theo WCOL
+          // Để đơn giản, nếu không truyền amount, ta báo lỗi hoặc yêu cầu truyền vào
+          // Hoặc bạn có thể tái sử dụng logic tính TokenID WCOL ở câu trả lời trước để fetch balance
+          return {
+            success: false,
+            error: "For NegRisk merge, please specify explicit 'amount'",
+          };
+        }
+
+        // 3. Gọi Adapter Merge
+        // Adapter sẽ: Pull tokens -> Merge trên CTF -> Nhận WCOL -> Unwrap WCOL -> Trả USDC cho Proxy
+        const mergeData = adapterInterface.encodeFunctionData(
+          'mergePositions',
+          [marketCondition.conditionId, mergeAmountWei],
+        );
+
+        const txMerge = await this.execProxyTx(
+          wallet,
+          proxyAddress,
+          adapterAddress,
+          mergeData,
+        );
+
+        this.logger.log(`Merge TX Sent: ${txMerge.hash}`);
+        await txMerge.wait();
+
+        return {
+          success: true,
+          txHash: txMerge.hash,
+          amountMerged: amount?.toString(),
+        };
+      }
 
       const ctfContract = new Contract(this.CTF_ADDR, this.ABIS.CTF, wallet);
       const usdcContract = new Contract(
@@ -939,6 +1017,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
   async getBalances(
     config: PolymarketConfig,
     conditionId?: string,
+    overrideAddress?: string,
   ): Promise<{
     usdc: string;
     yesToken?: string;
@@ -947,16 +1026,17 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
   }> {
     try {
       const wallet = this.buildWallet(config);
+      const targetAddress = overrideAddress || wallet.address;
       const usdcContract = new Contract(
         this.USDC_ADDR,
         this.ABIS.ERC20,
         wallet,
       );
 
-      const usdcBalance = await usdcContract.balanceOf(wallet.address);
+      const usdcBalance = await usdcContract.balanceOf(targetAddress);
       const result: any = {
         usdc: utils.formatUnits(usdcBalance, 6),
-        address: wallet.address,
+        address: targetAddress,
       };
 
       if (conditionId) {
@@ -966,8 +1046,11 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
           conditionId,
         );
 
+        console.log('yesTokenId:----', yesTokenId);
+        console.log('noTokenId:----', noTokenId);
+
         const balances = await ctfContract.balanceOfBatch(
-          [wallet.address, wallet.address],
+          [targetAddress, targetAddress],
           [yesTokenId, noTokenId],
         );
 
@@ -979,6 +1062,130 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
     } catch (error: any) {
       this.logger.error(`Error getting balances: ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Read minted asset balances from Redis for a wallet (cached during mint)
+   * Returns map tokenID -> available size (in USDC units)
+   */
+  async getMintedAssetBalances(
+    config: PolymarketConfig,
+    groupKey: string,
+  ): Promise<Record<string, number>> {
+    try {
+      const wallet = this.buildWallet(config);
+      return await this.getMintedAssetBalancesByWallet(
+        wallet.address,
+        groupKey,
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to load minted asset balances: ${error.message}`,
+      );
+      return {};
+    }
+  }
+
+  /**
+   * Internal helper to load minted balances by wallet address
+   */
+  private async getMintedAssetBalancesByWallet(
+    walletAddress: string,
+    groupKey: string,
+  ): Promise<Record<string, number>> {
+    const balances: Record<string, number> = {};
+
+    try {
+      const inventoryKey = `mint:inventory:${groupKey}:${walletAddress}`;
+      const hashBalances = await this.redisService
+        .getClient()
+        .hgetall(inventoryKey);
+
+      if (hashBalances && Object.keys(hashBalances).length > 0) {
+        for (const [tokenId, amountStr] of Object.entries(hashBalances)) {
+          const amount = Number(amountStr);
+          if (Number.isFinite(amount)) {
+            balances[tokenId] = amount;
+          }
+        }
+        return balances;
+      }
+
+      // Fallback to legacy structure (per condition key) for backward compatibility
+      const conditionIds = await this.redisService.smembers(
+        `mint:positions:${walletAddress}`,
+      );
+
+      if (!conditionIds || conditionIds.length === 0) {
+        return balances;
+      }
+
+      for (const conditionId of conditionIds) {
+        const raw = await this.redisService.get(
+          `mint:position:${conditionId}:${walletAddress}`,
+        );
+        if (!raw) continue;
+
+        try {
+          const parsed = JSON.parse(raw);
+          const amount = Number(parsed.amountUSDC) || 0;
+          const ids: string[] = parsed.positionIds || [];
+          for (const tokenId of ids) {
+            balances[tokenId] = (balances[tokenId] || 0) + amount;
+          }
+        } catch (parseError: any) {
+          this.logger.warn(
+            `Failed to parse mint cache for ${conditionId}: ${parseError.message}`,
+          );
+        }
+      }
+
+      // Seed inventory hash cache from legacy data (adds on top of any existing hash)
+      if (Object.keys(balances).length > 0) {
+        const ttlSeconds = 3024000;
+        const pipe = this.redisService.getClient().pipeline();
+        for (const [tokenId, amount] of Object.entries(balances)) {
+          pipe.hincrbyfloat(inventoryKey, tokenId, amount);
+        }
+        pipe.expire(inventoryKey, ttlSeconds);
+        await pipe.exec();
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `Error while reading minted assets from Redis: ${error.message}`,
+      );
+    }
+
+    return balances;
+  }
+
+  /**
+   * Update minted balances hash for a wallet (delta per token)
+   * Positive delta increases, negative decreases
+   */
+  async updateMintedBalances(
+    config: PolymarketConfig,
+    groupKey: string,
+    deltas: Record<string, number>,
+    ttlSeconds: number = 3024000,
+  ): Promise<void> {
+    try {
+      const wallet = this.buildWallet(config);
+      const inventoryKey = `mint:inventory:${groupKey}:${wallet.address}`;
+      const pipe = this.redisService.getClient().pipeline();
+
+      for (const [tokenId, delta] of Object.entries(deltas)) {
+        if (!Number.isFinite(delta) || delta === 0) continue;
+        pipe.hincrbyfloat(inventoryKey, tokenId, delta);
+      }
+
+      pipe.expire(inventoryKey, ttlSeconds);
+      await pipe.exec();
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to update minted balances hash: ${error.message}`,
+      );
     }
   }
 
@@ -1031,5 +1238,271 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
    */
   getDefaultConfig(): PolymarketConfig | undefined {
     return this.defaultConfig;
+  }
+
+  /**
+   * Execute a transaction through a Gnosis Safe proxy (single-signer)
+   */
+  private async execProxyTx(
+    owner: Wallet,
+    proxyAddress: string,
+    to: string,
+    data: string,
+  ): Promise<providers.TransactionResponse> {
+    const proxy = new Contract(proxyAddress, this.ABIS.GNOSIS_SAFE, owner);
+    const provider = owner.provider!;
+
+    const nonce = await proxy.nonce();
+
+    const safeTx = {
+      to,
+      value: 0,
+      data,
+      operation: 0,
+      safeTxGas: 0,
+      baseGas: 0,
+      gasPrice: 0,
+      gasToken: constants.AddressZero,
+      refundReceiver: constants.AddressZero,
+      nonce: nonce.toNumber(),
+    };
+
+    const network = await provider.getNetwork();
+    const domain = {
+      verifyingContract: proxyAddress,
+      chainId: Number(network.chainId),
+    };
+    const types = {
+      SafeTx: [
+        { type: 'address', name: 'to' },
+        { type: 'uint256', name: 'value' },
+        { type: 'bytes', name: 'data' },
+        { type: 'uint8', name: 'operation' },
+        { type: 'uint256', name: 'safeTxGas' },
+        { type: 'uint256', name: 'baseGas' },
+        { type: 'uint256', name: 'gasPrice' },
+        { type: 'address', name: 'gasToken' },
+        { type: 'address', name: 'refundReceiver' },
+        { type: 'uint256', name: 'nonce' },
+      ],
+    };
+
+    const signature = await owner._signTypedData(domain, types, safeTx);
+
+    const feeData = await provider.getFeeData();
+    const defaultGas = utils.parseUnits('800', 'gwei');
+    const floor = utils.parseUnits('800', 'gwei'); // enforce >= 800 gwei
+    const bump = (v: any) => v.mul(120).div(100); // +20%
+    const baseMaxFee = feeData.maxFeePerGas || defaultGas;
+    const baseMaxPrio = feeData.maxPriorityFeePerGas || defaultGas;
+    const maxFeePerGas = bump(baseMaxFee).lt(floor) ? floor : bump(baseMaxFee);
+    const maxPriorityFeePerGas = bump(baseMaxPrio).lt(floor)
+      ? floor
+      : bump(baseMaxPrio);
+
+    return proxy.execTransaction(
+      safeTx.to,
+      safeTx.value,
+      safeTx.data,
+      safeTx.operation,
+      safeTx.safeTxGas,
+      safeTx.baseGas,
+      safeTx.gasPrice,
+      safeTx.gasToken,
+      safeTx.refundReceiver,
+      signature,
+      {
+        maxFeePerGas: maxFeePerGas,
+        maxPriorityFeePerGas: maxPriorityFeePerGas,
+        gasLimit: 18_000_000,
+      },
+    );
+  }
+
+  /**
+   * Mint tokens directly in proxy wallet via Safe.execTransaction
+   */
+  async mintTokensViaProxy(
+    config: PolymarketConfig,
+    marketCondition: MarketCondition,
+    amountUSDC: number,
+    groupKey: string,
+  ): Promise<{ success: boolean; txHash?: string; error?: string }> {
+    try {
+      if (!config.proxyAddress) {
+        return {
+          success: false,
+          error: 'proxyAddress is required for proxy mint',
+        };
+      }
+
+      const owner = this.buildWallet(config);
+      const provider = owner.provider!;
+      const proxyAddress = config.proxyAddress;
+
+      const usdc = new Contract(this.USDC_ADDR, this.ABIS.ERC20, provider);
+      const erc20Interface = new utils.Interface(this.ABIS.ERC20);
+
+      const decimals = await usdc.decimals();
+      const amountWei = utils.parseUnits(amountUSDC.toString(), decimals);
+
+      // 1. Check proxy balance
+      const balanceProxy = await usdc.balanceOf(proxyAddress);
+      if (balanceProxy.lt(amountWei)) {
+        const have = utils.formatUnits(balanceProxy, decimals);
+        return {
+          success: false,
+          error: `Proxy insufficient USDC. Have ${have}, need ${amountUSDC}`,
+        };
+      }
+
+      // Determine target contract and calldata (NegRisk vs Standard)
+      let targetContractAddr: string;
+      let txData: string | undefined;
+      let spenderAddress: string;
+
+      if (marketCondition.negRisk && marketCondition.negRiskMarketID) {
+        this.logger.log(`Detected NegRisk market. Using adapter...`);
+        targetContractAddr = this.NEGRISK_ADAPTER_ADDR;
+        spenderAddress = this.NEGRISK_ADAPTER_ADDR;
+        const adapterInterface = new utils.Interface(this.ABIS.NEGRISK_ADAPTER);
+        txData = adapterInterface.encodeFunctionData('splitPosition', [
+          marketCondition.conditionId,
+          amountWei,
+        ]);
+      } else {
+        // Standard binary flow
+        const ctfInterface = new utils.Interface(this.ABIS.CTF);
+        targetContractAddr = this.CTF_ADDR;
+        spenderAddress = this.CTF_ADDR;
+        const partition = this.sanitizePartition(marketCondition.partition);
+        const parentCollectionId =
+          marketCondition.parentCollectionId || constants.HashZero;
+        txData = ctfInterface.encodeFunctionData('splitPosition', [
+          this.USDC_ADDR,
+          parentCollectionId,
+          marketCondition.conditionId,
+          partition,
+          amountWei,
+        ]);
+      }
+
+      // 2. Approve if needed (proxy -> target)
+      const allowance = await usdc.allowance(proxyAddress, spenderAddress);
+
+      if (allowance.lt(amountWei)) {
+        this.logger.log(`FORCE APPROVING USDC for ${spenderAddress}...`);
+        const approveData = erc20Interface.encodeFunctionData('approve', [
+          spenderAddress,
+          constants.MaxUint256,
+        ]);
+
+        const txApprove = await this.execProxyTx(
+          owner,
+          proxyAddress,
+          this.USDC_ADDR,
+          approveData,
+        );
+
+        await txApprove.wait();
+        this.logger.log('Force Approve Confirmed!');
+      }
+
+      //   return;
+
+      // 3. Execute mint (adapter or CTF) from proxy
+      if (!txData) {
+        return { success: false, error: 'Failed to build transaction data' };
+      }
+
+      const txMint = await this.execProxyTx(
+        owner,
+        proxyAddress,
+        targetContractAddr,
+        txData,
+      );
+      await txMint.wait();
+
+      // 4. Save inventory for standard markets; NegRisk requires outcome token IDs which aren't derived here
+      if (!(marketCondition.negRisk && marketCondition.negRiskMarketID)) {
+        const ctfContract = new Contract(this.CTF_ADDR, this.ABIS.CTF, owner);
+        const partition = this.sanitizePartition(marketCondition.partition);
+        const parentCollectionId =
+          marketCondition.parentCollectionId || constants.HashZero;
+        const positionIds = await Promise.all(
+          partition.map(async (indexSet) => {
+            const collectionId = await ctfContract.getCollectionId(
+              parentCollectionId,
+              marketCondition.conditionId,
+              indexSet,
+            );
+            return ctfContract.getPositionId(this.USDC_ADDR, collectionId);
+          }),
+        );
+
+        await this.saveMintPositionToRedis(
+          proxyAddress,
+          groupKey,
+          positionIds.map((id) => id.toString()),
+          amountUSDC.toString(),
+          txMint.hash,
+        );
+      } else {
+        this.logger.log(
+          'NegRisk mint executed; inventory tracking for outcomes not recorded (adapter returns whole set).',
+        );
+        const parentCollectionId = constants.HashZero;
+        const ctfContract = new Contract(this.CTF_ADDR, this.ABIS.CTF, owner);
+        const adapterContract = new Contract(
+          this.NEGRISK_ADAPTER_ADDR,
+          this.ABIS.NEGRISK_ADAPTER,
+          owner,
+        );
+        const wcolAddress = await adapterContract.wcol();
+        // Tính Collection ID cho YES (Index 1) và NO (Index 2)
+        const collectionIdYes = await ctfContract.getCollectionId(
+          parentCollectionId,
+          marketCondition.conditionId,
+          1,
+        );
+        const collectionIdNo = await ctfContract.getCollectionId(
+          parentCollectionId,
+          marketCondition.conditionId,
+          2,
+        );
+
+        // Tính Position ID (Token ID) dựa trên WCOL
+        const tokenIdYes = await ctfContract.getPositionId(
+          wcolAddress,
+          collectionIdYes,
+        );
+        const tokenIdNo = await ctfContract.getPositionId(
+          wcolAddress,
+          collectionIdNo,
+        );
+
+        const tokenIds = [tokenIdYes.toString(), tokenIdNo.toString()];
+        this.logger.log(
+          `Captured Token IDs: YES=${tokenIds[0]}, NO=${tokenIds[1]}`,
+        );
+
+        // 4. Lưu Inventory vào Redis
+        await this.saveMintPositionToRedis(
+          proxyAddress,
+          groupKey,
+          tokenIds,
+          amountUSDC.toString(),
+          txMint.hash,
+        );
+      }
+
+      return { success: true, txHash: txMint.hash };
+    } catch (error: any) {
+      this.logger.error(`Error minting via proxy: ${error.message || error}`);
+      return {
+        success: false,
+        error: error.message || 'Mint via proxy failed',
+      };
+    }
   }
 }

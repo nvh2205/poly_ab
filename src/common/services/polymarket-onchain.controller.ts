@@ -206,6 +206,36 @@ export class MintTokensDto {
   @ApiProperty({ example: 100, description: 'Amount in USDC' })
   @IsNumber()
   amountUSDC: number;
+
+  @ApiProperty({
+    example: 'btc-2026-01-11T17:00:00.000Z',
+    description: 'Arbitrage group key for inventory',
+  })
+  @IsString()
+  groupKey: string;
+}
+
+export class MintTokensProxyDto {
+  @ApiProperty({ type: PolymarketConfigDto })
+  @ValidateNested()
+  @Type(() => PolymarketConfigDto)
+  config: PolymarketConfigDto;
+
+  @ApiProperty({ type: MarketConditionDto })
+  @ValidateNested()
+  @Type(() => MarketConditionDto)
+  marketCondition: MarketConditionDto;
+
+  @ApiProperty({ example: 100, description: 'Amount in USDC' })
+  @IsNumber()
+  amountUSDC: number;
+
+  @ApiProperty({
+    example: 'btc-2026-01-11T17:00:00.000Z',
+    description: 'Arbitrage group key for inventory',
+  })
+  @IsString()
+  groupKey: string;
 }
 
 /**
@@ -408,6 +438,7 @@ export class PolymarketOnchainController {
         config,
         dto.marketCondition,
         dto.amountUSDC,
+        dto.groupKey,
       );
 
       if (!result.success) {
@@ -425,6 +456,52 @@ export class PolymarketOnchainController {
       };
     } catch (error: any) {
       this.logger.error(`Error in mintTokens: ${error.message}`);
+      throw new HttpException(
+        error.message || 'Internal server error',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * POST /polymarket-onchain/mint-proxy
+   * Mint tokens via proxy (Gnosis Safe)
+   */
+  @Post('mint-proxy')
+  async mintTokensProxy(@Body() dto: MintTokensProxyDto) {
+    try {
+      this.logger.log(
+        `Received mint-proxy request for ${dto.amountUSDC} USDC, groupKey=${dto.groupKey}`,
+      );
+      const config = this.polymarketOnchainService.getDefaultConfig();
+      if (!config) {
+        throw new HttpException(
+          'Polymarket config not found',
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+
+      const result = await this.polymarketOnchainService.mintTokensViaProxy(
+        config,
+        dto.marketCondition,
+        dto.amountUSDC,
+        dto.groupKey,
+      );
+
+      if (!result.success) {
+        throw new HttpException(
+          result.error || 'Mint-proxy operation failed',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      return {
+        success: true,
+        txHash: result.txHash,
+        message: 'Tokens minted via proxy successfully',
+      };
+    } catch (error: any) {
+      this.logger.error(`Error in mintTokensProxy: ${error.message}`);
       throw new HttpException(
         error.message || 'Internal server error',
         error.status || HttpStatus.INTERNAL_SERVER_ERROR,

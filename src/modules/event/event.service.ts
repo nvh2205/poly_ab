@@ -271,6 +271,18 @@ export class EventCrawlerService implements OnApplicationBootstrap {
     // Set type from crypto config
     market.type = crypto;
 
+    // Set negRisk fields
+    market.negRisk =
+      marketData?.negRisk !== undefined
+        ? Boolean(marketData.negRisk)
+        : market.negRisk ?? null;
+    market.negRiskMarketID =
+      marketData?.negRiskMarketID ??
+      marketData?.negRiskMarketId ??
+      marketData?.neg_risk_market_id ??
+      market.negRiskMarketID ??
+      null;
+
     await this.marketRepository.save(market);
   }
 }

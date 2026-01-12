@@ -34,11 +34,8 @@ const CONFIG = {
   chainId: 137,
   clobUrl: 'https://clob.polymarket.com',
   privateKey:
-    '0xd9041b8755ef104078a24c9823b5d55efb48e63b7380ed677f17fa1cc5c83eff',
-  apiKey: '019ba3e5-8772-7624-87d8-68d11f38e9f7',
-  apiSecret: 'jiP8DHdAJfdk5m94Q1P_O3cvaCtUqBPLNb5L_Q_8n9A=',
-  apiPassphrase:
-    '7728144c70d584a36071d4f07f4b9cba551b2896e991f424b5538379f7a2b46c',
+    '',
+ 
 };
 
 const MARKET_CONFIG = {
@@ -256,13 +253,13 @@ const main = async () => {
   const authenticatedClient = await createClient(wallet, creds);
 
 
-//   const provider = new providers.JsonRpcProvider(CONFIG.polygonRpc);
-//   const nonce = await provider.getTransactionCount(wallet.address, 'latest');
+  const provider = new providers.JsonRpcProvider(CONFIG.polygonRpc);
+  const nonce = await provider.getTransactionCount(wallet.address, 'latest');
 
-//   console.log(`✅ NONCE ĐANG BỊ KẸT LÀ: ${nonce}`);
+  console.log(`✅ NONCE ĐANG BỊ KẸT LÀ: ${nonce}`);
 //   console.log(`👉 Hãy điền số ${nonce} vào file cancel-stuck.ts để hủy lệnh.`);
 
-    await mintTokens(wallet, 1);
+    // await mintTokens(wallet, 1);
 
   //   // B4: Bắn lệnh (Truyền thêm địa chỉ ví để log cho dễ)
   //   await placeLimitOrder(authenticatedClient, wallet.address);

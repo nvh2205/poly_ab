@@ -14,6 +14,8 @@ import { ArbOpportunity } from './interfaces/arbitrage.interface';
 import {
   PolymarketOnchainService,
   BatchOrderParams,
+  BatchOrderResult,
+  PolymarketConfig,
 } from '../../common/services/polymarket-onchain.service';
 import { loadPolymarketConfig } from '../../common/services/polymarket-onchain.config';
 
@@ -25,6 +27,13 @@ interface RealTradeResult {
   totalCost: number;
   expectedPnl: number;
   timestampMs: number;
+}
+
+interface OrderCandidate {
+  tokenID: string;
+  price: number;
+  side: 'BUY' | 'SELL';
+  orderbookSize?: number;
 }
 
 /**
@@ -40,6 +49,8 @@ interface RealTradeResult {
 export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RealExecutionService.name);
   private opportunitySub?: Subscription;
+  private cachedUsdcBalance?: number;
+  private mintedAssetCacheByGroup?: Map<string, Map<string, number>>;
 
   // Configuration
   private readonly enabled = this.boolFromEnv('REAL_TRADING_ENABLED', false);
@@ -60,12 +71,13 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    // if (!this.enabled) {
-    //   this.logger.warn(
-    //     'Real trading is DISABLED. Set REAL_TRADING_ENABLED=true to enable.',
-    //   );
-    //   return;
-    // }
+
+    if (!this.enabled) {
+      this.logger.warn(
+        'Real trading is DISABLED. Set REAL_TRADING_ENABLED=true to enable.',
+      );
+      return;
+    }
 
     this.logger.log('Real Execution Service initializing...');
     this.logger.log(
@@ -254,7 +266,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       const config = loadPolymarketConfig();
 
       // Build batch orders based on strategy
-      const batchOrders = this.buildBatchOrders(opportunity);
+      const batchOrders = await this.buildBatchOrders(opportunity, config);
 
       if (batchOrders.length === 0) {
         return {
@@ -275,6 +287,14 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       const result = await this.polymarketOnchainService.placeBatchOrders(
         config,
         batchOrders,
+      );
+      // Refresh cached balances after submitting orders
+      await this.refreshCashBalance(config);
+      await this.adjustMintedCacheAfterSell(
+        batchOrders,
+        result.results,
+        config,
+        opportunity.groupKey,
       );
 
       const latencyMs = Date.now() - startTime;
@@ -335,178 +355,37 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
    * Build batch orders from arbitrage opportunity
    * Optimized for speed: all orders in single batch (up to 15 orders)
    */
-  private buildBatchOrders(opportunity: ArbOpportunity): BatchOrderParams[] {
-    const orders: BatchOrderParams[] = [];
-    const size = this.defaultSize;
+  private async buildBatchOrders(
+    opportunity: ArbOpportunity,
+    config: PolymarketConfig,
+  ): Promise<BatchOrderParams[]> {
+    const candidates = this.buildOrderCandidates(opportunity);
 
-    const strategy = opportunity.strategy;
-
-    // Range arbitrage: SELL_PARENT_BUY_CHILDREN
-    if (strategy === 'SELL_PARENT_BUY_CHILDREN') {
-      // Sell parent at bid
-      if (opportunity.parent.assetId && opportunity.parent.bestBid) {
-        orders.push({
-          tokenID: opportunity.parent.assetId,
-          price: opportunity.parent.bestBid,
-          size,
-          side: 'SELL',
-          feeRateBps: 0,
-          orderType: 'GTC',
-        });
-      }
-
-      // Buy children at ask
-      for (const child of opportunity.children) {
-        if (child.assetId && child.bestAsk) {
-          orders.push({
-            tokenID: child.assetId,
-            price: child.bestAsk,
-            size,
-            side: 'BUY',
-            feeRateBps: 0,
-            orderType: 'GTC',
-          });
-        }
-      }
-
-      // Buy parent upper at ask
-      if (opportunity.parentUpper?.assetId && opportunity.parentUpper.bestAsk) {
-        orders.push({
-          tokenID: opportunity.parentUpper.assetId,
-          price: opportunity.parentUpper.bestAsk,
-          size,
-          side: 'BUY',
-          feeRateBps: 0,
-          orderType: 'GTC',
-        });
-      }
+    if (candidates.length === 0) {
+      return [];
     }
 
-    // Range arbitrage: BUY_PARENT_SELL_CHILDREN
-    else if (strategy === 'BUY_PARENT_SELL_CHILDREN') {
-      // Buy parent at ask
-      if (opportunity.parent.assetId && opportunity.parent.bestAsk) {
-        orders.push({
-          tokenID: opportunity.parent.assetId,
-          price: opportunity.parent.bestAsk,
-          size,
-          side: 'BUY',
-          feeRateBps: 0,
-          orderType: 'GTC',
-        });
-      }
+    const size = await this.calculateFillSize(
+      candidates,
+      config,
+      opportunity.groupKey,
+    );
 
-      // Sell children at bid
-      for (const child of opportunity.children) {
-        if (child.assetId && child.bestBid) {
-          orders.push({
-            tokenID: child.assetId,
-            price: child.bestBid,
-            size,
-            side: 'SELL',
-            feeRateBps: 0,
-            orderType: 'GTC',
-          });
-        }
-      }
-
-      // Sell parent upper at bid
-      if (opportunity.parentUpper?.assetId && opportunity.parentUpper.bestBid) {
-        orders.push({
-          tokenID: opportunity.parentUpper.assetId,
-          price: opportunity.parentUpper.bestBid,
-          size,
-          side: 'SELL',
-          feeRateBps: 0,
-          orderType: 'GTC',
-        });
-      }
+    if (!Number.isFinite(size) || size <= 0) {
+      this.logger.warn(
+        `Calculated executable size is invalid (${size}). Skip placing orders.`,
+      );
+      return [];
     }
 
-    // Polymarket Triangle: BUY mode
-    else if (
-      strategy === 'POLYMARKET_TRIANGLE_BUY' ||
-      strategy === 'POLYMARKET_TRIANGLE'
-    ) {
-      // Buy parent lower YES at ask
-      if (opportunity.parent.assetId && opportunity.parent.bestAsk) {
-        orders.push({
-          tokenID: opportunity.parent.assetId,
-          price: opportunity.parent.bestAsk,
-          size,
-          side: 'BUY',
-          feeRateBps: 0,
-          orderType: 'GTC',
-        });
-      }
-
-      // Buy parent upper NO at ask
-      if (opportunity.parentUpper?.assetId && opportunity.parentUpper.bestAsk) {
-        orders.push({
-          tokenID: opportunity.parentUpper.assetId,
-          price: opportunity.parentUpper.bestAsk,
-          size,
-          side: 'BUY',
-          feeRateBps: 0,
-          orderType: 'GTC',
-        });
-      }
-
-      // Buy range children NO at ask
-      for (const child of opportunity.children) {
-        if (child.assetId && child.bestAsk) {
-          orders.push({
-            tokenID: child.assetId,
-            price: child.bestAsk,
-            size,
-            side: 'BUY',
-            feeRateBps: 0,
-            orderType: 'GTC',
-          });
-        }
-      }
-    }
-
-    // Polymarket Triangle: SELL mode
-    else if (strategy === 'POLYMARKET_TRIANGLE_SELL') {
-      // Sell parent lower YES at bid
-      if (opportunity.parent.assetId && opportunity.parent.bestBid) {
-        orders.push({
-          tokenID: opportunity.parent.assetId,
-          price: opportunity.parent.bestBid,
-          size,
-          side: 'SELL',
-          feeRateBps: 0,
-          orderType: 'GTC',
-        });
-      }
-
-      // Sell parent upper NO at bid
-      if (opportunity.parentUpper?.assetId && opportunity.parentUpper.bestBid) {
-        orders.push({
-          tokenID: opportunity.parentUpper.assetId,
-          price: opportunity.parentUpper.bestBid,
-          size,
-          side: 'SELL',
-          feeRateBps: 0,
-          orderType: 'GTC',
-        });
-      }
-
-      // Sell range children NO at bid
-      for (const child of opportunity.children) {
-        if (child.assetId && child.bestBid) {
-          orders.push({
-            tokenID: child.assetId,
-            price: child.bestBid,
-            size,
-            side: 'SELL',
-            feeRateBps: 0,
-            orderType: 'GTC',
-          });
-        }
-      }
-    }
+    const orders: BatchOrderParams[] = candidates.map((candidate) => ({
+      tokenID: candidate.tokenID,
+      price: candidate.price,
+      size,
+      side: candidate.side,
+      feeRateBps: 0,
+      orderType: 'GTC',
+    }));
 
     // Validate batch size (Polymarket limit is 15)
     if (orders.length > this.maxBatchSize) {
@@ -517,6 +396,307 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     }
 
     return orders;
+  }
+
+  /**
+   * Build order candidates with price/side/book size data
+   */
+  private buildOrderCandidates(opportunity: ArbOpportunity): OrderCandidate[] {
+    const orders: OrderCandidate[] = [];
+    const strategy = opportunity.strategy;
+
+    if (strategy === 'SELL_PARENT_BUY_CHILDREN') {
+      if (opportunity.parent.assetId && opportunity.parent.bestBid) {
+        orders.push({
+          tokenID: opportunity.parent.assetId,
+          price: opportunity.parent.bestBid,
+          side: 'SELL',
+          orderbookSize: opportunity.parent.bestBidSize,
+        });
+      }
+
+      for (const child of opportunity.children) {
+        if (child.assetId && child.bestAsk) {
+          orders.push({
+            tokenID: child.assetId,
+            price: child.bestAsk,
+            side: 'BUY',
+            orderbookSize: child.bestAskSize,
+          });
+        }
+      }
+
+      if (opportunity.parentUpper?.assetId && opportunity.parentUpper.bestAsk) {
+        orders.push({
+          tokenID: opportunity.parentUpper.assetId,
+          price: opportunity.parentUpper.bestAsk,
+          side: 'BUY',
+          orderbookSize: opportunity.parentUpper.bestAskSize,
+        });
+      }
+    } else if (strategy === 'BUY_PARENT_SELL_CHILDREN') {
+      if (opportunity.parent.assetId && opportunity.parent.bestAsk) {
+        orders.push({
+          tokenID: opportunity.parent.assetId,
+          price: opportunity.parent.bestAsk,
+          side: 'BUY',
+          orderbookSize: opportunity.parent.bestAskSize,
+        });
+      }
+
+      for (const child of opportunity.children) {
+        if (child.assetId && child.bestBid) {
+          orders.push({
+            tokenID: child.assetId,
+            price: child.bestBid,
+            side: 'SELL',
+            orderbookSize: child.bestBidSize,
+          });
+        }
+      }
+
+      if (opportunity.parentUpper?.assetId && opportunity.parentUpper.bestBid) {
+        orders.push({
+          tokenID: opportunity.parentUpper.assetId,
+          price: opportunity.parentUpper.bestBid,
+          side: 'SELL',
+          orderbookSize: opportunity.parentUpper.bestBidSize,
+        });
+      }
+    } else if (
+      strategy === 'POLYMARKET_TRIANGLE_BUY' ||
+      strategy === 'POLYMARKET_TRIANGLE'
+    ) {
+      if (opportunity.parent.assetId && opportunity.parent.bestAsk) {
+        orders.push({
+          tokenID: opportunity.parent.assetId,
+          price: opportunity.parent.bestAsk,
+          side: 'BUY',
+          orderbookSize: opportunity.parent.bestAskSize,
+        });
+      }
+
+      if (opportunity.parentUpper?.assetId && opportunity.parentUpper.bestAsk) {
+        orders.push({
+          tokenID: opportunity.parentUpper.assetId,
+          price: opportunity.parentUpper.bestAsk,
+          side: 'BUY',
+          orderbookSize: opportunity.parentUpper.bestAskSize,
+        });
+      }
+
+      for (const child of opportunity.children) {
+        if (child.assetId && child.bestAsk) {
+          orders.push({
+            tokenID: child.assetId,
+            price: child.bestAsk,
+            side: 'BUY',
+            orderbookSize: child.bestAskSize,
+          });
+        }
+      }
+    } else if (strategy === 'POLYMARKET_TRIANGLE_SELL') {
+      if (opportunity.parent.assetId && opportunity.parent.bestBid) {
+        orders.push({
+          tokenID: opportunity.parent.assetId,
+          price: opportunity.parent.bestBid,
+          side: 'SELL',
+          orderbookSize: opportunity.parent.bestBidSize,
+        });
+      }
+
+      if (opportunity.parentUpper?.assetId && opportunity.parentUpper.bestBid) {
+        orders.push({
+          tokenID: opportunity.parentUpper.assetId,
+          price: opportunity.parentUpper.bestBid,
+          side: 'SELL',
+          orderbookSize: opportunity.parentUpper.bestBidSize,
+        });
+      }
+
+      for (const child of opportunity.children) {
+        if (child.assetId && child.bestBid) {
+          orders.push({
+            tokenID: child.assetId,
+            price: child.bestBid,
+            side: 'SELL',
+            orderbookSize: child.bestBidSize,
+          });
+        }
+      }
+    }
+
+    return orders.filter((o) => Number.isFinite(o.price) && o.price > 0);
+  }
+
+  /**
+   * Compute executable size from cash + minted assets with default-size cap
+   */
+  private async calculateFillSize(
+    candidates: OrderCandidate[],
+    config: PolymarketConfig,
+    groupKey: string,
+  ): Promise<number> {
+    const buyLegs = candidates.filter((c) => c.side === 'BUY');
+    const sellLegs = candidates.filter((c) => c.side === 'SELL');
+    const sizeCandidates: number[] = [];
+
+    if (buyLegs.length > 0) {
+      const cash = await this.getCachedCashBalance(config);
+      const allocPerBuy = buyLegs.length > 0 ? cash / buyLegs.length : 0;
+
+      for (const leg of buyLegs) {
+        if (!leg.price || leg.price <= 0) continue;
+        const sizeFromCash =
+          allocPerBuy > 0 && leg.price > 0 ? allocPerBuy / leg.price : 0;
+        const bookCap =
+          leg.orderbookSize && leg.orderbookSize > 0
+            ? leg.orderbookSize
+            : Number.POSITIVE_INFINITY;
+        sizeCandidates.push(Math.min(sizeFromCash, bookCap));
+      }
+    }
+
+    if (sellLegs.length > 0) {
+      const mintedCache = await this.getMintedAssetCache(config, groupKey);
+      for (const leg of sellLegs) {
+        const mintedAvailable = mintedCache.get(leg.tokenID) ?? 0;
+        const bookCap =
+          leg.orderbookSize && leg.orderbookSize > 0
+            ? leg.orderbookSize
+            : Number.POSITIVE_INFINITY;
+        sizeCandidates.push(Math.min(mintedAvailable, bookCap));
+      }
+    }
+
+    const finiteCandidates = sizeCandidates.filter(
+      (v) => Number.isFinite(v) && v >= 0,
+    );
+
+    let minSize =
+      finiteCandidates.length > 0
+        ? Math.min(...finiteCandidates)
+        : this.defaultSize;
+
+    if (!Number.isFinite(minSize)) {
+      minSize = 0;
+    }
+
+    if (this.defaultSize && Number.isFinite(minSize)) {
+      minSize = Math.min(minSize, this.defaultSize);
+    }
+
+    return minSize > 0 ? minSize : 0;
+  }
+
+  /**
+   * Cached USDC balance helper (on-chain fetch only when needed)
+   */
+  private async getCachedCashBalance(
+    config: PolymarketConfig,
+  ): Promise<number> {
+    if (this.cachedUsdcBalance === undefined) {
+      return this.refreshCashBalance(config);
+    }
+    return this.cachedUsdcBalance;
+  }
+
+  private async refreshCashBalance(config: PolymarketConfig): Promise<number> {
+    try {
+      const targetAddress = config.proxyAddress || undefined;
+      const balances = await this.polymarketOnchainService.getBalances(
+        config,
+        undefined,
+        targetAddress,
+      );
+      this.cachedUsdcBalance = parseFloat(balances.usdc) || 0;
+    } catch (error: any) {
+      this.logger.warn(`Failed to refresh USDC balance: ${error.message}`);
+      this.cachedUsdcBalance = this.cachedUsdcBalance ?? 0;
+    }
+    return this.cachedUsdcBalance;
+  }
+
+  /**
+   * Load minted assets from Redis once, then serve from memory
+   */
+  private async getMintedAssetCache(
+    config: PolymarketConfig,
+    groupKey: string,
+  ): Promise<Map<string, number>> {
+    if (this.mintedAssetCacheByGroup?.has(groupKey)) {
+      return this.mintedAssetCacheByGroup.get(groupKey)!;
+    }
+
+    try {
+      const minted = await this.polymarketOnchainService.getMintedAssetBalances(
+        config,
+        groupKey,
+      );
+      const cache = new Map(
+        Object.entries(minted).map(([tokenId, amount]) => [
+          tokenId,
+          Number(amount) || 0,
+        ]),
+      );
+      if (!this.mintedAssetCacheByGroup) {
+        this.mintedAssetCacheByGroup = new Map();
+      }
+      this.mintedAssetCacheByGroup.set(groupKey, cache);
+      return cache;
+    } catch (error: any) {
+      this.logger.warn(`Failed to load minted asset cache: ${error.message}`);
+      if (!this.mintedAssetCacheByGroup) {
+        this.mintedAssetCacheByGroup = new Map();
+      }
+      const emptyCache = new Map<string, number>();
+      this.mintedAssetCacheByGroup.set(groupKey, emptyCache);
+      return emptyCache;
+    }
+  }
+
+  /**
+   * Reduce minted cache after submitting sell orders (best-effort)
+   */
+  private adjustMintedCacheAfterSell(
+    orders: BatchOrderParams[],
+    results?: BatchOrderResult[],
+    config?: PolymarketConfig,
+    groupKey?: string,
+  ): Promise<void> {
+    if (!this.mintedAssetCacheByGroup || orders.length === 0 || !results) {
+      return Promise.resolve();
+    }
+
+    const successfulIndexes = new Set<number>();
+
+    results.forEach((res, idx) => {
+      if (res?.success) successfulIndexes.add(idx);
+    });
+
+    const redisDeltas: Record<string, number> = {};
+
+    successfulIndexes.forEach((idx) => {
+      const order = orders[idx];
+      if (!order || order.side !== 'SELL') return;
+      if (groupKey && this.mintedAssetCacheByGroup.has(groupKey)) {
+        const cache = this.mintedAssetCacheByGroup.get(groupKey)!;
+        const current = cache.get(order.tokenID) || 0;
+        cache.set(order.tokenID, Math.max(current - order.size, 0));
+      }
+      redisDeltas[order.tokenID] =
+        (redisDeltas[order.tokenID] || 0) - order.size;
+    });
+
+    if (config && groupKey && Object.keys(redisDeltas).length > 0) {
+      return this.polymarketOnchainService.updateMintedBalances(
+        config,
+        groupKey,
+        redisDeltas,
+      );
+    }
+
+    return Promise.resolve();
   }
 
   /**
