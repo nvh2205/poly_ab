@@ -59,6 +59,16 @@ interface TriangleState {
   }>;
 }
 
+interface TokenSnapshot {
+  assetId?: string;
+  marketSlug?: string;
+  bestBid?: number | null;
+  bestAsk?: number | null;
+  bestBidSize?: number;
+  bestAskSize?: number;
+  timestampMs?: number;
+}
+
 type ParentState = MarketSnapshot & { coverage?: RangeCoverage };
 
 interface GroupState {
@@ -83,6 +93,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly slugIndex = new Map<string, MarketLocator>();
   private readonly marketIdIndex = new Map<string, MarketLocator>();
   private readonly triangleTokenIndex = new Map<string, TriangleLocator[]>();
+  private readonly allTokenIndex = new Map<string, TokenSnapshot>();
   private readonly opportunity$ = new Subject<ArbOpportunity>();
   private readonly binaryChillManager: BinaryChillManager; // Tách riêng binary chill
   private topOfBookSub?: Subscription;
@@ -140,6 +151,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       this.slugIndex.clear();
       this.marketIdIndex.clear();
       this.triangleTokenIndex.clear();
+      this.allTokenIndex.clear();
 
       for (const group of groups) {
         const state = this.buildGroupState(group);
@@ -476,9 +488,32 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     return { startIndex: start, endIndex: end };
   }
 
+  /**
+   * Update allTokenIndex immediately when receiving an update
+   */
+  private updateAllTokenIndex(update: TopOfBookUpdate): void {
+    if (!update.assetId) return;
+
+    // Get existing snapshot to preserve sizes if update omits them
+    const existing = this.allTokenIndex.get(update.assetId);
+
+    this.allTokenIndex.set(update.assetId, {
+      assetId: update.assetId,
+      marketSlug: update.marketSlug ?? existing?.marketSlug,
+      bestBid: this.toFinite(update.bestBid),
+      bestAsk: this.toFinite(update.bestAsk),
+      bestBidSize: update.bestBidSize ?? existing?.bestBidSize,
+      bestAskSize: update.bestAskSize ?? existing?.bestAskSize,
+      timestampMs: update.timestampMs ?? existing?.timestampMs,
+    });
+  }
+
   private handleTopOfBook(update: TopOfBookUpdate): void {
     // Ignore updates with zero bid/ask to avoid invalid spreads
     if (update.bestBid === 0 || update.bestAsk === 0) return;
+
+    // Update allTokenIndex immediately when receiving update
+    this.updateAllTokenIndex(update);
 
     // ALWAYS forward to binary chill manager first
     // Binary chill needs parent token updates too, and it has its own tokenIndex
@@ -1241,6 +1276,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     this.slugIndex.clear();
     this.marketIdIndex.clear();
     this.triangleTokenIndex.clear();
+    this.allTokenIndex.clear();
     this.binaryChillManager.clear();
 
     if (removedCount > 0) {
@@ -1283,117 +1319,90 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Get latest market snapshot for an opportunity after simulate latency
-   * This allows paper execution to use current prices from socket updates
-   * Uses assetId to match markets (not marketId)
+   * Simplified: Only update price and size for related tokens using allTokenIndex
    */
   getLatestSnapshot(opportunity: ArbOpportunity): ArbOpportunity | null {
-    const state = this.groups.get(opportunity.groupKey);
-    if (!state) {
-      return null;
-    }
+    // Update parent prices and sizes from allTokenIndex
+    const parentTokenSnapshot = opportunity.parent.assetId
+      ? this.allTokenIndex.get(opportunity.parent.assetId)
+      : null;
 
-    // Find parent by assetId only
-    const parentAssetId = opportunity.parent.assetId;
-    if (!parentAssetId) {
-      return null;
-    }
+    const updatedParent = parentTokenSnapshot
+      ? {
+          ...opportunity.parent,
+          bestBid: parentTokenSnapshot.bestBid ?? opportunity.parent.bestBid,
+          bestAsk: parentTokenSnapshot.bestAsk ?? opportunity.parent.bestAsk,
+          bestBidSize: parentTokenSnapshot.bestBidSize ?? opportunity.parent.bestBidSize,
+          bestAskSize: parentTokenSnapshot.bestAskSize ?? opportunity.parent.bestAskSize,
+          timestampMs: parentTokenSnapshot.timestampMs ?? opportunity.parent.timestampMs,
+        }
+      : opportunity.parent;
 
-    const parentState = state.parentStates.find(
-      (p) => p.assetId === parentAssetId,
-    );
-    if (!parentState) {
-      return null;
-    }
+    // Update parentUpper prices and sizes from allTokenIndex
+    const parentUpperTokenSnapshot = opportunity.parentUpper?.assetId
+      ? this.allTokenIndex.get(opportunity.parentUpper.assetId)
+      : null;
 
-    // Find parentUpper by assetId if exists
-    const parentUpperState = opportunity.parentUpper?.assetId
-      ? state.parentStates.find(
-          (p) => p.assetId === opportunity.parentUpper?.assetId,
-        )
+    const updatedParentUpper = opportunity.parentUpper
+      ? parentUpperTokenSnapshot
+        ? {
+            ...opportunity.parentUpper,
+            bestBid: parentUpperTokenSnapshot.bestBid ?? opportunity.parentUpper.bestBid,
+            bestAsk: parentUpperTokenSnapshot.bestAsk ?? opportunity.parentUpper.bestAsk,
+            bestBidSize:
+              parentUpperTokenSnapshot.bestBidSize ?? opportunity.parentUpper.bestBidSize,
+            bestAskSize:
+              parentUpperTokenSnapshot.bestAskSize ?? opportunity.parentUpper.bestAskSize,
+            timestampMs:
+              parentUpperTokenSnapshot.timestampMs ?? opportunity.parentUpper.timestampMs,
+          }
+        : opportunity.parentUpper
       : undefined;
 
-    // Map children by assetId to get latest prices and sizes
-    const latestChildren = opportunity.children.map((child) => {
-      const childAssetId = child.assetId;
-      if (!childAssetId) {
-        return child; // Fallback if no assetId
-      }
+    // Update children prices and sizes from allTokenIndex
+    const updatedChildren = opportunity.children.map((child) => {
+      const childTokenSnapshot = child.assetId
+        ? this.allTokenIndex.get(child.assetId)
+        : null;
 
-      // Try to find by assetId first
-      const childState = state.childStates.find(
-        (c) => c.assetId === childAssetId,
-      );
-
-      if (childState) {
-        return {
-          ...childState,
-          index: child.index, // Preserve original index
-        };
-      }
-
-      // Fallback: try by index if assetId not found
-      const childIndex = child.index;
-      if (
-        childIndex >= 0 &&
-        childIndex < state.childStates.length &&
-        state.childStates[childIndex]
-      ) {
-        return {
-          ...state.childStates[childIndex],
-          index: childIndex,
-        };
-      }
-
-      return child; // Fallback to original if not found
+      return childTokenSnapshot
+        ? {
+            ...child,
+            bestBid: childTokenSnapshot.bestBid ?? child.bestBid,
+            bestAsk: childTokenSnapshot.bestAsk ?? child.bestAsk,
+            bestBidSize: childTokenSnapshot.bestBidSize ?? child.bestBidSize,
+            bestAskSize: childTokenSnapshot.bestAskSize ?? child.bestAskSize,
+            timestampMs: childTokenSnapshot.timestampMs ?? child.timestampMs,
+          }
+        : child;
     });
 
-    // Build latest opportunity with current prices and sizes
-    const latestOpportunity: ArbOpportunity = {
+    // Recalculate sums with latest prices
+    const childrenSumAsk = updatedChildren.reduce(
+      (sum, child) => sum + (this.toFinite(child.bestAsk) || 0),
+      0,
+    );
+    const childrenSumBid = updatedChildren.reduce(
+      (sum, child) => sum + (this.toFinite(child.bestBid) || 0),
+      0,
+    );
+
+    return {
       ...opportunity,
-      parent: {
-        descriptor: parentState.descriptor,
-        bestBid: parentState.bestBid,
-        bestAsk: parentState.bestAsk,
-        bestBidSize: parentState.bestBidSize,
-        bestAskSize: parentState.bestAskSize,
-        assetId: parentState.assetId,
-        marketSlug: parentState.marketSlug,
-        timestampMs: parentState.timestampMs,
-        coverage: parentState.coverage || opportunity.parent.coverage,
-      },
-      parentUpper: parentUpperState
-        ? {
-            descriptor: parentUpperState.descriptor,
-            bestBid: parentUpperState.bestBid,
-            bestAsk: parentUpperState.bestAsk,
-            bestBidSize: parentUpperState.bestBidSize,
-            bestAskSize: parentUpperState.bestAskSize,
-            assetId: parentUpperState.assetId,
-            marketSlug: parentUpperState.marketSlug,
-            timestampMs: parentUpperState.timestampMs,
-          }
-        : opportunity.parentUpper,
-      children: latestChildren,
-      // Recalculate sums with latest prices
-      childrenSumAsk: latestChildren.reduce(
-        (sum, child) => sum + (this.toFinite(child.bestAsk) || 0),
-        0,
-      ),
-      childrenSumBid: latestChildren.reduce(
-        (sum, child) => sum + (this.toFinite(child.bestBid) || 0),
-        0,
-      ),
-      parentBestBid: this.toFinite(parentState.bestBid) ?? undefined,
-      parentBestAsk: this.toFinite(parentState.bestAsk) ?? undefined,
-      parentUpperBestBid: parentUpperState
-        ? this.toFinite(parentUpperState.bestBid) ?? undefined
+      parent: updatedParent,
+      parentUpper: updatedParentUpper,
+      children: updatedChildren,
+      childrenSumAsk,
+      childrenSumBid,
+      parentBestBid: this.toFinite(updatedParent.bestBid) ?? undefined,
+      parentBestAsk: this.toFinite(updatedParent.bestAsk) ?? undefined,
+      parentUpperBestBid: updatedParentUpper
+        ? this.toFinite(updatedParentUpper.bestBid) ?? undefined
         : opportunity.parentUpperBestBid,
-      parentUpperBestAsk: parentUpperState
-        ? this.toFinite(parentUpperState.bestAsk) ?? undefined
+      parentUpperBestAsk: updatedParentUpper
+        ? this.toFinite(updatedParentUpper.bestAsk) ?? undefined
         : opportunity.parentUpperBestAsk,
       timestampMs: Date.now(),
     };
-
-    return latestOpportunity;
   }
 }
