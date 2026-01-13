@@ -5,6 +5,7 @@ import { Event } from '../../database/entities/event.entity';
 import { ArbSignal } from '../../database/entities/arb-signal.entity';
 import { ArbPaperTrade } from '../../database/entities/arb-paper-trade.entity';
 import { ArbRealTrade } from '../../database/entities/arb-real-trade.entity';
+import { SellStatistics } from '../../database/entities/sell-statistics.entity';
 import { MarketStructureService } from './market-structure.service';
 import { IngestionModule } from '../ingestion/ingestion.module';
 import { ArbitrageEngineService } from './arbitrage-engine.service';
@@ -22,6 +23,7 @@ import { PolymarketOnchainModule } from '../../common/services/polymarket-onchai
       ArbSignal,
       ArbPaperTrade,
       ArbRealTrade,
+      SellStatistics,
     ]),
     IngestionModule,
     PolymarketOnchainModule,

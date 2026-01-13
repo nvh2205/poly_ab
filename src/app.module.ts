@@ -14,6 +14,8 @@ import { Market } from './database/entities/market.entity';
 import { Event } from './database/entities/event.entity';
 import { ArbSignal } from './database/entities/arb-signal.entity';
 import { ArbPaperTrade } from './database/entities/arb-paper-trade.entity';
+import { ArbRealTrade } from './database/entities/arb-real-trade.entity';
+import { SellStatistics } from './database/entities/sell-statistics.entity';
 import { EventModule } from './modules/event/event.module';
 import { StrategyModule } from './modules/strategy/strategy.module';
 
@@ -33,7 +35,14 @@ import { StrategyModule } from './modules/strategy/strategy.module';
         username: configService.get('DB_USERNAME'),
         password: configService.get('DB_PASSWORD'),
         database: configService.get('DB_DATABASE'),
-        entities: [Market, Event, ArbSignal, ArbPaperTrade], // Import entities directly
+        entities: [
+          Market,
+          Event,
+          ArbSignal,
+          ArbPaperTrade,
+          ArbRealTrade,
+          SellStatistics,
+        ], // Import entities directly
         synchronize: true, // Auto-sync database schema
         logging: false, // Enable logging to see CREATE TABLE queries
         extra: {

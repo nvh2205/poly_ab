@@ -60,6 +60,37 @@ export class MarketStructureService {
     return Array.from(this.cache.values());
   }
 
+  /**
+   * Calculate groupKey from market (public method for external use)
+   */
+  calculateGroupKey(market: Market): string {
+    const baseOverride = this.resolveOverride(market);
+    const symbol = this.resolveSymbol(market, baseOverride);
+    const endDateKey = this.resolveEndDateKey(market);
+    return this.resolveGroupKey(symbol, endDateKey);
+  }
+
+  /**
+   * Cleanup expired groups from cache based on groupKeys
+   * Simplified: Clear entire cache and rebuild (since markets in same group share endDate)
+   */
+  cleanupExpiredGroups(groupKeys: string[]): number {
+    if (groupKeys.length === 0) return 0;
+
+    const removedCount = this.cache.size;
+    
+    // Clear entire cache
+    this.cache.clear();
+
+    if (removedCount > 0) {
+      this.logger.log(
+        `Cleaned up ${removedCount} groups from cache (cleared all)`,
+      );
+    }
+
+    return removedCount;
+  }
+
   private buildGroups(markets: Market[]): RangeGroup[] {
     type DescriptorRecord = {
       descriptor: MarketRangeDescriptor;
@@ -227,7 +258,7 @@ export class MarketStructureService {
     return { descriptor, appliedOverrides: applied };
   }
 
-  private parseRange(
+  parseRange(
     input: string | null,
     source: 'question' | 'slug',
   ): ParsedRange | null {

@@ -1220,6 +1220,39 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Cleanup expired groups and all related indexes based on groupKeys
+   * Simplified: Clear all memory (groups and indexes) since markets in same group share endDate
+   */
+  cleanupExpiredGroups(groupKeys: string[]): number {
+    if (groupKeys.length === 0) return 0;
+
+    const removedCount = this.groups.size;
+
+    // Clear all scan timers
+    for (const state of this.groups.values()) {
+      if (state.scanTimer) {
+        clearTimeout(state.scanTimer);
+      }
+    }
+
+    // Clear all memory (same as bootstrapGroups)
+    this.groups.clear();
+    this.tokenIndex.clear();
+    this.slugIndex.clear();
+    this.marketIdIndex.clear();
+    this.triangleTokenIndex.clear();
+    this.binaryChillManager.clear();
+
+    if (removedCount > 0) {
+      this.logger.log(
+        `Cleaned up ${removedCount} groups from arbitrage engine (cleared all)`,
+      );
+    }
+
+    return removedCount;
+  }
+
+  /**
    * Detect any price that is missing or zero to avoid executing invalid opportunities.
    */
   private hasInvalidPrices(
@@ -1246,5 +1279,121 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     }
 
     return false;
+  }
+
+  /**
+   * Get latest market snapshot for an opportunity after simulate latency
+   * This allows paper execution to use current prices from socket updates
+   * Uses assetId to match markets (not marketId)
+   */
+  getLatestSnapshot(opportunity: ArbOpportunity): ArbOpportunity | null {
+    const state = this.groups.get(opportunity.groupKey);
+    if (!state) {
+      return null;
+    }
+
+    // Find parent by assetId only
+    const parentAssetId = opportunity.parent.assetId;
+    if (!parentAssetId) {
+      return null;
+    }
+
+    const parentState = state.parentStates.find(
+      (p) => p.assetId === parentAssetId,
+    );
+    if (!parentState) {
+      return null;
+    }
+
+    // Find parentUpper by assetId if exists
+    const parentUpperState = opportunity.parentUpper?.assetId
+      ? state.parentStates.find(
+          (p) => p.assetId === opportunity.parentUpper?.assetId,
+        )
+      : undefined;
+
+    // Map children by assetId to get latest prices and sizes
+    const latestChildren = opportunity.children.map((child) => {
+      const childAssetId = child.assetId;
+      if (!childAssetId) {
+        return child; // Fallback if no assetId
+      }
+
+      // Try to find by assetId first
+      const childState = state.childStates.find(
+        (c) => c.assetId === childAssetId,
+      );
+
+      if (childState) {
+        return {
+          ...childState,
+          index: child.index, // Preserve original index
+        };
+      }
+
+      // Fallback: try by index if assetId not found
+      const childIndex = child.index;
+      if (
+        childIndex >= 0 &&
+        childIndex < state.childStates.length &&
+        state.childStates[childIndex]
+      ) {
+        return {
+          ...state.childStates[childIndex],
+          index: childIndex,
+        };
+      }
+
+      return child; // Fallback to original if not found
+    });
+
+    // Build latest opportunity with current prices and sizes
+    const latestOpportunity: ArbOpportunity = {
+      ...opportunity,
+      parent: {
+        descriptor: parentState.descriptor,
+        bestBid: parentState.bestBid,
+        bestAsk: parentState.bestAsk,
+        bestBidSize: parentState.bestBidSize,
+        bestAskSize: parentState.bestAskSize,
+        assetId: parentState.assetId,
+        marketSlug: parentState.marketSlug,
+        timestampMs: parentState.timestampMs,
+        coverage: parentState.coverage || opportunity.parent.coverage,
+      },
+      parentUpper: parentUpperState
+        ? {
+            descriptor: parentUpperState.descriptor,
+            bestBid: parentUpperState.bestBid,
+            bestAsk: parentUpperState.bestAsk,
+            bestBidSize: parentUpperState.bestBidSize,
+            bestAskSize: parentUpperState.bestAskSize,
+            assetId: parentUpperState.assetId,
+            marketSlug: parentUpperState.marketSlug,
+            timestampMs: parentUpperState.timestampMs,
+          }
+        : opportunity.parentUpper,
+      children: latestChildren,
+      // Recalculate sums with latest prices
+      childrenSumAsk: latestChildren.reduce(
+        (sum, child) => sum + (this.toFinite(child.bestAsk) || 0),
+        0,
+      ),
+      childrenSumBid: latestChildren.reduce(
+        (sum, child) => sum + (this.toFinite(child.bestBid) || 0),
+        0,
+      ),
+      parentBestBid: this.toFinite(parentState.bestBid) ?? undefined,
+      parentBestAsk: this.toFinite(parentState.bestAsk) ?? undefined,
+      parentUpperBestBid: parentUpperState
+        ? this.toFinite(parentUpperState.bestBid) ?? undefined
+        : opportunity.parentUpperBestBid,
+      parentUpperBestAsk: parentUpperState
+        ? this.toFinite(parentUpperState.bestAsk) ?? undefined
+        : opportunity.parentUpperBestAsk,
+      timestampMs: Date.now(),
+    };
+
+    return latestOpportunity;
   }
 }

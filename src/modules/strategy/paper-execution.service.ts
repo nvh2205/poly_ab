@@ -9,8 +9,10 @@ import { Repository } from 'typeorm';
 import { Subscription } from 'rxjs';
 import { ArbSignal } from '../../database/entities/arb-signal.entity';
 import { ArbPaperTrade } from '../../database/entities/arb-paper-trade.entity';
+import { SellStatistics } from '../../database/entities/sell-statistics.entity';
 import { ArbitrageEngineService } from './arbitrage-engine.service';
 import { ArbOpportunity } from './interfaces/arbitrage.interface';
+import { MarketStructureService } from './market-structure.service';
 
 interface PaperFill {
   assetId: string;
@@ -64,7 +66,7 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
   private readonly defaultSize = this.numFromEnv('PAPER_TRADE_SIZE', 100);
   private readonly simulatedLatencyMs = this.numFromEnv(
     'PAPER_TRADE_LATENCY_MS',
-    160,
+    260,
   );
 
   constructor(
@@ -72,7 +74,10 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
     private readonly arbSignalRepository: Repository<ArbSignal>,
     @InjectRepository(ArbPaperTrade)
     private readonly arbPaperTradeRepository: Repository<ArbPaperTrade>,
+    @InjectRepository(SellStatistics)
+    private readonly sellStatisticsRepository: Repository<SellStatistics>,
     private readonly arbitrageEngineService: ArbitrageEngineService,
+    private readonly marketStructureService: MarketStructureService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -99,13 +104,18 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
       // 2. Simulate paper trade execution
       const tradeResult = await this.simulateTrade(opportunity, signal.id);
 
-      // 3. Save paper trade result
-      await this.savePaperTrade(tradeResult);
-
-      this.logger.log(
-        `Paper trade executed: ${opportunity.strategy} on ${opportunity.groupKey}, ` +
-          `profit: ${tradeResult.pnlAbs.toFixed(4)} (${tradeResult.pnlBps.toFixed(2)} bps)`,
-      );
+      // 3. Only save paper trade if pnl > 1% of total cost (100 basis points)
+      if (tradeResult.pnlAbs / tradeResult.totalCost > 0.01) {
+        await this.savePaperTrade(tradeResult);
+        this.logger.log(
+          `Paper trade executed: ${opportunity.strategy} on ${opportunity.groupKey}, ` +
+            `profit: ${tradeResult.pnlAbs.toFixed(4)} (${tradeResult.totalCost})`,
+        );
+      } else {
+        this.logger.debug(
+          `Skipping paper trade: pnl ${tradeResult.pnlAbs.toFixed(2)} <= 1% of total cost ${tradeResult.totalCost}`,
+        );
+      }
     } catch (error) {
       this.logger.error(
         `Failed to handle opportunity: ${error.message}`,
@@ -259,13 +269,19 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async simulateTrade(
-    opportunity: ArbOpportunity,
+    opportunityOld: ArbOpportunity,
     signalId: string,
   ): Promise<PaperTradeResult> {
     const startTime = Date.now();
 
     // Simulate latency
     await this.sleep(this.simulatedLatencyMs);
+
+    // Get latest prices from socket updates after latency
+    // This reflects real-world scenario where prices may have changed
+    const latestOpportunity =
+      this.arbitrageEngineService.getLatestSnapshot(opportunityOld);
+    const opportunity = latestOpportunity || opportunityOld;
 
     const fills: PaperFill[] = [];
 
@@ -717,7 +733,12 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
       timestampMs: result.timestampMs,
     });
 
-    return await this.arbPaperTradeRepository.save(paperTrade);
+    const saved = await this.arbPaperTradeRepository.save(paperTrade);
+
+    // Update sell statistics for the executed signal
+    await this.updateSellStatistics(result.signalId, result);
+
+    return saved;
   }
 
   private sleep(ms: number): Promise<void> {
@@ -729,6 +750,180 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
     if (!raw) return defaultValue;
     const num = Number(raw);
     return Number.isFinite(num) ? num : defaultValue;
+  }
+
+  /**
+   * Persist SellStatistics increments based on executed trade.
+   * Only saves tokens that were SELL, using assetId from snapshot as tokenId.
+   */
+  private async updateSellStatistics(
+    signalId: string,
+    result: PaperTradeResult,
+  ): Promise<void> {
+    try {
+      const signal = await this.arbSignalRepository.findOne({
+        where: { id: signalId },
+      });
+      if (!signal || !signal.snapshot) {
+        this.logger.warn(
+          `Cannot update SellStatistics: signal ${signalId} not found or missing snapshot`,
+        );
+        return;
+      }
+
+      const snapshot = signal.snapshot as any;
+      const symbol = signal.crypto || '';
+
+      // Get all SELL fills
+      const sellFills = result.fills.filter((f) => f.side === 'sell');
+      if (sellFills.length === 0) {
+        return; // No sells, nothing to record
+      }
+
+      // Helper to parse bounds from market slug using MarketStructureService
+      const parseBoundsFromSlug = (slug: string): any => {
+        if (!slug) return null;
+        const parsed = this.marketStructureService.parseRange(slug, 'slug');
+        return parsed?.bounds || null;
+      };
+
+      // Helper to create identifi from bounds
+      const createIdentifi = (bounds: any): string => {
+        if (!bounds) return 'unknown';
+        if (bounds.lower !== undefined && bounds.upper !== undefined) {
+          // Format: "90000-92000"
+          return `${bounds.lower}-${bounds.upper}`;
+        } else if (bounds.lower !== undefined) {
+          // Format: ">92000"
+          return `>${bounds.lower}`;
+        }
+        return 'unknown';
+      };
+
+      // Process each SELL fill
+      for (const fill of sellFills) {
+        let tokenId = '';
+        let marketSlug = '';
+        let marketId = '';
+        let identifi = 'unknown';
+        let tokenType: 'yes' | 'no' = signal.tokenType ?? 'yes';
+
+        // Match fill with snapshot to get correct assetId and bounds
+        if (snapshot.parent && snapshot.parent.assetId === fill.assetId) {
+          // Parent lower token - use its own bounds or parse from slug
+          tokenId = snapshot.parent.assetId;
+          marketSlug = snapshot.parent.marketSlug || '';
+          marketId = signal.parentMarketId;
+          // Use parent's own bounds if available
+          if (snapshot.parent.bounds) {
+            identifi = createIdentifi(snapshot.parent.bounds);
+          } else {
+            // Try to parse from market slug
+            const parsedBounds = parseBoundsFromSlug(marketSlug);
+            if (parsedBounds) {
+              identifi = createIdentifi(parsedBounds);
+            } else if (snapshot.parent.coverage) {
+              // Fallback to coverage index if no bounds and can't parse from slug
+              const { startIndex, endIndex } = snapshot.parent.coverage;
+              identifi = `${startIndex}-${endIndex}`;
+            }
+          }
+        } else if (
+          snapshot.parentUpper &&
+          snapshot.parentUpper.assetId === fill.assetId
+        ) {
+          // Parent upper token
+          tokenId = snapshot.parentUpper.assetId;
+          marketSlug = snapshot.parentUpper.marketSlug || '';
+          marketId = signal.parentMarketId;
+          // Use bounds if available, otherwise parse from slug
+          if (snapshot.parentUpper.bounds) {
+            identifi = createIdentifi(snapshot.parentUpper.bounds);
+          } else {
+            const parsedBounds = parseBoundsFromSlug(marketSlug);
+            if (parsedBounds) {
+              identifi = createIdentifi(parsedBounds);
+            }
+          }
+        } else if (snapshot.children) {
+          // Check if it's a child token
+          const child = snapshot.children.find(
+            (c: any) => c.assetId === fill.assetId,
+          );
+          if (child) {
+            tokenId = child.assetId;
+            marketSlug = child.marketSlug || '';
+            marketId = signal.parentMarketId;
+            // Use bounds if available, otherwise parse from slug
+            if (child.bounds) {
+              identifi = createIdentifi(child.bounds);
+            } else {
+              const parsedBounds = parseBoundsFromSlug(marketSlug);
+              if (parsedBounds) {
+                identifi = createIdentifi(parsedBounds);
+              }
+            }
+          }
+        }
+
+        // Skip if we couldn't identify the token
+        if (!tokenId) {
+          this.logger.debug(
+            `Skipping sell fill: could not match assetId ${fill.assetId} with snapshot`,
+          );
+          continue;
+        }
+
+        // Find or create statistics record
+        const existing = await this.sellStatisticsRepository.findOne({
+          where: {
+            marketId,
+            tokenType,
+            tokenId,
+            identifi,
+          },
+        });
+
+        const stats =
+          existing ??
+          this.sellStatisticsRepository.create({
+            marketSlug,
+            marketId,
+            tokenType,
+            tokenId,
+            identifi,
+            symbol,
+            sellParentBuyChildrenCount: 0,
+            buyParentSellChildrenCount: 0,
+            polymarketTriangleSellCount: 0,
+          });
+
+        // Update counts based on strategy
+        switch (signal.strategy) {
+          case 'SELL_PARENT_BUY_CHILDREN':
+            stats.sellParentBuyChildrenCount += 1;
+            break;
+          case 'BUY_PARENT_SELL_CHILDREN':
+            stats.buyParentSellChildrenCount += 1;
+            break;
+          case 'POLYMARKET_TRIANGLE_SELL':
+            stats.polymarketTriangleSellCount += 1;
+            break;
+          default:
+            break;
+        }
+
+        // Refresh slug/symbol if missing
+        if (!stats.marketSlug && marketSlug) stats.marketSlug = marketSlug;
+        if (!stats.symbol && symbol) stats.symbol = symbol;
+
+        await this.sellStatisticsRepository.save(stats);
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Failed to update SellStatistics for signal ${signalId}: ${error.message}`,
+      );
+    }
   }
 
   /**

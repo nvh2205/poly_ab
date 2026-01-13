@@ -192,6 +192,27 @@ export class BinaryChillManager {
     this.cooldowns.clear();
   }
 
+  /**
+   * Cleanup pairs for a specific group
+   * Simplified: Clear all memory (same as clear() method)
+   */
+  cleanupGroup(groupKey: string): number {
+    const removedCount = this.pairs.size;
+
+    // Clear all memory (same as clear() method)
+    this.pairs.clear();
+    this.tokenIndex.clear();
+    this.cooldowns.clear();
+
+    if (removedCount > 0) {
+      this.logger.log(
+        `Cleaned up ${removedCount} binary chill pairs (cleared all)`,
+      );
+    }
+
+    return removedCount;
+  }
+
   // ==================== Private Methods ====================
 
   private createSnapshot(

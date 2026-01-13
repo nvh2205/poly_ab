@@ -12,6 +12,8 @@ import {
   SlugConfig,
 } from '../../common/constants/app.constants';
 import { Market } from '../../database/entities/market.entity';
+import { MarketStructureService } from '../strategy/market-structure.service';
+import { ArbitrageEngineService } from '../strategy/arbitrage-engine.service';
 
 @Injectable()
 export class MarketService implements OnApplicationBootstrap {
@@ -24,6 +26,8 @@ export class MarketService implements OnApplicationBootstrap {
     private readonly utilService: UtilService,
     private readonly polymarketApi: PolymarketApiService,
     private readonly ingestionService: IngestionService,
+    private readonly marketStructureService: MarketStructureService,
+    private readonly arbitrageEngineService: ArbitrageEngineService,
     @InjectRepository(Market)
     private readonly marketRepository: Repository<Market>,
   ) {}
@@ -52,9 +56,10 @@ export class MarketService implements OnApplicationBootstrap {
     try {
       const now = new Date();
 
-      // Find all active markets with endDate < now
+      // Find all active markets with endDate < now (include event relation for groupKey calculation)
       const expiredMarketsToClose = await this.marketRepository
         .createQueryBuilder('market')
+        .leftJoinAndSelect('market.event', 'event')
         .where('market.active = :active', { active: true })
         .andWhere('market.endDate IS NOT NULL')
         .andWhere('market.endDate < :now', { now })
@@ -102,6 +107,32 @@ export class MarketService implements OnApplicationBootstrap {
           `Unsubscribing from ${uniqueExpiredTokens.length} expired tokens`,
         );
         await this.ingestionService.unsubscribeFromTokens(uniqueExpiredTokens);
+      }
+
+      // Cleanup expired markets from memory cache by groupKey
+      // Calculate groupKeys from expired markets using MarketStructureService
+      const groupKeysToCleanup = new Set<string>();
+      for (const market of expiredMarketsToClose) {
+        const groupKey = this.marketStructureService.calculateGroupKey(market);
+        groupKeysToCleanup.add(groupKey);
+      }
+
+      if (groupKeysToCleanup.size > 0) {
+        try {
+          const groupKeysArray = Array.from(groupKeysToCleanup);
+          const cleanedGroups = this.marketStructureService.cleanupExpiredGroups(
+            groupKeysArray,
+          );
+          const cleanedEngineGroups =
+            this.arbitrageEngineService.cleanupExpiredGroups(groupKeysArray);
+          this.logger.log(
+            `Cleaned up ${cleanedGroups} groups from market structure cache and ${cleanedEngineGroups} groups from arbitrage engine cache`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `Error cleaning up expired markets from cache: ${error.message}`,
+          );
+        }
       }
 
       this.logger.log(
