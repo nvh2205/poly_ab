@@ -21,6 +21,14 @@ export interface TopOfBookUpdate {
    */
   timestampMs: number;
   /**
+   * Local receive timestamp when socket message is handled.
+   */
+  socketReceivedAtMs?: number;
+  /**
+   * Local timestamp just before emission to the stream.
+   */
+  emittedAtMs?: number;
+  /**
    * Raw message for downstream audit/debugging.
    */
   raw?: any;

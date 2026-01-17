@@ -81,9 +81,15 @@ interface GroupState {
   missingAskPrefix: number[];
   missingBidPrefix: number[];
   cooldowns: Map<string, number>;
-  lastScanAt: number;
-  scanTimer?: NodeJS.Timeout;
+  // Dependency mapping for targeted scans
+  childIndexToParentIndices: Map<number, number[]>;
+  triangleLookupByAsset: Map<string, number[]>;
 }
+
+// Threshold for dirty checking - skip if size change < 1%
+const SIZE_CHANGE_THRESHOLD = 0.01;
+// Threshold for slow scan warning
+const SLOW_SCAN_THRESHOLD_MS = 2;
 
 @Injectable()
 export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
@@ -97,10 +103,12 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly opportunity$ = new Subject<ArbOpportunity>();
   private readonly binaryChillManager: BinaryChillManager; // Tách riêng binary chill
   private topOfBookSub?: Subscription;
+  
+  // Cache for last known prices/sizes for dirty checking
+  private readonly lastPriceCache = new Map<string, { bid: number | null; ask: number | null; bidSize?: number; askSize?: number }>();
 
   private readonly minProfitBps = this.numFromEnv('ARB_MIN_PROFIT_BPS', 5);
   private readonly minProfitAbs = this.numFromEnv('ARB_MIN_PROFIT_ABS', 0);
-  private readonly throttleMs = this.numFromEnv('ARB_SCAN_THROTTLE_MS', 50);
   private readonly cooldownMs = this.numFromEnv('ARB_COOLDOWN_MS', 1000);
 
   constructor(
@@ -126,11 +134,6 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     if (this.topOfBookSub) {
       this.topOfBookSub.unsubscribe();
     }
-    this.groups.forEach((state) => {
-      if (state.scanTimer) {
-        clearTimeout(state.scanTimer);
-      }
-    });
     this.binaryChillManager.clear();
     this.opportunity$.complete();
   }
@@ -141,6 +144,28 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       this.opportunity$.asObservable(),
       this.binaryChillManager.onOpportunity(),
     );
+  }
+
+  /**
+   * Check if arbitrage engine has any groups loaded
+   * Used to determine if bootstrap is needed
+   */
+  hasGroups(): boolean {
+    return this.groups.size > 0;
+  }
+
+  /**
+   * Ensure arbitrage engine is bootstrapped
+   * Only bootstraps if no groups exist (after cleanup or fresh start)
+   * Safe to call multiple times - will skip if already bootstrapped
+   */
+  async ensureBootstrapped(): Promise<void> {
+    if (this.hasGroups()) {
+      this.logger.debug('Arbitrage engine already has groups, skipping bootstrap');
+      return;
+    }
+    this.logger.log('Arbitrage engine has no groups, triggering bootstrap...');
+    await this.bootstrapGroups();
   }
 
   private async bootstrapGroups(): Promise<void> {
@@ -212,10 +237,23 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     }
 
     const length = childStates.length;
+    // Pre-allocate prefix arrays (reused, not recreated)
     const askPrefix = new Array<number>(length + 1).fill(0);
     const bidPrefix = new Array<number>(length + 1).fill(0);
     const missingAskPrefix = new Array<number>(length + 1).fill(0);
     const missingBidPrefix = new Array<number>(length + 1).fill(0);
+
+    // Build dependency mapping: childIndex -> which parents are affected
+    const childIndexToParentIndices = new Map<number, number[]>();
+    for (let parentIdx = 0; parentIdx < parentStates.length; parentIdx++) {
+      const coverage = parentStates[parentIdx].coverage;
+      if (!coverage) continue;
+      for (let childIdx = coverage.startIndex; childIdx <= coverage.endIndex; childIdx++) {
+        const existing = childIndexToParentIndices.get(childIdx) || [];
+        existing.push(parentIdx);
+        childIndexToParentIndices.set(childIdx, existing);
+      }
+    }
 
     const state: GroupState = {
       group,
@@ -227,7 +265,8 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       missingAskPrefix,
       missingBidPrefix,
       cooldowns: new Map(),
-      lastScanAt: 0,
+      childIndexToParentIndices,
+      triangleLookupByAsset: new Map(), // Will be populated in initializeTriangleStates
     };
 
     this.recalculatePrefixes(state, 0);
@@ -441,8 +480,20 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
               'rangeNo',
               range.index,
             );
+            // Populate local triangleLookupByAsset for targeted scanning
+            const existing = state.triangleLookupByAsset.get(range.snapshot.assetId) || [];
+            existing.push(triangleIndex);
+            state.triangleLookupByAsset.set(range.snapshot.assetId, existing);
           }
         }
+        // Also add parent tokens to triangleLookupByAsset
+        const lowerYesExisting = state.triangleLookupByAsset.get(lowerYesToken) || [];
+        lowerYesExisting.push(triangleIndex);
+        state.triangleLookupByAsset.set(lowerYesToken, lowerYesExisting);
+        
+        const upperNoExisting = state.triangleLookupByAsset.get(upperNoToken) || [];
+        upperNoExisting.push(triangleIndex);
+        state.triangleLookupByAsset.set(upperNoToken, upperNoExisting);
       }
     }
 
@@ -509,37 +560,113 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
   }
 
   private handleTopOfBook(update: TopOfBookUpdate): void {
+    const startTime = performance.now();
+    let stepTimes: { step: string; time: number }[] = [];
+    
     // Ignore updates with zero bid/ask to avoid invalid spreads
     if (update.bestBid === 0 || update.bestAsk === 0) return;
 
+    // === STEP 1: FAST FAIL - Dirty Checking ===
+    const step1Start = performance.now();
+    const cacheKey = update.assetId;
+    if (cacheKey) {
+      const cached = this.lastPriceCache.get(cacheKey);
+      if (cached) {
+        const priceUnchanged = 
+          cached.bid === update.bestBid && 
+          cached.ask === update.bestAsk;
+        
+        // Check size change threshold (< 1% is considered insignificant)
+        const sizeUnchanged = 
+          update.bestBidSize === undefined || 
+          update.bestAskSize === undefined ||
+          (cached.bidSize !== undefined && 
+           cached.askSize !== undefined &&
+           Math.abs((update.bestBidSize - cached.bidSize) / cached.bidSize) < SIZE_CHANGE_THRESHOLD &&
+           Math.abs((update.bestAskSize - cached.askSize) / cached.askSize) < SIZE_CHANGE_THRESHOLD);
+        
+        if (priceUnchanged && sizeUnchanged) {
+          // Skip update - no meaningful change
+          return;
+        }
+      }
+      // Update cache
+      this.lastPriceCache.set(cacheKey, {
+        bid: update.bestBid,
+        ask: update.bestAsk,
+        bidSize: update.bestBidSize,
+        askSize: update.bestAskSize,
+      });
+    }
+    stepTimes.push({ step: 'DirtyCheck', time: performance.now() - step1Start });
+
     // Update allTokenIndex immediately when receiving update
-    this.updateAllTokenIndex(update);
+    // this.updateAllTokenIndex(update);
 
     // ALWAYS forward to binary chill manager first
     // Binary chill needs parent token updates too, and it has its own tokenIndex
     // this.binaryChillManager.handleTopOfBook(update);
 
-    // Handle polymarket triangle arbitrage tokens (YES/NO mix)
+    // === STEP 2: Handle Triangle Arbitrage ===
+    const step2Start = performance.now();
     this.handleTriangleTopOfBook(update);
+    stepTimes.push({ step: 'Triangle', time: performance.now() - step2Start });
 
-    // Then handle range arbitrage
+    // === STEP 3: Locator Lookup ===
+    const step3Start = performance.now();
     const locator =
       (update.assetId && this.tokenIndex.get(update.assetId)) ||
       (update.marketSlug && this.slugIndex.get(update.marketSlug)) ||
       (update.marketId && this.marketIdIndex.get(update.marketId.toString()));
+    stepTimes.push({ step: 'LocatorLookup', time: performance.now() - step3Start });
 
     if (!locator) return;
 
     const state = this.groups.get(locator.groupKey);
     if (!state) return;
 
+    // === STEP 4: Update State & Scan ===
+    const step4Start = performance.now();
     if (locator.role === 'child') {
       this.updateChild(state, locator.index, update);
+      // Targeted scan: only evaluate parents affected by this child
+      this.scanAffectedParents(state, locator.index);
+      stepTimes.push({ step: 'ChildUpdate+Scan', time: performance.now() - step4Start });
     } else if (locator.role === 'parent') {
       this.updateParent(state, locator.index, update);
+      // Targeted scan: only evaluate this specific parent
+      this.evaluateParentAllRanges(state, locator.index);
+      stepTimes.push({ step: 'ParentUpdate+Scan', time: performance.now() - step4Start });
     }
 
-    this.scheduleScan(state);
+    // === PROFILING: Slow scan detection with step breakdown ===
+    const elapsed = performance.now() - startTime;
+    if (elapsed > SLOW_SCAN_THRESHOLD_MS) {
+      const stepDetails = stepTimes
+        .map(s => `${s.step}=${s.time.toFixed(2)}ms`)
+        .join(', ');
+      this.logger.warn(
+        `[Slow Scan] handleTopOfBook took ${elapsed.toFixed(2)}ms for ${update.assetId?.slice(0, 20)}... | Steps: ${stepDetails}`,
+      );
+    }
+  }
+
+  /**
+   * Targeted scan: only evaluate parents affected by a specific child index
+   */
+  private scanAffectedParents(state: GroupState, childIndex: number): void {
+    const affectedParents = state.childIndexToParentIndices.get(childIndex);
+    if (!affectedParents || affectedParents.length === 0) return;
+    
+    for (const parentIdx of affectedParents) {
+      this.evaluateParentAllRanges(state, parentIdx);
+    }
+  }
+
+  // DEPRECATED: Replaced by targeted scanning in handleTopOfBook
+  // Kept for compatibility but should not be called
+  private scanAffectedGroups(_update: TopOfBookUpdate): void {
+    // No-op: Replaced by scanAffectedParents for targeted scanning
   }
 
   private updateChild(
@@ -676,28 +803,28 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Calculate triangle profit without emitting
-   * Returns the profitable opportunity (BUY or SELL, only one can be profitable at a time)
+   * Phase 1: Calculate triangle profit only (no object allocation)
+   * Returns profit values for quick filtering without building the full opportunity
    */
-  private calculateTriangleProfit(
-    state: GroupState,
+  private calcTriangleProfitOnly(
     triangle: TriangleState,
   ): {
-    profitAbs: number;
-    profitBps: number;
-    opportunity: ArbOpportunity;
-    emitKey: string;
-    mode: 'BUY' | 'SELL';
+    profitBuyAbs: number;
+    profitBuyBps: number;
+    profitSellAbs: number;
+    profitSellBps: number;
+    totalAsk: number;
+    totalBid: number;
+    totalAskRanges: number;
+    totalBidRanges: number;
+    payout: number;
+    askLowerYes: number;
+    askUpperNo: number;
+    bidsLowerYes: number;
+    bidsUpperNo: number;
+    meetsBuy: boolean;
+    meetsSell: boolean;
   } | null {
-    const parentLower = state.parentStates[triangle.parentLowerIndex];
-    const parentUpper = state.parentStates[triangle.parentUpperIndex];
-    if (!parentLower || !parentUpper) return null;
-    if (!parentLower.coverage) return null;
-
-    // Triangle legs are updated independently via handleTriangleTopOfBook()
-    // lowerYes: YES token of parent lower (index 0)
-    // upperNo: NO token of parent upper (index 1)
-    // ranges[].snapshot: NO tokens of range children (index 1)
     const askLowerYes = this.toFinite(triangle.lowerYes.bestAsk);
     const askUpperNo = this.toFinite(triangle.upperNo.bestAsk);
     const bidsLowerYes = this.toFinite(triangle.lowerYes.bestBid);
@@ -719,13 +846,11 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
 
     let totalAskRanges = 0;
     let totalBidRanges = 0;
-    const rangeChildren: Array<MarketSnapshot & { index: number }> = [];
 
-    // Single pass through ranges - accumulate and build children array
+    // Single pass through ranges - just accumulate totals (no array building)
     const rangesLength = triangle.ranges.length;
     for (let i = 0; i < rangesLength; i++) {
       const rangeRef = triangle.ranges[i];
-      const child = state.childStates[rangeRef.index];
       const ask = this.toFinite(rangeRef.snapshot.bestAsk);
       const bid = this.toFinite(rangeRef.snapshot.bestBid);
 
@@ -736,11 +861,86 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
 
       totalAskRanges += ask;
       totalBidRanges += bid;
+    }
 
+    const totalAsk = askLowerYes + askUpperNo + totalAskRanges;
+    const totalBid = bidsLowerYes + bidsUpperNo + totalBidRanges;
+    const payout = rangesLength + 1;
+
+    // Calculate both sides
+    const profitBuyAbs = payout - totalAsk;
+    const profitBuyBps = totalAsk > 0 ? (profitBuyAbs / totalAsk) * 10_000 : 0;
+    const profitSellAbs = totalBid - payout;
+    const profitSellBps = payout > 0 ? (profitSellAbs / payout) * 10_000 : 0;
+
+    const meetsBuy =
+      profitBuyAbs > 0 &&
+      profitBuyBps >= this.minProfitBps &&
+      profitBuyAbs >= this.minProfitAbs;
+
+    const meetsSell =
+      profitSellAbs > 0 &&
+      profitSellBps >= this.minProfitBps &&
+      profitSellAbs >= this.minProfitAbs;
+
+    // Fast fail: neither side is profitable
+    if (!meetsBuy && !meetsSell) {
+      return null;
+    }
+
+    return {
+      profitBuyAbs,
+      profitBuyBps,
+      profitSellAbs,
+      profitSellBps,
+      totalAsk,
+      totalBid,
+      totalAskRanges,
+      totalBidRanges,
+      payout,
+      askLowerYes,
+      askUpperNo,
+      bidsLowerYes,
+      bidsUpperNo,
+      meetsBuy,
+      meetsSell,
+    };
+  }
+
+  /**
+   * Calculate triangle profit without emitting
+   * Returns the profitable opportunity (BUY or SELL, only one can be profitable at a time)
+   * Uses two-phase approach: calcProfitOnly first, then build opportunity
+   */
+  private calculateTriangleProfit(
+    state: GroupState,
+    triangle: TriangleState,
+  ): {
+    profitAbs: number;
+    profitBps: number;
+    opportunity: ArbOpportunity;
+    emitKey: string;
+    mode: 'BUY' | 'SELL';
+  } | null {
+    const parentLower = state.parentStates[triangle.parentLowerIndex];
+    const parentUpper = state.parentStates[triangle.parentUpperIndex];
+    if (!parentLower || !parentUpper) return null;
+    if (!parentLower.coverage) return null;
+
+    // Phase 1: Quick profit calculation (no allocation)
+    const profitResult = this.calcTriangleProfitOnly(triangle);
+    if (!profitResult) return null;
+
+    // Phase 2: Build full opportunity (only after passing profit check)
+    // Now we need to build rangeChildren array
+    const rangeChildren: Array<MarketSnapshot & { index: number }> = [];
+    for (let i = 0; i < triangle.ranges.length; i++) {
+      const rangeRef = triangle.ranges[i];
+      const child = state.childStates[rangeRef.index];
       rangeChildren.push({
         descriptor: child.descriptor,
-        bestBid: bid,
-        bestAsk: ask,
+        bestBid: rangeRef.snapshot.bestBid,
+        bestAsk: rangeRef.snapshot.bestAsk,
         bestBidSize: rangeRef.snapshot.bestBidSize,
         bestAskSize: rangeRef.snapshot.bestAskSize,
         assetId:
@@ -752,10 +952,6 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
         index: rangeRef.index,
       });
     }
-
-    const totalAsk = askLowerYes + askUpperNo + totalAskRanges;
-    const totalBid = bidsLowerYes + bidsUpperNo + totalBidRanges;
-    const payout = rangesLength + 1; // constant payoff
 
     const timestamp =
       triangle.lowerYes.timestampMs ||
@@ -775,10 +971,6 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       mode: 'BUY' | 'SELL',
       profitAbs: number,
       profitBps: number,
-      usedParentAsk: number | null,
-      usedParentBid: number | null,
-      usedUpperAsk: number | null,
-      usedUpperBid: number | null,
     ): ArbOpportunity => {
       return {
         groupKey: state.group.groupKey,
@@ -788,7 +980,6 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
           mode === 'BUY'
             ? 'POLYMARKET_TRIANGLE_BUY'
             : 'POLYMARKET_TRIANGLE_SELL',
-        // Parent snapshot should use triangle YES token data, not parentLower state
         parent: {
           descriptor: parentLower.descriptor,
           bestBid: triangle.lowerYes.bestBid,
@@ -815,26 +1006,26 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
           timestampMs: triangle.upperNo.timestampMs,
         },
         children: rangeChildren,
-        childrenSumAsk: mode === 'BUY' ? totalAsk : Number.NaN,
-        childrenSumBid: mode === 'SELL' ? totalBid : Number.NaN,
-        parentBestBid: usedParentBid,
-        parentBestAsk: usedParentAsk,
-        parentUpperBestBid: usedUpperBid,
-        parentUpperBestAsk: usedUpperAsk,
+        childrenSumAsk: mode === 'BUY' ? profitResult.totalAsk : Number.NaN,
+        childrenSumBid: mode === 'SELL' ? profitResult.totalBid : Number.NaN,
+        parentBestBid: profitResult.bidsLowerYes,
+        parentBestAsk: profitResult.askLowerYes,
+        parentUpperBestBid: profitResult.bidsUpperNo,
+        parentUpperBestAsk: profitResult.askUpperNo,
         profitAbs,
         profitBps,
         timestampMs: timestamp,
         isExecutable: true,
         polymarketTriangleContext: {
-          parentLowerYesAsk: askLowerYes,
-          parentLowerYesBid: bidsLowerYes,
-          parentUpperNoAsk: askUpperNo,
-          parentUpperNoBid: bidsUpperNo,
-          rangeNoAsk: totalAskRanges,
-          rangeNoBid: totalBidRanges,
-          totalCost: mode === 'BUY' ? totalAsk : undefined,
-          totalBid: mode === 'SELL' ? totalBid : undefined,
-          payout,
+          parentLowerYesAsk: profitResult.askLowerYes,
+          parentLowerYesBid: profitResult.bidsLowerYes,
+          parentUpperNoAsk: profitResult.askUpperNo,
+          parentUpperNoBid: profitResult.bidsUpperNo,
+          rangeNoAsk: profitResult.totalAskRanges,
+          rangeNoBid: profitResult.totalBidRanges,
+          totalCost: mode === 'BUY' ? profitResult.totalAsk : undefined,
+          totalBid: mode === 'SELL' ? profitResult.totalBid : undefined,
+          payout: profitResult.payout,
           mode,
           rangesCount: triangle.ranges.length,
         },
@@ -845,58 +1036,29 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       };
     };
 
-    // Calculate both sides
-    // Buy side: pay asks, receive payout
-    const profitBuyAbs = payout - totalAsk;
-    const profitBuyBps = totalAsk > 0 ? (profitBuyAbs / totalAsk) * 10_000 : 0;
-
-    // Sell side: collect bids, owe payout
-    const profitSellAbs = totalBid - payout;
-    const profitSellBps = payout > 0 ? (profitSellAbs / payout) * 10_000 : 0;
-
-    // Only one side can be profitable at a time
-    // Choose the side with positive profit that meets thresholds
-    const meetsProfitBuy =
-      profitBuyAbs > 0 &&
-      profitBuyBps >= this.minProfitBps &&
-      profitBuyAbs >= this.minProfitAbs;
-
-    const meetsProfitSell =
-      profitSellAbs > 0 &&
-      profitSellBps >= this.minProfitBps &&
-      profitSellAbs >= this.minProfitAbs;
-
     // Return the profitable side (should only be one)
-    if (meetsProfitBuy) {
+    if (profitResult.meetsBuy) {
       return {
-        profitAbs: profitBuyAbs,
-        profitBps: profitBuyBps,
+        profitAbs: profitResult.profitBuyAbs,
+        profitBps: profitResult.profitBuyBps,
         opportunity: buildOpportunity(
           'BUY',
-          profitBuyAbs,
-          profitBuyBps,
-          askLowerYes,
-          bidsLowerYes,
-          askUpperNo,
-          bidsUpperNo,
+          profitResult.profitBuyAbs,
+          profitResult.profitBuyBps,
         ),
         emitKey: `${emitKeyBase}:BUY`,
         mode: 'BUY',
       };
     }
 
-    if (meetsProfitSell) {
+    if (profitResult.meetsSell) {
       return {
-        profitAbs: profitSellAbs,
-        profitBps: profitSellBps,
+        profitAbs: profitResult.profitSellAbs,
+        profitBps: profitResult.profitSellBps,
         opportunity: buildOpportunity(
           'SELL',
-          profitSellAbs,
-          profitSellBps,
-          askLowerYes,
-          bidsLowerYes,
-          askUpperNo,
-          bidsUpperNo,
+          profitResult.profitSellAbs,
+          profitResult.profitSellBps,
         ),
         emitKey: `${emitKeyBase}:SELL`,
         mode: 'SELL',
@@ -931,22 +1093,9 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private scheduleScan(state: GroupState): void {
-    if (state.scanTimer) return;
-
-    const now = Date.now();
-    const elapsed = now - state.lastScanAt;
-    const delay = Math.max(0, this.throttleMs - elapsed);
-
-    state.scanTimer = setTimeout(() => {
-      state.scanTimer = undefined;
-      this.scanGroup(state);
-    }, delay);
-  }
-
+  // DEPRECATED: Full group scan replaced by targeted scanning
+  // Kept for backward compatibility
   private scanGroup(state: GroupState): void {
-    state.lastScanAt = Date.now();
-
     // Scan range arbitrage opportunities only
     // Binary chill is handled separately in BinaryChillManager
     for (
@@ -1049,6 +1198,37 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
    * Chiều A: Unbundling - Short Parent Lower, Long Children + Long Parent Upper
    * Profit = Bid(>i) - [Sum(Ask(Range)) + Ask(>j)]
    */
+  /**
+   * Phase 1: Calculate profit only (no object allocation)
+   * Returns profit values for quick filtering
+   */
+  private calcUnbundlingProfitOnly(
+    state: GroupState,
+    parentLowerBestBid: number | null,
+    parentUpperBestAsk: number | null,
+    startIndex: number,
+    endIndex: number,
+  ): { profitAbs: number; profitBps: number; rangesSumAsk: number } | null {
+    if (parentLowerBestBid === null || parentUpperBestAsk === null) return null;
+
+    const rangesSumAsk = this.sumRange(state, 'ask', startIndex, endIndex);
+    if (!Number.isFinite(rangesSumAsk)) return null;
+
+    const totalCost = (rangesSumAsk as number) + parentUpperBestAsk;
+    const profitAbs = parentLowerBestBid - totalCost;
+    const profitBps = totalCost > 0 ? (profitAbs / totalCost) * 10_000 : 0;
+
+    // Fast fail: skip if not profitable
+    if (profitAbs <= 0 || profitBps < this.minProfitBps || profitAbs < this.minProfitAbs) {
+      return null;
+    }
+
+    return { profitAbs, profitBps, rangesSumAsk: rangesSumAsk as number };
+  }
+
+  /**
+   * Phase 2: Build full opportunity object (only called after profit check passes)
+   */
   private evaluateUnbundling(
     state: GroupState,
     parentLower: ParentState & { coverage: RangeCoverage },
@@ -1062,19 +1242,21 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     emitKey: string;
     opportunity: ArbOpportunity;
   } | null {
-    if (parentLowerBestBid === null) return null;
-
     const parentUpperBestAsk = this.toFinite(parentUpper.bestAsk);
-    if (parentUpperBestAsk === null) return null;
+    
+    // Phase 1: Quick profit calculation (no allocation)
+    const profitResult = this.calcUnbundlingProfitOnly(
+      state,
+      parentLowerBestBid,
+      parentUpperBestAsk,
+      startIndex,
+      endIndex,
+    );
+    
+    if (!profitResult) return null;
 
-    const rangesSumAsk = this.sumRange(state, 'ask', startIndex, endIndex);
-    if (!Number.isFinite(rangesSumAsk)) return null;
-
+    // Phase 2: Build full opportunity (only after passing profit check)
     const children = state.childStates.slice(startIndex, endIndex + 1);
-    const totalCost = (rangesSumAsk as number) + parentUpperBestAsk;
-
-    const profitAbs = parentLowerBestBid - totalCost;
-    const profitBps = totalCost > 0 ? (profitAbs / totalCost) * 10_000 : 0;
 
     return this.buildRangeOpportunity(
       state,
@@ -1083,9 +1265,9 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       children,
       {
         strategy: 'SELL_PARENT_BUY_CHILDREN',
-        profitAbs,
-        profitBps,
-        childrenSumAsk: rangesSumAsk as number,
+        profitAbs: profitResult.profitAbs,
+        profitBps: profitResult.profitBps,
+        childrenSumAsk: profitResult.rangesSumAsk,
         childrenSumBid: Number.NaN,
         parentBestAsk: parentLowerBestAsk,
         parentBestBid: parentLowerBestBid,
@@ -1094,6 +1276,33 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
         timestampMs: parentLower.timestampMs || Date.now(),
       },
     );
+  }
+
+  /**
+   * Phase 1: Calculate bundling profit only (no object allocation)
+   */
+  private calcBundlingProfitOnly(
+    state: GroupState,
+    parentLowerBestAsk: number | null,
+    parentUpperBestBid: number | null,
+    startIndex: number,
+    endIndex: number,
+  ): { profitAbs: number; profitBps: number; rangesSumBid: number } | null {
+    if (parentLowerBestAsk === null || parentUpperBestBid === null) return null;
+
+    const rangesSumBid = this.sumRange(state, 'bid', startIndex, endIndex);
+    if (!Number.isFinite(rangesSumBid)) return null;
+
+    const totalRevenue = (rangesSumBid as number) + parentUpperBestBid;
+    const profitAbs = totalRevenue - parentLowerBestAsk;
+    const profitBps = parentLowerBestAsk > 0 ? (profitAbs / parentLowerBestAsk) * 10_000 : 0;
+
+    // Fast fail: skip if not profitable
+    if (profitAbs <= 0 || profitBps < this.minProfitBps || profitAbs < this.minProfitAbs) {
+      return null;
+    }
+
+    return { profitAbs, profitBps, rangesSumBid: rangesSumBid as number };
   }
 
   /**
@@ -1113,20 +1322,21 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     emitKey: string;
     opportunity: ArbOpportunity;
   } | null {
-    if (parentLowerBestAsk === null) return null;
-
     const parentUpperBestBid = this.toFinite(parentUpper.bestBid);
-    if (parentUpperBestBid === null) return null;
+    
+    // Phase 1: Quick profit calculation (no allocation)
+    const profitResult = this.calcBundlingProfitOnly(
+      state,
+      parentLowerBestAsk,
+      parentUpperBestBid,
+      startIndex,
+      endIndex,
+    );
+    
+    if (!profitResult) return null;
 
-    const rangesSumBid = this.sumRange(state, 'bid', startIndex, endIndex);
-    if (!Number.isFinite(rangesSumBid)) return null;
-
+    // Phase 2: Build full opportunity (only after passing profit check)
     const children = state.childStates.slice(startIndex, endIndex + 1);
-    const totalRevenue = (rangesSumBid as number) + parentUpperBestBid;
-
-    const profitAbs = totalRevenue - parentLowerBestAsk;
-    const profitBps =
-      parentLowerBestAsk > 0 ? (profitAbs / parentLowerBestAsk) * 10_000 : 0;
 
     return this.buildRangeOpportunity(
       state,
@@ -1135,10 +1345,10 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       children,
       {
         strategy: 'BUY_PARENT_SELL_CHILDREN',
-        profitAbs,
-        profitBps,
+        profitAbs: profitResult.profitAbs,
+        profitBps: profitResult.profitBps,
         childrenSumAsk: Number.NaN,
-        childrenSumBid: rangesSumBid as number,
+        childrenSumBid: profitResult.rangesSumBid,
         parentBestAsk: parentLowerBestAsk,
         parentBestBid: parentLowerBestBid,
         parentUpperBestAsk: this.toFinite(parentUpper.bestAsk),
@@ -1195,6 +1405,8 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       return null;
     }
 
+    // Note: profitAbs/profitBps checks are now done in calcProfitOnly phase
+    // This is a safety check in case buildRangeOpportunity is called directly
     const isExecutable =
       profitAbs > 0 &&
       profitBps >= this.minProfitBps &&
@@ -1262,13 +1474,6 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     if (groupKeys.length === 0) return 0;
 
     const removedCount = this.groups.size;
-
-    // Clear all scan timers
-    for (const state of this.groups.values()) {
-      if (state.scanTimer) {
-        clearTimeout(state.scanTimer);
-      }
-    }
 
     // Clear all memory (same as bootstrapGroups)
     this.groups.clear();

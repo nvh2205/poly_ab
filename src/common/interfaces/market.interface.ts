@@ -2,6 +2,7 @@ export interface MarketData {
   market: string; // market_hash
   asset_id: string;
   timestamp: number;
+  receivedAtMs?: number;
   bids?: any[];
   asks?: any[];
   last_trade_price?: number;
@@ -11,6 +12,7 @@ export interface PriceChangeData {
   market: string; // market_hash
   asset_id: string;
   timestamp: number;
+  receivedAtMs?: number;
   best_bid: number;
   best_ask: number;
 }

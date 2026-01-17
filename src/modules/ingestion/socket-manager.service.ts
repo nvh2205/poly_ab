@@ -33,6 +33,8 @@ export class SocketManagerService
   private readonly pingInterval: number = APP_CONSTANTS.PING_INTERVAL_MS;
   private readonly maxReconnectAttempts = 5;
   private readonly subscribedTokens: Set<string> = new Set();
+  private readonly perfEnabled =
+    Number(process.env.ARB_PERF_LOG_EVERY || 0) > 0;
 
   constructor(
     private readonly utilService: UtilService,
@@ -221,6 +223,7 @@ export class SocketManagerService
             market: msg.market || '',
             asset_id: msg.asset_id || '',
             timestamp: bookTimestamp,
+            receivedAtMs: this.perfEnabled ? Date.now() : undefined,
             bids: msg.bids || null,
             asks: msg.asks || null,
             last_trade_price: msg.last_trade_price

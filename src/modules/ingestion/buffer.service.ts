@@ -25,6 +25,8 @@ export class BufferService implements OnModuleInit {
   private readonly orderbookTable = 'market_orderbooks_analytics';
   private readonly unknownMarketSlug = '__unknown__';
   private readonly unknownMarketId = '__unknown__';
+  private readonly perfEnabled =
+    Number(process.env.ARB_PERF_LOG_EVERY || 0) > 0;
   /**
    * Some sources may send seconds, some milliseconds; normalize to unix ms.
    */
@@ -73,7 +75,7 @@ export class BufferService implements OnModuleInit {
    * Push new data to buffer (from event_type='book')
    */
   push(data: MarketData): void {
-    this.buffer.push(data);
+    // this.buffer.push(data);
     // Emit top-of-book update with orderbook size information
     // Find best bid (highest price) and best ask (lowest price) from the orderbook
     const { bestBid, bestAsk, bestBidSize, bestAskSize } = this.findBestBidAsk(
@@ -94,18 +96,13 @@ export class BufferService implements OnModuleInit {
       bestAsk,
       bestBidSize: Number.isFinite(bestBidSize) ? bestBidSize : undefined,
       bestAskSize: Number.isFinite(bestAskSize) ? bestAskSize : undefined,
-      midPrice:
-        Number.isFinite(bestBid) && Number.isFinite(bestAsk)
-          ? (bestBid + bestAsk) / 2
-          : undefined,
-      spread:
-        Number.isFinite(bestBid) && Number.isFinite(bestAsk)
-          ? bestAsk - bestBid
-          : undefined,
       lastPrice: this.toNumber(data.last_trade_price),
       timestampMs: tsMs,
-      raw: data,
     };
+
+    if (this.perfEnabled && Number.isFinite(data.receivedAtMs)) {
+      update.socketReceivedAtMs = data.receivedAtMs;
+    }
 
     void this.emitTopOfBookWithMetadata(update);
 
@@ -132,17 +129,12 @@ export class BufferService implements OnModuleInit {
       bestAsk,
       // Do NOT include bestBidSize, bestAskSize, size, or side
       // These are only available from orderbook data (event_type='book')
-      midPrice:
-        Number.isFinite(bestBid) && Number.isFinite(bestAsk)
-          ? (bestBid + bestAsk) / 2
-          : undefined,
-      spread:
-        Number.isFinite(bestBid) && Number.isFinite(bestAsk)
-          ? bestAsk - bestBid
-          : undefined,
       timestampMs: tsMs,
-      raw: data,
     };
+
+    if (this.perfEnabled && Number.isFinite(data.receivedAtMs)) {
+      update.socketReceivedAtMs = data.receivedAtMs;
+    }
 
     void this.emitTopOfBookWithMetadata(update);
   }
@@ -213,24 +205,29 @@ export class BufferService implements OnModuleInit {
     return { bestBid, bestAsk, bestBidSize, bestAskSize };
   }
 
-  private async emitTopOfBookWithMetadata(
-    update: TopOfBookUpdate,
-  ): Promise<void> {
-    try {
-      const marketSlug = await this.getSlugFromToken(update.assetId);
-      const marketId =
-        marketSlug !== null ? await this.getMarketIdFromSlug(marketSlug) : null;
-      this.marketDataStreamService.emitTopOfBook({
-        ...update,
-        marketSlug: marketSlug || undefined,
-        marketId: marketId || undefined,
-      });
-    } catch (error) {
-      this.logger.debug(
-        `Failed to enrich top-of-book for asset ${update.assetId}: ${error.message}`,
-      );
-      this.marketDataStreamService.emitTopOfBook(update);
+  private emitTopOfBookWithMetadata(update: TopOfBookUpdate): void {
+    if (this.perfEnabled) {
+      update.emittedAtMs = Date.now();
     }
+    // Comment lại logic get market async để tăng performance
+    // try {
+    //   const marketSlug = await this.getSlugFromToken(update.assetId);
+    //   const marketId =
+    //     marketSlug !== null ? await this.getMarketIdFromSlug(marketSlug) : null;
+    //   this.marketDataStreamService.emitTopOfBook({
+    //     ...update,
+    //     marketSlug: marketSlug || undefined,
+    //     marketId: marketId || undefined,
+    //   });
+    // } catch (error) {
+    //   this.logger.debug(
+    //     `Failed to enrich top-of-book for asset ${update.assetId}: ${error.message}`,
+    //   );
+    //   this.marketDataStreamService.emitTopOfBook(update);
+    // }
+
+    // Emit trực tiếp không enrich metadata
+    this.marketDataStreamService.emitTopOfBook(update);
   }
 
   /**

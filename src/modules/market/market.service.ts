@@ -150,6 +150,10 @@ export class MarketService implements OnApplicationBootstrap {
   @Interval(1000 * 60 * 0.5) // Every 5 minutes
   async crawlMarketsForSocketSubscription() {
     try {
+      // Ensure arbitrage engine is bootstrapped (if groups were cleaned up after market expiry)
+      // This is safe to call multiple times - will skip if already bootstrapped
+      await this.arbitrageEngineService.ensureBootstrapped();
+
       const now = new Date();
 
       // Query markets with startTime <= current time and active = true using query builder
