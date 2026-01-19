@@ -61,6 +61,9 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   private readonly BALANCE_REFRESH_MS = 5000; // 5 seconds
   private readonly MINTED_REFRESH_MS = 10000; // 10 seconds (minted changes less frequently)
 
+  // === Order Submission Lock ===
+  private isSubmittingOrder: boolean = false;
+
   // Configuration
   private readonly enabled = this.boolFromEnv('REAL_TRADING_ENABLED', false);
   private readonly minPnlThresholdPercent = this.numFromEnv(
@@ -214,9 +217,18 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
    * - Uses cached localUsdcBalance (no RPC/Redis calls)
    * - Optimistic balance deduction before order placement
    * - Fire & Forget order execution
+   * - Ensures only one signal is processed at a time (sequential execution)
    */
   private handleOpportunity(opportunity: ArbOpportunity): void {
     try {
+      // === CHECK: Skip if already submitting an order ===
+      if (this.isSubmittingOrder) {
+        this.logger.debug(
+          `Skipping signal: Order submission already in progress`,
+        );
+        return;
+      }
+
       // === FAST PATH: All synchronous calculations ===
       const totalCost = this.calculateTotalCost(opportunity);
       const pnlPercent = (opportunity.profitAbs / totalCost) * 100;
@@ -254,6 +266,10 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       // === OPTIMISTIC UPDATE: Deduct balance BEFORE sending order ===
       const reservedAmount = requiredCost;
       this.localUsdcBalance -= reservedAmount;
+      
+      // === LOCK: Mark as submitting order ===
+      this.isSubmittingOrder = true;
+      
       this.logger.log(
         `🎯 HFT Signal! PnL: ${pnlPercent.toFixed(2)}% | Size: ${size.toFixed(2)} | Reserved: ${reservedAmount.toFixed(2)} | Remaining: ${this.localUsdcBalance.toFixed(2)}`,
       );
@@ -334,6 +350,9 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
               this.logger.warn(`Telegram notification failed: ${error.message}`);
             });
           }
+
+          // === UNLOCK: Release order submission lock ===
+          this.isSubmittingOrder = false;
         })
         .catch((error) => {
           const latencyMs = Date.now() - tradeStartTime;
@@ -354,6 +373,9 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
           }).catch((err) => {
             this.logger.warn(`Telegram notification failed: ${err.message}`);
           });
+
+          // === UNLOCK: Release order submission lock ===
+          this.isSubmittingOrder = false;
         });
 
       // === ASYNC DB SAVE (non-blocking) ===
