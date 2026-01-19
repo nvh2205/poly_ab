@@ -155,6 +155,14 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Get all group keys currently loaded
+   * Used by RealExecutionService to preload minted asset cache
+   */
+  getGroupKeys(): string[] {
+    return Array.from(this.groups.keys());
+  }
+
+  /**
    * Ensure arbitrage engine is bootstrapped
    * Only bootstraps if no groups exist (after cleanup or fresh start)
    * Safe to call multiple times - will skip if already bootstrapped

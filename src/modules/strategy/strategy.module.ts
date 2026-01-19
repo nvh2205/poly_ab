@@ -14,6 +14,7 @@ import { RealExecutionService } from './real-execution.service';
 import { StrategyController } from './strategy.controller';
 import { RetentionCleanupService } from './retention-cleanup.service';
 import { PolymarketOnchainModule } from '../../common/services/polymarket-onchain.module';
+import { TelegramModule } from '../../common/services/telegram.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { PolymarketOnchainModule } from '../../common/services/polymarket-onchai
     ]),
     IngestionModule,
     PolymarketOnchainModule,
+    TelegramModule,
   ],
   controllers: [StrategyController],
   providers: [

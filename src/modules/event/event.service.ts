@@ -214,9 +214,11 @@ export class EventCrawlerService implements OnApplicationBootstrap {
 
     // Set status flags
     market.active =
-      marketData?.active !== undefined
-        ? Boolean(marketData.active)
-        : (market.active ?? true);
+      market.active !== undefined
+        ? market.active
+        : marketData?.active !== undefined
+          ? Boolean(marketData.active)
+          : true;
     market.closed =
       marketData?.closed !== undefined
         ? Boolean(marketData.closed)

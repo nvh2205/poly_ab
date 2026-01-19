@@ -188,15 +188,24 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
 
   /**
    * Normalize partition array, defaulting to [1, 2] when invalid/missing
+   * Note: Accepts 0-indexed partitions [0, 1] and converts to 1-indexed [1, 2]
    */
   private sanitizePartition(partition?: number[]): number[] {
     if (!Array.isArray(partition)) return [1, 2];
 
     const cleaned = Array.from(
-      new Set(partition.filter((v) => Number.isInteger(v) && v > 0)),
+      new Set(partition.filter((v) => Number.isInteger(v) && v >= 0)),
     );
 
-    return cleaned.length ? cleaned : [1, 2];
+    if (!cleaned.length) return [1, 2];
+
+    // Convert 0-indexed to 1-indexed if needed
+    const hasZero = cleaned.includes(0);
+    if (hasZero) {
+      return cleaned.map(v => v + 1);
+    }
+
+    return cleaned;
   }
 
   /**
@@ -555,7 +564,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
   ): Promise<void> {
     try {
       const mintedAmount = Number(amountUSDC) || 0;
-      const ttlSeconds = 3024000; // 35 days
+      const ttlSeconds = 172800; // 2 days
       const timestamp = new Date().toISOString();
 
       const pipeline = this.redisService.getClient().pipeline();

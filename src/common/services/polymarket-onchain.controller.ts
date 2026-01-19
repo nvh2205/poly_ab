@@ -155,6 +155,22 @@ export class MarketConditionDto implements MarketCondition {
   @IsArray()
   @Type(() => Number)
   partition?: number[];
+
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Whether this is a NegRisk market',
+  })
+  @IsOptional()
+  @IsBoolean()
+  negRisk?: boolean;
+
+  @ApiPropertyOptional({
+    example: '0xnegrisk-market-id',
+    description: 'Group ID for NegRisk adapter (required if negRisk is true)',
+  })
+  @IsOptional()
+  @IsString()
+  negRiskMarketID?: string;
 }
 
 /**

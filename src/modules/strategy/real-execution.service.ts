@@ -18,6 +18,7 @@ import {
   PolymarketConfig,
 } from '../../common/services/polymarket-onchain.service';
 import { loadPolymarketConfig } from '../../common/services/polymarket-onchain.config';
+import { TelegramService } from '../../common/services/telegram.service';
 
 interface RealTradeResult {
   signalId: string;
@@ -52,6 +53,14 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   private cachedUsdcBalance?: number;
   private mintedAssetCacheByGroup?: Map<string, Map<string, number>>;
 
+  // === HFT Cache State (RAM) ===
+  private localUsdcBalance: number = 0;
+  private config!: PolymarketConfig;
+  private balanceRefreshInterval?: ReturnType<typeof setInterval>;
+  private mintedRefreshInterval?: ReturnType<typeof setInterval>;
+  private readonly BALANCE_REFRESH_MS = 5000; // 5 seconds
+  private readonly MINTED_REFRESH_MS = 10000; // 10 seconds (minted changes less frequently)
+
   // Configuration
   private readonly enabled = this.boolFromEnv('REAL_TRADING_ENABLED', false);
   private readonly minPnlThresholdPercent = this.numFromEnv(
@@ -68,10 +77,10 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     private readonly arbRealTradeRepository: Repository<ArbRealTrade>,
     private readonly arbitrageEngineService: ArbitrageEngineService,
     private readonly polymarketOnchainService: PolymarketOnchainService,
+    private readonly telegramService: TelegramService,
   ) {}
 
   async onModuleInit(): Promise<void> {
-
     if (!this.enabled) {
       this.logger.warn(
         'Real trading is DISABLED. Set REAL_TRADING_ENABLED=true to enable.',
@@ -79,35 +88,140 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    this.logger.log('Real Execution Service initializing...');
+    this.logger.log('Real Execution Service initializing (HFT Mode)...');
     this.logger.log(
       `PnL threshold: ${this.minPnlThresholdPercent}% of total_cost`,
     );
     this.logger.log(`Default trade size: ${this.defaultSize} USDC`);
 
-    this.opportunitySub = this.arbitrageEngineService
-      .onOpportunity()
-      .subscribe((opportunity) => this.handleOpportunity(opportunity));
+    // === HFT: Load config ONCE at startup ===
+    this.config = loadPolymarketConfig();
+    this.logger.log('Polymarket config loaded and cached in RAM');
 
-    this.logger.log('Real Execution Service initialized and ACTIVE');
+    // === HFT: Initialize mintedAssetCacheByGroup ===
+    this.mintedAssetCacheByGroup = new Map();
+
+    // === HFT: Initial balance fetch ===
+    this.refreshBalancesBackground();
+
+    // === HFT: Initial minted assets fetch (BASE POOL) ===
+    this.refreshMintedAssetsBackground();
+
+    // === HFT: Setup background balance refresh (every 5s) ===
+    this.balanceRefreshInterval = setInterval(() => {
+      this.refreshBalancesBackground();
+    }, this.BALANCE_REFRESH_MS);
+    this.logger.log(
+      `Background balance refresh scheduled every ${this.BALANCE_REFRESH_MS}ms`,
+    );
+
+    // === HFT: Setup background minted assets refresh (every 10s) ===
+    this.mintedRefreshInterval = setInterval(() => {
+      this.refreshMintedAssetsBackground();
+    }, this.MINTED_REFRESH_MS);
+    this.logger.log(
+      `Background minted assets refresh scheduled every ${this.MINTED_REFRESH_MS}ms`,
+    );
+
+    // Subscribe to opportunities
+    // this.opportunitySub = this.arbitrageEngineService
+    //   .onOpportunity()
+    //   .subscribe((opportunity) => this.handleOpportunity(opportunity));
+
+    this.logger.log('Real Execution Service initialized and ACTIVE (HFT Mode)');
   }
 
   onModuleDestroy(): void {
     if (this.opportunitySub) {
       this.opportunitySub.unsubscribe();
     }
+    if (this.balanceRefreshInterval) {
+      clearInterval(this.balanceRefreshInterval);
+    }
+    if (this.mintedRefreshInterval) {
+      clearInterval(this.mintedRefreshInterval);
+    }
   }
 
   /**
-   * Handle arbitrage opportunity - check threshold and execute if profitable enough
+   * Background balance refresh - runs async, updates localUsdcBalance
+   * This is called periodically to sync cached balance with actual RPC/Redis state
    */
-  private async handleOpportunity(opportunity: ArbOpportunity): Promise<void> {
+  private refreshBalancesBackground(): void {
+    const targetAddress = this.config.proxyAddress || undefined;
+    this.polymarketOnchainService
+      .getBalances(this.config, undefined, targetAddress)
+      .then((balances) => {
+        this.localUsdcBalance = parseFloat(balances.usdc) || 0;
+        this.cachedUsdcBalance = this.localUsdcBalance;
+        this.logger.debug(
+          `Background balance refresh: ${this.localUsdcBalance.toFixed(2)} USDC`,
+        );
+      })
+      .catch((error) => {
+        this.logger.warn(
+          `Background balance refresh failed: ${error.message}`,
+        );
+      });
+  }
+
+  /**
+   * Background minted assets refresh - loads BASE POOL from Redis for all groups
+   * This enables SELL legs to work correctly by knowing available pre-minted inventory
+   */
+  private refreshMintedAssetsBackground(): void {
+    const groupKeys = this.arbitrageEngineService.getGroupKeys();
+    if (groupKeys.length === 0) {
+      this.logger.debug('No group keys available yet, skipping minted assets refresh');
+      return;
+    }
+
+    // Load minted assets for each group in parallel (fire & forget)
+    for (const groupKey of groupKeys) {
+      this.polymarketOnchainService
+        .getMintedAssetBalances(this.config, groupKey)
+        .then((balances) => {
+          const cache = new Map(
+            Object.entries(balances).map(([tokenId, amount]) => [
+              tokenId,
+              Number(amount) || 0,
+            ]),
+          );
+          
+          if (!this.mintedAssetCacheByGroup) {
+            this.mintedAssetCacheByGroup = new Map();
+          }
+          this.mintedAssetCacheByGroup.set(groupKey, cache);
+          
+          const totalTokens = cache.size;
+          const totalAmount = Array.from(cache.values()).reduce((a, b) => a + b, 0);
+          if (totalTokens > 0) {
+            this.logger.debug(
+              `Minted cache refreshed for ${groupKey}: ${totalTokens} tokens, ${totalAmount.toFixed(2)} total units`,
+            );
+          }
+        })
+        .catch((error) => {
+          this.logger.warn(
+            `Minted assets refresh failed for ${groupKey}: ${error.message}`,
+          );
+        });
+    }
+  }
+
+  /**
+   * HFT Hot Path: Handle arbitrage opportunity with ZERO awaits
+   * - Uses cached localUsdcBalance (no RPC/Redis calls)
+   * - Optimistic balance deduction before order placement
+   * - Fire & Forget order execution
+   */
+  private handleOpportunity(opportunity: ArbOpportunity): void {
     try {
-      // Calculate total cost and PnL percentage
+      // === FAST PATH: All synchronous calculations ===
       const totalCost = this.calculateTotalCost(opportunity);
       const pnlPercent = (opportunity.profitAbs / totalCost) * 100;
 
-      // Check PnL threshold
+      // Check PnL threshold (synchronous)
       if (pnlPercent < this.minPnlThresholdPercent) {
         this.logger.debug(
           `Signal below threshold: ${pnlPercent.toFixed(2)}% < ${this.minPnlThresholdPercent}% (profit: ${opportunity.profitAbs.toFixed(4)}, cost: ${totalCost.toFixed(4)})`,
@@ -115,44 +229,226 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      this.logger.log(
-        `🎯 Signal meets threshold! PnL: ${pnlPercent.toFixed(2)}% (${opportunity.profitAbs.toFixed(4)} USDC) - Strategy: ${opportunity.strategy}`,
-      );
-
-      // SPEED OPTIMIZATION: Execute trade IMMEDIATELY, save to DB later (async)
-      const tradeStartTime = Date.now();
-
-      // Execute real trade WITHOUT waiting for DB save
-      const tradeResult = await this.executeRealTrade(
-        opportunity,
-        'pending', // Temporary ID, will be updated after DB save
-      );
-
-      const tradeLatency = Date.now() - tradeStartTime;
-
-      if (tradeResult.success) {
-        this.logger.log(
-          `✅ Real trade executed in ${tradeLatency}ms! Orders: ${tradeResult.orderIds?.join(', ')}`,
-        );
-      } else {
-        this.logger.error(
-          `❌ Real trade failed after ${tradeLatency}ms: ${tradeResult.error}`,
-        );
+      // === Calculate order size using cached balance (NO awaits) ===
+      const candidates = this.buildOrderCandidates(opportunity);
+      if (candidates.length === 0) {
+        this.logger.warn('No valid order candidates built');
+        return;
       }
 
-      // Save to database AFTER trade execution (async, non-blocking for next signal)
+      const size = this.calculateFillSizeSync(candidates, opportunity.groupKey);
+      if (!Number.isFinite(size) || size <= 0) {
+        this.logger.warn(`Insufficient balance or invalid size: ${size}`);
+        return;
+      }
+
+      // === Check if localUsdcBalance is sufficient ===
+      const requiredCost = this.estimateRequiredCost(candidates, size);
+      if (this.localUsdcBalance < requiredCost) {
+        this.logger.warn(
+          `Insufficient local balance: ${this.localUsdcBalance.toFixed(2)} < ${requiredCost.toFixed(2)} required`,
+        );
+        return;
+      }
+
+      // === OPTIMISTIC UPDATE: Deduct balance BEFORE sending order ===
+      const reservedAmount = requiredCost;
+      this.localUsdcBalance -= reservedAmount;
+      this.logger.log(
+        `🎯 HFT Signal! PnL: ${pnlPercent.toFixed(2)}% | Size: ${size.toFixed(2)} | Reserved: ${reservedAmount.toFixed(2)} | Remaining: ${this.localUsdcBalance.toFixed(2)}`,
+      );
+
+      // Build batch orders
+      const orders = candidates.map((candidate) => ({
+        tokenID: candidate.tokenID,
+        price: candidate.price,
+        size,
+        side: candidate.side,
+        feeRateBps: 0,
+        orderType: 'GTC' as const,
+      }));
+
+      // Truncate if exceeds max batch size
+      const batchOrders = orders.length > this.maxBatchSize
+        ? orders.slice(0, this.maxBatchSize)
+        : orders;
+
+      const tradeStartTime = Date.now();
+
+      // === FIRE & FORGET: Place orders WITHOUT awaiting ===
+      this.polymarketOnchainService
+        .placeBatchOrders(this.config, batchOrders)
+        .then((result) => {
+          const latencyMs = Date.now() - tradeStartTime;
+
+          if (result.success && result.results) {
+            const orderIds = result.results
+              .filter((r) => r.success && r.orderID)
+              .map((r) => r.orderID!);
+            const failedCount = result.results.filter((r) => !r.success).length;
+
+            this.logger.log(
+              `✅ HFT Trade SUCCESS in ${latencyMs}ms! Orders: ${orderIds.length}, Failed: ${failedCount}`,
+            );
+
+            // Send Telegram notification (fire & forget)
+            this.telegramService.notifyOrderFilled({
+              success: true,
+              strategy: opportunity.strategy,
+              ordersPlaced: orderIds.length,
+              ordersFailed: failedCount,
+              size,
+              pnlPercent,
+              totalCost,
+              expectedPnl: opportunity.profitAbs,
+              latencyMs,
+              balance: this.localUsdcBalance,
+              reserved: reservedAmount,
+            }).catch((error) => {
+              this.logger.warn(`Telegram notification failed: ${error.message}`);
+            });
+
+            // Adjust minted cache for sell orders (async)
+            this.adjustMintedCacheAfterSell(
+              batchOrders,
+              result.results,
+              this.config,
+              opportunity.groupKey,
+            );
+          } else {
+            // === ROLLBACK: Add back reserved amount on failure ===
+            this.localUsdcBalance += reservedAmount;
+            this.logger.error(
+              `❌ HFT Trade FAILED in ${latencyMs}ms: ${result.error || 'Unknown error'} | Rolled back: ${reservedAmount.toFixed(2)}`,
+            );
+
+            // Send Telegram notification (fire & forget)
+            this.telegramService.notifyOrderFilled({
+              success: false,
+              strategy: opportunity.strategy,
+              error: result.error || 'Unknown error',
+              latencyMs,
+              balance: this.localUsdcBalance,
+              reserved: reservedAmount,
+            }).catch((error) => {
+              this.logger.warn(`Telegram notification failed: ${error.message}`);
+            });
+          }
+        })
+        .catch((error) => {
+          const latencyMs = Date.now() - tradeStartTime;
+          // === ROLLBACK: Add back reserved amount on error ===
+          this.localUsdcBalance += reservedAmount;
+          this.logger.error(
+            `❌ HFT Trade ERROR in ${latencyMs}ms: ${error.message} | Rolled back: ${reservedAmount.toFixed(2)}`,
+          );
+
+          // Send Telegram notification (fire & forget)
+          this.telegramService.notifyOrderFilled({
+            success: false,
+            strategy: opportunity.strategy,
+            error: error.message,
+            latencyMs,
+            balance: this.localUsdcBalance,
+            reserved: reservedAmount,
+          }).catch((err) => {
+            this.logger.warn(`Telegram notification failed: ${err.message}`);
+          });
+        });
+
+      // === ASYNC DB SAVE (non-blocking) ===
+      const tradeResult: RealTradeResult = {
+        signalId: 'pending',
+        success: true, // Optimistic - will be updated if we add result tracking
+        totalCost,
+        expectedPnl: opportunity.profitAbs,
+        timestampMs: Date.now(),
+      };
+
       this.saveSignalAndTradeAsync(opportunity, tradeResult).catch((error) => {
         this.logger.error(
           `Failed to save signal/trade to DB: ${error.message}`,
-          error.stack,
         );
       });
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(
         `Failed to handle opportunity: ${error.message}`,
         error.stack,
       );
     }
+  }
+
+  /**
+   * Synchronous fill size calculation using cached balances (HFT optimized)
+   * NO awaits - uses localUsdcBalance and mintedAssetCacheByGroup
+   */
+  private calculateFillSizeSync(
+    candidates: OrderCandidate[],
+    groupKey: string,
+  ): number {
+    const buyLegs = candidates.filter((c) => c.side === 'BUY');
+    const sellLegs = candidates.filter((c) => c.side === 'SELL');
+    const sizeCandidates: number[] = [];
+
+    // Use cached localUsdcBalance for buy legs
+    if (buyLegs.length > 0) {
+      const allocPerBuy = this.localUsdcBalance / buyLegs.length;
+
+      for (const leg of buyLegs) {
+        if (!leg.price || leg.price <= 0) continue;
+        const sizeFromCash = allocPerBuy > 0 ? allocPerBuy / leg.price : 0;
+        const bookCap = leg.orderbookSize && leg.orderbookSize > 0
+          ? leg.orderbookSize
+          : Number.POSITIVE_INFINITY;
+        sizeCandidates.push(Math.min(sizeFromCash, bookCap));
+      }
+    }
+
+    // Use cached minted assets for sell legs
+    if (sellLegs.length > 0) {
+      const mintedCache = this.mintedAssetCacheByGroup?.get(groupKey);
+      for (const leg of sellLegs) {
+        const mintedAvailable = mintedCache?.get(leg.tokenID) ?? 0;
+        const bookCap = leg.orderbookSize && leg.orderbookSize > 0
+          ? leg.orderbookSize
+          : Number.POSITIVE_INFINITY;
+        sizeCandidates.push(Math.min(mintedAvailable, bookCap));
+      }
+    }
+
+    const finiteCandidates = sizeCandidates.filter(
+      (v) => Number.isFinite(v) && v >= 0,
+    );
+
+    let minSize = finiteCandidates.length > 0
+      ? Math.min(...finiteCandidates)
+      : this.defaultSize;
+
+    if (!Number.isFinite(minSize)) {
+      minSize = 0;
+    }
+
+    if (this.defaultSize && Number.isFinite(minSize)) {
+      minSize = Math.min(minSize, this.defaultSize);
+    }
+
+    return minSize > 0 ? minSize : 0;
+  }
+
+  /**
+   * Estimate required USDC cost for buy orders (synchronous)
+   */
+  private estimateRequiredCost(
+    candidates: OrderCandidate[],
+    size: number,
+  ): number {
+    let totalCost = 0;
+    for (const candidate of candidates) {
+      if (candidate.side === 'BUY') {
+        totalCost += candidate.price * size;
+      }
+    }
+    return totalCost;
   }
 
   /**

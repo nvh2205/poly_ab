@@ -68,7 +68,9 @@ export class BufferService implements OnModuleInit {
   }
 
   async onModuleInit() {
-    await this.ensureClickHouseTable();
+    // TEMPORARILY DISABLED: ClickHouse writes disabled due to disk space issues
+    // await this.ensureClickHouseTable();
+    this.logger.warn('⚠️  ClickHouse writes are DISABLED (disk space issues)');
   }
 
   /**
@@ -78,10 +80,12 @@ export class BufferService implements OnModuleInit {
     // this.buffer.push(data);
     // Emit top-of-book update with orderbook size information
     // Find best bid (highest price) and best ask (lowest price) from the orderbook
+
     const { bestBid, bestAsk, bestBidSize, bestAskSize } = this.findBestBidAsk(
       data.bids,
       data.asks,
     );
+
     const tsMs = this.normalizeTimestampMs(Number(data.timestamp));
     // if (data.asset_id === '105508083447924148526783669819657180357261025688241426014197548801294535749915') {
     //   console.log('bestBidSize socket', bestBidSize);
@@ -463,10 +467,11 @@ export class BufferService implements OnModuleInit {
         }),
       );
 
+      // TEMPORARILY DISABLED: ClickHouse writes disabled due to disk space issues
       // Bulk insert into ClickHouse
       if (entities.length > 0) {
-        await this.clickHouseService.insert(this.orderbookTable, entities);
-        this.logger.log(`Flushed ${entities.length} records to ClickHouse`);
+        // await this.clickHouseService.insert(this.orderbookTable, entities);
+        this.logger.debug(`[SKIPPED] Would have flushed ${entities.length} records to ClickHouse (disabled)`);
       }
     } catch (error) {
       this.logger.error('Error flushing buffer:', error.message);
