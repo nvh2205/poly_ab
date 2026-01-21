@@ -152,24 +152,24 @@ log "Code updated successfully"
 log "Latest commit: $(git rev-parse --short HEAD)"
 log "Commit message: $(git log -1 --pretty=%B)"
 
-# Step 4: Install dependencies (only if package-lock.json changed)
+# Step 4: Install dependencies (only if package.json changed)
 log "Step 4: Checking dependencies..."
-PACKAGE_LOCK_HASH_FILE=".package-lock.hash"
-CURRENT_HASH=$(md5sum package-lock.json 2>/dev/null | cut -d' ' -f1 || md5 -q package-lock.json 2>/dev/null)
+PACKAGE_HASH_FILE=".package.hash"
+CURRENT_HASH=$(md5sum package.json 2>/dev/null | cut -d' ' -f1 || md5 -q package.json 2>/dev/null)
 
-if [ -f "$PACKAGE_LOCK_HASH_FILE" ]; then
-    PREVIOUS_HASH=$(cat "$PACKAGE_LOCK_HASH_FILE")
+if [ -f "$PACKAGE_HASH_FILE" ]; then
+    PREVIOUS_HASH=$(cat "$PACKAGE_HASH_FILE")
     if [ "$CURRENT_HASH" = "$PREVIOUS_HASH" ] && [ -d "node_modules" ]; then
-        info "Dependencies are up to date. Skipping npm ci..."
+        info "Dependencies are up to date. Skipping npm install..."
     else
-        log "Dependencies changed. Running npm ci..."
-        npm ci
-        echo "$CURRENT_HASH" > "$PACKAGE_LOCK_HASH_FILE"
+        log "Dependencies changed. Running npm install..."
+        npm install --omit=dev
+        echo "$CURRENT_HASH" > "$PACKAGE_HASH_FILE"
     fi
 else
-    log "Installing dependencies (npm ci)..."
-    npm ci
-    echo "$CURRENT_HASH" > "$PACKAGE_LOCK_HASH_FILE"
+    log "Installing dependencies (npm install)..."
+    npm install --omit=dev
+    echo "$CURRENT_HASH" > "$PACKAGE_HASH_FILE"
 fi
 
 # Step 5: Build application

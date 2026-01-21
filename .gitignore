@@ -29,6 +29,7 @@ tsconfig.tsbuildinfo
 
 # Deployment
 .package-lock.hash
+.package.hash
 
 # Helm secrets (if you create separate secret files)
 helm/**/secrets.yaml
