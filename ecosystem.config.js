@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'polymarket-collector',
+      name: 'polymarket-ab',
       script: './dist/main.js',
       instances: 1,
       exec_mode: 'cluster',

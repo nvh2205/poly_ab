@@ -195,20 +195,24 @@ echo ""
 # Step 7: Restart PM2 application (start if missing)
 log "Step 7: Restarting PM2 application..."
 if pm2 describe "$PM2_APP_NAME" > /dev/null 2>&1; then
+    log "PM2 app exists. Restarting..."
     pm2 restart "$PM2_APP_NAME"
     log "PM2 app restarted successfully"
 else
     log "PM2 app not found. Starting new instance..."
     if [ -f "ecosystem.config.js" ]; then
-        pm2 start ecosystem.config.js --only "$PM2_APP_NAME" --env production
+        log "Using ecosystem.config.js..."
+        pm2 start ecosystem.config.js --env production
     else
+        log "No ecosystem.config.js found. Starting with npm..."
         pm2 start npm --name "$PM2_APP_NAME" -- run start:prod
     fi
     log "PM2 app started successfully"
 fi
 
-# Save PM2 process list
-pm2 save
+# Save PM2 process list and show list
+log "Saving PM2 process list..."
+pm2 save --force
 
 # Step 8: Show status and recent logs
 log "Step 8: Deployment completed successfully!"
