@@ -5,11 +5,11 @@ services:
     image: postgres:15-alpine
     container_name: poly_postgres_ab
     environment:
-      POSTGRES_USER: polymarket
-      POSTGRES_PASSWORD: polymarket123
-      POSTGRES_DB: polymarket_db
+      POSTGRES_USER: ${DB_USERNAME:-polymarket}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-polymarket123}
+      POSTGRES_DB: ${DB_DATABASE:-polymarket_db}
     ports:
-      - '5483:5432'  # Host port 5482 -> Container port 5432
+      - '${DB_PORT:-5483}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -19,7 +19,7 @@ services:
     image: redis:7-alpine
     container_name: poly_redis_ab
     ports:
-      - '6430:6379'  # Host port 6429 -> Container port 6379
+      - '${REDIS_PORT:-6430}:6379'
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -29,13 +29,13 @@ services:
     image: clickhouse/clickhouse-server:latest
     container_name: poly_clickhouse_ab
     environment:
-      CLICKHOUSE_DB: polymarket_db
-      CLICKHOUSE_USER: polymarket
-      CLICKHOUSE_PASSWORD: polymarket123
+      CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE:-polymarket_db}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-polymarket}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-polymarket123}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
     ports:
-      - '8174:8123' # HTTP interface (Host port 8173 -> Container port 8123)
-      - '9051:9000' # Native protocol (Host port 9050 -> Container port 9000)
+      - '8174:8123' # HTTP interface
+      - '9051:9000' # Native protocol
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_log:/var/log/clickhouse-server
@@ -45,38 +45,26 @@ services:
         soft: 262144
         hard: 262144
 
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: poly_app_ab
-    ports:
-      - '3051:3000'  # Host port 3050 -> Container port 3000
-    environment:
-      NODE_ENV: production
-      PORT: '3000'
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USERNAME: polymarket
-      DB_PASSWORD: polymarket123
-      DB_DATABASE: polymarket_db
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      CLICKHOUSE_HOST: http://clickhouse:8123
-      CLICKHOUSE_USER: polymarket
-      CLICKHOUSE_PASSWORD: polymarket123
-      CLICKHOUSE_DATABASE: polymarket_db
-    depends_on:
-      - postgres
-      - redis
-      - clickhouse
-    restart: unless-stopped
-    healthcheck:
-      test: ['CMD', 'node', '-e', "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 40s
+  # app:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: poly_app_ab
+  #   ports:
+  #     - '3051:3000'  # Host port 3050 -> Container port 3000
+  #   env_file:
+  #     - .env
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #     - clickhouse
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ['CMD', 'node', '-e', "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+  #     interval: 30s
+  #     timeout: 3s
+  #     retries: 3
+  #     start_period: 40s
 
 volumes:
   postgres_data:
