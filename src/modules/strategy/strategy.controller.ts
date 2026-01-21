@@ -14,6 +14,7 @@ import { Repository } from 'typeorm';
 import { ArbSignal } from '../../database/entities/arb-signal.entity';
 import { ArbPaperTrade } from '../../database/entities/arb-paper-trade.entity';
 import { PaperExecutionService } from './paper-execution.service';
+import { RealExecutionService } from './real-execution.service';
 import { MarketStructureService } from './market-structure.service';
 import { RetentionCleanupService } from './retention-cleanup.service';
 
@@ -27,6 +28,7 @@ export class StrategyController {
     @InjectRepository(ArbPaperTrade)
     private readonly arbPaperTradeRepository: Repository<ArbPaperTrade>,
     private readonly paperExecutionService: PaperExecutionService,
+    private readonly realExecutionService: RealExecutionService,
     private readonly marketStructureService: MarketStructureService,
     private readonly retentionCleanupService: RetentionCleanupService,
   ) {}
@@ -321,6 +323,59 @@ export class StrategyController {
     } catch (error) {
       this.logger.error(
         `Failed to trigger cleanup: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * GET /strategy/real-trading/status
+   * Get current real trading status and configuration
+   */
+  @Get('real-trading/status')
+  async getRealTradingStatus() {
+    try {
+      return this.realExecutionService.getTradingStatus();
+    } catch (error) {
+      this.logger.error(
+        `Failed to get real trading status: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * POST /strategy/real-trading/enable
+   * Enable real trading at runtime
+   */
+  @Post('real-trading/enable')
+  async enableRealTrading() {
+    try {
+      this.logger.log('Real trading enable requested via API');
+      return this.realExecutionService.enableTrading();
+    } catch (error) {
+      this.logger.error(
+        `Failed to enable real trading: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * POST /strategy/real-trading/disable
+   * Disable real trading at runtime
+   */
+  @Post('real-trading/disable')
+  async disableRealTrading() {
+    try {
+      this.logger.log('Real trading disable requested via API');
+      return this.realExecutionService.disableTrading();
+    } catch (error) {
+      this.logger.error(
+        `Failed to disable real trading: ${error.message}`,
         error.stack,
       );
       throw error;

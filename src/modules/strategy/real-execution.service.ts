@@ -44,6 +44,20 @@ interface OrderCandidate {
   orderbookSize?: number;
 }
 
+// ============================================
+// Constants
+// ============================================
+
+/** HFT Configuration Constants */
+const BALANCE_REFRESH_MS = 5000; // 5 seconds
+const MINTED_REFRESH_MS = 10000; // 10 seconds (minted changes less frequently)
+const OPPORTUNITY_TIMEOUT_MS = 5000; // 5 seconds between opportunities
+
+/** Polymarket Constraints */
+const MAX_BATCH_SIZE = 15; // Polymarket batch order limit
+const MAX_PRICE = 0.99; // Maximum price for probability markets (must be < 1.0)
+const MIN_ORDER_VALUE = 1.0; // Polymarket minimum order value in test mode (USDC)
+
 /**
  * Real Execution Service
  * Executes real trades on Polymarket when arbitrage opportunities meet PnL threshold
@@ -65,24 +79,19 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   private config!: PolymarketConfig;
   private balanceRefreshInterval?: ReturnType<typeof setInterval>;
   private mintedRefreshInterval?: ReturnType<typeof setInterval>;
-  private readonly BALANCE_REFRESH_MS = 5000; // 5 seconds
-  private readonly MINTED_REFRESH_MS = 10000; // 10 seconds (minted changes less frequently)
 
   // === Order Submission Lock ===
   private isSubmittingOrder: boolean = false;
 
-  // === Opportunity Timeout (5 seconds between opportunities) ===
+  // === Opportunity Timeout ===
   private lastOpportunityExecutedAt: number = 0;
-  private readonly OPPORTUNITY_TIMEOUT_MS = 5000; // 5 seconds
 
-  // Configuration
+  // === Configuration (from environment variables) ===
   private readonly enabled = this.boolFromEnv('REAL_TRADING_ENABLED', false);
-  private readonly minPnlThresholdPercent = this.numFromEnv(
-    'REAL_TRADING_MIN_PNL_PERCENT',
-    1.0,
-  ); // Default 2%
-  private readonly defaultSize = this.numFromEnv('REAL_TRADE_SIZE', 5); // Default 10 USDC
-  private readonly maxBatchSize = 15; // Polymarket limit
+  private runtimeEnabled: boolean = this.boolFromEnv('REAL_TRADING_ENABLED', false);
+  private readonly minPnlThresholdPercent = this.numFromEnv('REAL_TRADING_MIN_PNL_PERCENT', 1.0);
+  private readonly defaultSize = this.numFromEnv('REAL_TRADE_SIZE', 5);
+  private readonly enforceMinOrderValue = this.boolFromEnv('ENFORCE_MIN_ORDER_VALUE', true);
 
   constructor(
     @InjectRepository(ArbSignal)
@@ -107,7 +116,8 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       `PnL threshold: ${this.minPnlThresholdPercent}% of total_cost`,
     );
     this.logger.log(`Default trade size: ${this.defaultSize} USDC`);
-    this.logger.log(`Opportunity timeout: ${this.OPPORTUNITY_TIMEOUT_MS}ms between opportunities`);
+    this.logger.log(`Opportunity timeout: ${OPPORTUNITY_TIMEOUT_MS}ms between opportunities`);
+    this.logger.log(`Min order value enforcement: ${this.enforceMinOrderValue ? 'ENABLED' : 'DISABLED'} (${MIN_ORDER_VALUE} USDC)`);
 
     // === HFT: Load config ONCE at startup ===
     this.config = loadPolymarketConfig();
@@ -125,17 +135,17 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     // === HFT: Setup background balance refresh (every 5s) ===
     this.balanceRefreshInterval = setInterval(() => {
       this.refreshBalancesBackground();
-    }, this.BALANCE_REFRESH_MS);
+    }, BALANCE_REFRESH_MS);
     this.logger.log(
-      `Background balance refresh scheduled every ${this.BALANCE_REFRESH_MS}ms`,
+      `Background balance refresh scheduled every ${BALANCE_REFRESH_MS}ms`,
     );
 
     // === HFT: Setup background minted assets refresh (every 10s) ===
     this.mintedRefreshInterval = setInterval(() => {
       this.refreshMintedAssetsBackground();
-    }, this.MINTED_REFRESH_MS);
+    }, MINTED_REFRESH_MS);
     this.logger.log(
-      `Background minted assets refresh scheduled every ${this.MINTED_REFRESH_MS}ms`,
+      `Background minted assets refresh scheduled every ${MINTED_REFRESH_MS}ms`,
     );
 
     // Subscribe to opportunities
@@ -244,6 +254,11 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
    */
   private handleOpportunity(opportunity: ArbOpportunity): void {
     try {
+      // === CHECK: Skip if trading is disabled ===
+      if (!this.runtimeEnabled) {
+        return;
+      }
+
       // === CHECK: Skip if already submitting an order ===
       if (this.isSubmittingOrder) {
         return;
@@ -252,8 +267,8 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       // === CHECK: Skip if within 5 second timeout from last opportunity ===
       const now = Date.now();
       const timeSinceLastOpportunity = now - this.lastOpportunityExecutedAt;
-      if (this.lastOpportunityExecutedAt > 0 && timeSinceLastOpportunity < this.OPPORTUNITY_TIMEOUT_MS) {
-        const remainingMs = this.OPPORTUNITY_TIMEOUT_MS - timeSinceLastOpportunity;
+      if (this.lastOpportunityExecutedAt > 0 && timeSinceLastOpportunity < OPPORTUNITY_TIMEOUT_MS) {
+        const remainingMs = OPPORTUNITY_TIMEOUT_MS - timeSinceLastOpportunity;
         this.logger.debug(
           `Skipping opportunity: timeout (${remainingMs}ms remaining until next opportunity)`
         );
@@ -296,7 +311,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       // === UPDATE: Mark opportunity execution timestamp ===
       this.lastOpportunityExecutedAt = Date.now();
       this.logger.log(
-        `✅ Opportunity accepted: ${opportunity.strategy} | PnL: ${pnlPercent.toFixed(2)}% | Size: ${size.toFixed(2)} | Next opportunity in ${this.OPPORTUNITY_TIMEOUT_MS}ms`
+        `✅ Opportunity accepted: ${opportunity.strategy} | PnL: ${pnlPercent.toFixed(2)}% | Size: ${size.toFixed(2)} | Next opportunity in ${OPPORTUNITY_TIMEOUT_MS}ms`
       );
 
       // === LOCK: Mark as submitting order ===
@@ -312,10 +327,34 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
         orderType: 'GTC' as const,
       }));
 
-      // Truncate if exceeds max batch size
-      const batchOrders = orders.length > this.maxBatchSize
-        ? orders.slice(0, this.maxBatchSize)
+      // Adjust prices to meet minimum order value ($1) for test mode
+      const adjustedOrders = this.enforceMinOrderValue 
+        ? orders.map((order) => {
+            const orderValue = order.size * order.price;
+            
+            if (orderValue < MIN_ORDER_VALUE) {
+              const adjustedPrice = MIN_ORDER_VALUE / order.size;
+              // Cap at MAX_PRICE for probability markets (can't be >= 1.0)
+              const finalPrice = Math.min(adjustedPrice, MAX_PRICE);
+              
+              this.logger.debug(
+                `Adjusting price for ${order.side} order: ${order.price.toFixed(4)} -> ${finalPrice.toFixed(4)} (value: ${orderValue.toFixed(2)} -> ${(order.size * finalPrice).toFixed(2)})`
+              );
+              
+              return {
+                ...order,
+                price: finalPrice,
+              };
+            }
+            
+            return order;
+          })
         : orders;
+
+      // Truncate if exceeds max batch size
+      const batchOrders = adjustedOrders.length > MAX_BATCH_SIZE
+        ? adjustedOrders.slice(0, MAX_BATCH_SIZE)
+        : adjustedOrders;
 
       const tradeStartTime = Date.now();
 
@@ -887,11 +926,11 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     }));
 
     // Validate batch size (Polymarket limit is 15)
-    if (orders.length > this.maxBatchSize) {
+    if (orders.length > MAX_BATCH_SIZE) {
       this.logger.warn(
-        `Batch size ${orders.length} exceeds limit ${this.maxBatchSize}. Truncating.`,
+        `Batch size ${orders.length} exceeds limit ${MAX_BATCH_SIZE}. Truncating.`,
       );
-      return orders.slice(0, this.maxBatchSize);
+      return orders.slice(0, MAX_BATCH_SIZE);
     }
 
     return orders;
@@ -1341,6 +1380,78 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     });
 
     return await this.arbRealTradeRepository.save(realTrade);
+  }
+
+  /**
+   * Enable real trading at runtime
+   */
+  enableTrading(): { success: boolean; message: string; enabled: boolean } {
+    this.runtimeEnabled = true;
+    this.logger.log('Real trading ENABLED via API');
+    return {
+      success: true,
+      message: 'Real trading has been enabled',
+      enabled: true,
+    };
+  }
+
+  /**
+   * Disable real trading at runtime
+   */
+  disableTrading(): { success: boolean; message: string; enabled: boolean } {
+    this.runtimeEnabled = false;
+    this.logger.log('Real trading DISABLED via API');
+    return {
+      success: true,
+      message: 'Real trading has been disabled',
+      enabled: false,
+    };
+  }
+
+  /**
+   * Get current trading status and configuration
+   */
+  getTradingStatus(): {
+    enabled: boolean;
+    runtimeEnabled: boolean;
+    config: {
+      minPnlThresholdPercent: number;
+      defaultSize: number;
+      maxBatchSize: number;
+      opportunityTimeoutMs: number;
+      balanceRefreshMs: number;
+      mintedRefreshMs: number;
+    };
+    state: {
+      isSubmittingOrder: boolean;
+      localUsdcBalance: number;
+      cachedUsdcBalance?: number;
+      lastOpportunityExecutedAt: number;
+      timeSinceLastOpportunity: number;
+    };
+  } {
+    const now = Date.now();
+    return {
+      enabled: this.enabled,
+      runtimeEnabled: this.runtimeEnabled,
+      config: {
+        minPnlThresholdPercent: this.minPnlThresholdPercent,
+        defaultSize: this.defaultSize,
+        maxBatchSize: MAX_BATCH_SIZE,
+        opportunityTimeoutMs: OPPORTUNITY_TIMEOUT_MS,
+        balanceRefreshMs: BALANCE_REFRESH_MS,
+        mintedRefreshMs: MINTED_REFRESH_MS,
+      },
+      state: {
+        isSubmittingOrder: this.isSubmittingOrder,
+        localUsdcBalance: this.localUsdcBalance,
+        cachedUsdcBalance: this.cachedUsdcBalance,
+        lastOpportunityExecutedAt: this.lastOpportunityExecutedAt,
+        timeSinceLastOpportunity: this.lastOpportunityExecutedAt > 0 
+          ? now - this.lastOpportunityExecutedAt 
+          : 0,
+      },
+    };
   }
 
   private toFiniteOrNull(value: number | undefined | null): number | null {
