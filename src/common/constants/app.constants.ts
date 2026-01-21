@@ -22,6 +22,9 @@ export const APP_CONSTANTS = {
 
   // Market Discovery Configuration
   MARKET_CACHE_TTL: 1800, // 30 minutes in seconds
+  
+  // Minted Assets Cache Configuration
+  MINTED_ASSETS_CACHE_TTL: 86400, // 1 day in seconds
 
   // Slug Configurations for different patterns
   SLUG_CONFIGS: [

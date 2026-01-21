@@ -5,7 +5,7 @@ import { Event } from '../../database/entities/event.entity';
 import { ArbSignal } from '../../database/entities/arb-signal.entity';
 import { ArbPaperTrade } from '../../database/entities/arb-paper-trade.entity';
 import { ArbRealTrade } from '../../database/entities/arb-real-trade.entity';
-import { SellStatistics } from '../../database/entities/sell-statistics.entity';
+// import { SellStatistics } from '../../database/entities/sell-statistics.entity'; // DEPRECATED: No longer used
 import { MarketStructureService } from './market-structure.service';
 import { IngestionModule } from '../ingestion/ingestion.module';
 import { ArbitrageEngineService } from './arbitrage-engine.service';
@@ -24,7 +24,7 @@ import { TelegramModule } from '../../common/services/telegram.module';
       ArbSignal,
       ArbPaperTrade,
       ArbRealTrade,
-      SellStatistics,
+      // SellStatistics, // DEPRECATED: No longer used
     ]),
     IngestionModule,
     PolymarketOnchainModule,

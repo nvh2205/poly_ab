@@ -7,6 +7,7 @@ import type {
 } from '@polymarket/clob-client';
 import { loadPolymarketConfig } from './polymarket-onchain.config';
 import { RedisService } from './redis.service';
+import { APP_CONSTANTS } from '../constants/app.constants';
 
 /**
  * Interface for Polymarket configuration
@@ -81,6 +82,12 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
   private credentialsCache = new Map<string, ApiKeyCreds>();
   private clientCache = new Map<string, ClobClientType>();
 
+  // Cache for CLOB types (loaded once at startup)
+  private clobTypes: {
+    OrderType: any;
+    Side: any;
+  } | null = null;
+
   // Default config loaded from environment variables
   private defaultConfig?: PolymarketConfig;
 
@@ -140,10 +147,11 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
     try {
       this.logger.log('Initializing Polymarket Onchain Service...');
 
-      // Pre-load CLOB client module to avoid cold start delays
-      this.logger.log('Loading CLOB client module...');
-      await this.loadClob();
-      this.logger.log('CLOB client module loaded successfully');
+      // Pre-load CLOB client module and cache types
+      this.logger.log('Loading CLOB client module and caching types...');
+      const { OrderType, Side } = await this.loadClob();
+      this.clobTypes = { OrderType, Side };
+      this.logger.log('CLOB client module and types cached successfully');
 
       // Load default config from environment variables
       try {
@@ -224,6 +232,20 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       return cached;
     };
   })();
+
+  /**
+   * Get cached CLOB types (OrderType, Side)
+   * If not cached, load and cache them
+   */
+  private async getClobTypes(): Promise<{ OrderType: any; Side: any }> {
+    if (this.clobTypes) {
+      return this.clobTypes;
+    }
+    
+    const { OrderType, Side } = await this.loadClob();
+    this.clobTypes = { OrderType, Side };
+    return this.clobTypes;
+  }
 
   /**
    * Build wallet from private key
@@ -403,11 +425,11 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
     orderParams: OrderParams,
   ): Promise<{ success: boolean; orderID?: string; error?: string }> {
     try {
-      // Use cached authenticated client (credentials are created once and reused)
-      const client = await this.getOrCreateAuthenticatedClient(config);
-
-      // Create and post order
-      const { OrderType, Side } = await this.loadClob();
+      // Use cached authenticated client and types
+      const [client, { OrderType, Side }] = await Promise.all([
+        this.getOrCreateAuthenticatedClient(config),
+        this.getClobTypes(),
+      ]);
 
       const order = await client.createOrder({
         tokenID: orderParams.tokenID,
@@ -449,6 +471,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
     results?: BatchOrderResult[];
     error?: string;
   }> {
+    const startTime = performance.now();
     try {
       // Validate batch size
       if (orders.length === 0) {
@@ -462,13 +485,15 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
         };
       }
 
-      // Use cached authenticated client
-      const client = await this.getOrCreateAuthenticatedClient(config);
+      // Get client and cached types (types are pre-loaded at startup)
+      const loadStartTime = performance.now();
+      const [client, { OrderType, Side }] = await Promise.all([
+        this.getOrCreateAuthenticatedClient(config),
+        this.getClobTypes(),
+      ]);
+      const loadTime = performance.now() - loadStartTime;
 
-      // Load clob types once
-      const { OrderType, Side } = await this.loadClob();
-
-      // Map OrderType strings to enum values
+      // Pre-create orderTypeMap (moved outside loop for better performance)
       const orderTypeMap: Record<string, any> = {
         GTC: OrderType.GTC,
         GTD: OrderType.GTD,
@@ -476,7 +501,8 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
         FAK: OrderType.FAK,
       };
 
-      // Create all orders in parallel for maximum speed
+      // Create all orders in parallel (faster than sequential)
+      const createStartTime = performance.now();
       const batchOrdersArgs = await Promise.all(
         orders.map(async (orderParams) => {
           const order = await client.createOrder({
@@ -500,12 +526,17 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
           };
         }),
       );
+      const createTime = performance.now() - createStartTime;
 
-      // Post batch orders
+      // Post batch orders - this is the actual network request
+      const postStartTime = performance.now();
       const responses = await client.postOrders(batchOrdersArgs);
+      const postTime = performance.now() - postStartTime;
 
-      // Process responses
-      const results: BatchOrderResult[] = [];
+      // Process responses - optimized with pre-allocated array and direct access
+      const results: BatchOrderResult[] = new Array(
+        Array.isArray(responses) ? responses.length : 0,
+      );
       let successCount = 0;
       let failureCount = 0;
 
@@ -515,24 +546,29 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
 
           if (response && response.orderID) {
             successCount++;
-            results.push({
+            results[i] = {
               success: true,
               orderID: response.orderID,
               status: response.status || 'unknown',
               errorMsg: response.errorMsg || '',
-            });
+            };
           } else {
             failureCount++;
-            results.push({
+            results[i] = {
               success: false,
               errorMsg: response?.errorMsg || `Order ${i + 1} placement failed`,
-            });
+            };
           }
         }
       }
 
+      const totalTime = performance.now() - startTime;
       this.logger.log(
-        `Batch complete: ${successCount} success, ${failureCount} failed`,
+        `Batch complete: ${successCount} success, ${failureCount} failed | ` +
+          `Timing - Total: ${totalTime.toFixed(2)}ms, ` +
+          `Load: ${loadTime.toFixed(2)}ms, ` +
+          `Create: ${createTime.toFixed(2)}ms, ` +
+          `Post: ${postTime.toFixed(2)}ms`,
       );
 
       return {
@@ -540,7 +576,10 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
         results,
       };
     } catch (error: any) {
-      this.logger.error(`Error placing batch orders: ${error.message}`);
+      const totalTime = performance.now() - startTime;
+      this.logger.error(
+        `Error placing batch orders: ${error.message} | Execution time: ${totalTime.toFixed(2)}ms`,
+      );
       if (error.response?.data) {
         this.logger.error(
           `Server response: ${JSON.stringify(error.response.data)}`,
@@ -564,7 +603,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
   ): Promise<void> {
     try {
       const mintedAmount = Number(amountUSDC) || 0;
-      const ttlSeconds = 172800; // 2 days
+      const ttlSeconds = APP_CONSTANTS.MINTED_ASSETS_CACHE_TTL;
       const timestamp = new Date().toISOString();
 
       const pipeline = this.redisService.getClient().pipeline();
@@ -1083,9 +1122,10 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
     groupKey: string,
   ): Promise<Record<string, number>> {
     try {
-      const wallet = this.buildWallet(config);
+      // Use proxy address if available, otherwise use wallet address from private key
+      const targetAddress = config.proxyAddress || this.buildWallet(config).address;
       return await this.getMintedAssetBalancesByWallet(
-        wallet.address,
+        targetAddress,
         groupKey,
       );
     } catch (error: any) {
@@ -1106,11 +1146,10 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
     const balances: Record<string, number> = {};
 
     try {
-      const inventoryKey = `mint:inventory:${groupKey}:${walletAddress}`;
+      const inventoryKey = `mint:inventory:${groupKey}:${walletAddress.toLowerCase()}`;
       const hashBalances = await this.redisService
         .getClient()
         .hgetall(inventoryKey);
-
       if (hashBalances && Object.keys(hashBalances).length > 0) {
         for (const [tokenId, amountStr] of Object.entries(hashBalances)) {
           const amount = Number(amountStr);
@@ -1152,7 +1191,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
 
       // Seed inventory hash cache from legacy data (adds on top of any existing hash)
       if (Object.keys(balances).length > 0) {
-        const ttlSeconds = 3024000;
+        const ttlSeconds = APP_CONSTANTS.MINTED_ASSETS_CACHE_TTL;
         const pipe = this.redisService.getClient().pipeline();
         for (const [tokenId, amount] of Object.entries(balances)) {
           pipe.hincrbyfloat(inventoryKey, tokenId, amount);
@@ -1177,11 +1216,12 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
     config: PolymarketConfig,
     groupKey: string,
     deltas: Record<string, number>,
-    ttlSeconds: number = 3024000,
+    ttlSeconds: number = APP_CONSTANTS.MINTED_ASSETS_CACHE_TTL,
   ): Promise<void> {
     try {
-      const wallet = this.buildWallet(config);
-      const inventoryKey = `mint:inventory:${groupKey}:${wallet.address}`;
+      // Use proxy address if available, otherwise use wallet address from private key
+      const targetAddress = config.proxyAddress || this.buildWallet(config).address;
+      const inventoryKey = `mint:inventory:${groupKey}:${targetAddress.toLowerCase()}`;
       const pipe = this.redisService.getClient().pipeline();
 
       for (const [tokenId, delta] of Object.entries(deltas)) {

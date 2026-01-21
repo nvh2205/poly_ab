@@ -25,6 +25,13 @@ interface RealTradeResult {
   success: boolean;
   orderIds?: string[];
   error?: string;
+  errorMessages?: Array<{
+    tokenID: string;
+    marketSlug?: string;
+    side: 'BUY' | 'SELL';
+    price: number;
+    errorMsg: string;
+  }>;
   totalCost: number;
   expectedPnl: number;
   timestampMs: number;
@@ -64,13 +71,17 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   // === Order Submission Lock ===
   private isSubmittingOrder: boolean = false;
 
+  // === Opportunity Timeout (5 seconds between opportunities) ===
+  private lastOpportunityExecutedAt: number = 0;
+  private readonly OPPORTUNITY_TIMEOUT_MS = 5000; // 5 seconds
+
   // Configuration
   private readonly enabled = this.boolFromEnv('REAL_TRADING_ENABLED', false);
   private readonly minPnlThresholdPercent = this.numFromEnv(
     'REAL_TRADING_MIN_PNL_PERCENT',
-    2.0,
+    1.0,
   ); // Default 2%
-  private readonly defaultSize = this.numFromEnv('REAL_TRADE_SIZE', 10); // Default 10 USDC
+  private readonly defaultSize = this.numFromEnv('REAL_TRADE_SIZE', 5); // Default 10 USDC
   private readonly maxBatchSize = 15; // Polymarket limit
 
   constructor(
@@ -81,7 +92,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     private readonly arbitrageEngineService: ArbitrageEngineService,
     private readonly polymarketOnchainService: PolymarketOnchainService,
     private readonly telegramService: TelegramService,
-  ) {}
+  ) { }
 
   async onModuleInit(): Promise<void> {
     if (!this.enabled) {
@@ -96,6 +107,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       `PnL threshold: ${this.minPnlThresholdPercent}% of total_cost`,
     );
     this.logger.log(`Default trade size: ${this.defaultSize} USDC`);
+    this.logger.log(`Opportunity timeout: ${this.OPPORTUNITY_TIMEOUT_MS}ms between opportunities`);
 
     // === HFT: Load config ONCE at startup ===
     this.config = loadPolymarketConfig();
@@ -157,9 +169,6 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       .then((balances) => {
         this.localUsdcBalance = parseFloat(balances.usdc) || 0;
         this.cachedUsdcBalance = this.localUsdcBalance;
-        this.logger.debug(
-          `Background balance refresh: ${this.localUsdcBalance.toFixed(2)} USDC`,
-        );
       })
       .catch((error) => {
         this.logger.warn(
@@ -173,9 +182,8 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
    * This enables SELL legs to work correctly by knowing available pre-minted inventory
    */
   private refreshMintedAssetsBackground(): void {
-    const groupKeys = this.arbitrageEngineService.getGroupKeys();
+    const groupKeys = this.generateGroupKeys();
     if (groupKeys.length === 0) {
-      this.logger.debug('No group keys available yet, skipping minted assets refresh');
       return;
     }
 
@@ -190,19 +198,10 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
               Number(amount) || 0,
             ]),
           );
-          
           if (!this.mintedAssetCacheByGroup) {
             this.mintedAssetCacheByGroup = new Map();
           }
           this.mintedAssetCacheByGroup.set(groupKey, cache);
-          
-          const totalTokens = cache.size;
-          const totalAmount = Array.from(cache.values()).reduce((a, b) => a + b, 0);
-          if (totalTokens > 0) {
-            this.logger.debug(
-              `Minted cache refreshed for ${groupKey}: ${totalTokens} tokens, ${totalAmount.toFixed(2)} total units`,
-            );
-          }
         })
         .catch((error) => {
           this.logger.warn(
@@ -213,18 +212,50 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Generate group keys for ETH and BTC with 17:00 UTC expiration on current date
+   * Format: {symbol}-{ISO8601 expiration time}
+   * Example: "eth-2026-01-20T17:00:00.000Z"
+   */
+  private generateGroupKeys(): string[] {
+    const now = new Date();
+    const expirationDate = new Date(Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      17, // 17:00 UTC
+      0,  // 0 minutes
+      0,  // 0 seconds
+      0   // 0 milliseconds
+    ));
+
+    const expirationISO = expirationDate.toISOString();
+    const symbols = ['eth', 'btc'];
+
+    return symbols.map(symbol => `${symbol}-${expirationISO}`);
+  }
+
+  /**
    * HFT Hot Path: Handle arbitrage opportunity with ZERO awaits
    * - Uses cached localUsdcBalance (no RPC/Redis calls)
    * - Optimistic balance deduction before order placement
    * - Fire & Forget order execution
    * - Ensures only one signal is processed at a time (sequential execution)
+   * - 5 second timeout between opportunities
    */
   private handleOpportunity(opportunity: ArbOpportunity): void {
     try {
       // === CHECK: Skip if already submitting an order ===
       if (this.isSubmittingOrder) {
+        return;
+      }
+
+      // === CHECK: Skip if within 5 second timeout from last opportunity ===
+      const now = Date.now();
+      const timeSinceLastOpportunity = now - this.lastOpportunityExecutedAt;
+      if (this.lastOpportunityExecutedAt > 0 && timeSinceLastOpportunity < this.OPPORTUNITY_TIMEOUT_MS) {
+        const remainingMs = this.OPPORTUNITY_TIMEOUT_MS - timeSinceLastOpportunity;
         this.logger.debug(
-          `Skipping signal: Order submission already in progress`,
+          `Skipping opportunity: timeout (${remainingMs}ms remaining until next opportunity)`
         );
         return;
       }
@@ -235,44 +266,41 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
 
       // Check PnL threshold (synchronous)
       if (pnlPercent < this.minPnlThresholdPercent) {
-        this.logger.debug(
-          `Signal below threshold: ${pnlPercent.toFixed(2)}% < ${this.minPnlThresholdPercent}% (profit: ${opportunity.profitAbs.toFixed(4)}, cost: ${totalCost.toFixed(4)})`,
-        );
+        console.log('pnlPercent: ', pnlPercent, ' < ', this.minPnlThresholdPercent, '%');
+
+        console.log("---SKIP OPPORTUNITY---");
         return;
       }
 
       // === Calculate order size using cached balance (NO awaits) ===
       const candidates = this.buildOrderCandidates(opportunity);
       if (candidates.length === 0) {
-        this.logger.warn('No valid order candidates built');
         return;
       }
 
       const size = this.calculateFillSizeSync(candidates, opportunity.groupKey);
       if (!Number.isFinite(size) || size <= 0) {
-        this.logger.warn(`Insufficient balance or invalid size: ${size}`);
         return;
       }
 
       // === Check if localUsdcBalance is sufficient ===
       const requiredCost = this.estimateRequiredCost(candidates, size);
       if (this.localUsdcBalance < requiredCost) {
-        this.logger.warn(
-          `Insufficient local balance: ${this.localUsdcBalance.toFixed(2)} < ${requiredCost.toFixed(2)} required`,
-        );
         return;
       }
 
       // === OPTIMISTIC UPDATE: Deduct balance BEFORE sending order ===
       const reservedAmount = requiredCost;
       this.localUsdcBalance -= reservedAmount;
-      
+
+      // === UPDATE: Mark opportunity execution timestamp ===
+      this.lastOpportunityExecutedAt = Date.now();
+      this.logger.log(
+        `✅ Opportunity accepted: ${opportunity.strategy} | PnL: ${pnlPercent.toFixed(2)}% | Size: ${size.toFixed(2)} | Next opportunity in ${this.OPPORTUNITY_TIMEOUT_MS}ms`
+      );
+
       // === LOCK: Mark as submitting order ===
       this.isSubmittingOrder = true;
-      
-      this.logger.log(
-        `🎯 HFT Signal! PnL: ${pnlPercent.toFixed(2)}% | Size: ${size.toFixed(2)} | Reserved: ${reservedAmount.toFixed(2)} | Remaining: ${this.localUsdcBalance.toFixed(2)}`,
-      );
 
       // Build batch orders
       const orders = candidates.map((candidate) => ({
@@ -303,9 +331,50 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
               .map((r) => r.orderID!);
             const failedCount = result.results.filter((r) => !r.success).length;
 
-            this.logger.log(
-              `✅ HFT Trade SUCCESS in ${latencyMs}ms! Orders: ${orderIds.length}, Failed: ${failedCount}`,
-            );
+            // Build token to market slug mapping
+            const tokenToMarketSlug = this.buildTokenToMarketSlugMap(opportunity);
+
+            // Collect successful orders details
+            const successfulOrders = result.results
+              .map((r, idx) => ({ result: r, order: batchOrders[idx] }))
+              .filter(({ result }) => result.success)
+              .map(({ result, order }) => ({
+                tokenID: order.tokenID,
+                marketSlug: tokenToMarketSlug.get(order.tokenID),
+                side: order.side,
+                price: order.price,
+              }));
+
+            // Collect failed orders details
+            const failedOrders = result.results
+              .map((r, idx) => ({ result: r, order: batchOrders[idx] }))
+              .filter(({ result }) => !result.success)
+              .map(({ result, order }) => ({
+                tokenID: order.tokenID,
+                marketSlug: tokenToMarketSlug.get(order.tokenID),
+                side: order.side,
+                price: order.price,
+                errorMsg: result.errorMsg || result.status || 'Unknown error',
+              }));
+
+            // Console log failed orders for debugging
+            if (failedOrders.length > 0) {
+              this.logger.warn(`❌ ${failedOrders.length} order(s) failed:`);
+              failedOrders.forEach((order, idx) => {
+                this.logger.warn(
+                  `  [${idx + 1}] ${order.side} ${order.marketSlug || order.tokenID.substring(0, 10)} @ ${order.price.toFixed(4)} - Error: ${order.errorMsg}`
+                );
+              });
+            }
+
+            // Calculate actual total cost based on size (already multiplied by price in candidates)
+            const actualTotalCost = this.calculateActualCost(batchOrders, size);
+            
+            // Calculate actual PnL in USDC (size * profit per unit)
+            const actualPnlUsdc = size * opportunity.profitAbs;
+            
+            // Recalculate PnL percentage based on actual cost
+            const actualPnlPercent = actualTotalCost > 0 ? (actualPnlUsdc / actualTotalCost) * 100 : 0;
 
             // Send Telegram notification (fire & forget)
             this.telegramService.notifyOrderFilled({
@@ -313,15 +382,34 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
               strategy: opportunity.strategy,
               ordersPlaced: orderIds.length,
               ordersFailed: failedCount,
+              successfulOrders,
+              failedOrders,
               size,
-              pnlPercent,
-              totalCost,
-              expectedPnl: opportunity.profitAbs,
+              pnlPercent: actualPnlPercent,
+              totalCost: actualTotalCost,
+              expectedPnl: actualPnlUsdc,
               latencyMs,
               balance: this.localUsdcBalance,
               reserved: reservedAmount,
-            }).catch((error) => {
-              this.logger.warn(`Telegram notification failed: ${error.message}`);
+            }).catch(() => {
+              // Silent fail for telegram notifications
+            });
+
+            // Save trade result to database (async)
+            const tradeResult: RealTradeResult = {
+              signalId: 'pending',
+              success: orderIds.length > 0,
+              orderIds: orderIds.length > 0 ? orderIds : undefined,
+              errorMessages: failedOrders.length > 0 ? failedOrders : undefined,
+              totalCost: actualTotalCost,
+              expectedPnl: actualPnlUsdc,
+              timestampMs: Date.now(),
+            };
+
+            this.saveTradeResultAsync(opportunity, tradeResult).catch((error) => {
+              this.logger.error(
+                `Failed to save trade result to DB: ${error.message}`,
+              );
             });
 
             // Adjust minted cache for sell orders (async)
@@ -334,20 +422,42 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
           } else {
             // === ROLLBACK: Add back reserved amount on failure ===
             this.localUsdcBalance += reservedAmount;
+
+            // Console log batch failure
+            const errorMsg = result.error || 'Unknown error';
             this.logger.error(
-              `❌ HFT Trade FAILED in ${latencyMs}ms: ${result.error || 'Unknown error'} | Rolled back: ${reservedAmount.toFixed(2)}`,
+              `❌ BATCH ORDER FAILED - Strategy: ${opportunity.strategy}, Error: ${errorMsg}`
+            );
+            this.logger.error(
+              `   Orders attempted: ${batchOrders.length}, Size: ${size}, Reserved: ${reservedAmount.toFixed(2)} USDC`
             );
 
             // Send Telegram notification (fire & forget)
             this.telegramService.notifyOrderFilled({
               success: false,
               strategy: opportunity.strategy,
-              error: result.error || 'Unknown error',
+              error: errorMsg,
               latencyMs,
               balance: this.localUsdcBalance,
               reserved: reservedAmount,
-            }).catch((error) => {
-              this.logger.warn(`Telegram notification failed: ${error.message}`);
+            }).catch(() => {
+              // Silent fail for telegram notifications
+            });
+
+            // Save trade result to database (async)
+            const tradeResult: RealTradeResult = {
+              signalId: 'pending',
+              success: false,
+              error: errorMsg,
+              totalCost,
+              expectedPnl: opportunity.profitAbs,
+              timestampMs: Date.now(),
+            };
+
+            this.saveTradeResultAsync(opportunity, tradeResult).catch((error) => {
+              this.logger.error(
+                `Failed to save trade result to DB: ${error.message}`,
+              );
             });
           }
 
@@ -358,8 +468,14 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
           const latencyMs = Date.now() - tradeStartTime;
           // === ROLLBACK: Add back reserved amount on error ===
           this.localUsdcBalance += reservedAmount;
+
+          // Console log exception
           this.logger.error(
-            `❌ HFT Trade ERROR in ${latencyMs}ms: ${error.message} | Rolled back: ${reservedAmount.toFixed(2)}`,
+            `❌ EXCEPTION during order placement - Strategy: ${opportunity.strategy}`,
+            error.stack
+          );
+          this.logger.error(
+            `   Orders attempted: ${batchOrders.length}, Size: ${size}, Reserved: ${reservedAmount.toFixed(2)} USDC`
           );
 
           // Send Telegram notification (fire & forget)
@@ -370,28 +486,29 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
             latencyMs,
             balance: this.localUsdcBalance,
             reserved: reservedAmount,
-          }).catch((err) => {
-            this.logger.warn(`Telegram notification failed: ${err.message}`);
+          }).catch(() => {
+            // Silent fail for telegram notifications
+          });
+
+          // Save trade result to database (async)
+          const tradeResult: RealTradeResult = {
+            signalId: 'pending',
+            success: false,
+            error: error.message,
+            totalCost,
+            expectedPnl: opportunity.profitAbs,
+            timestampMs: Date.now(),
+          };
+
+          this.saveTradeResultAsync(opportunity, tradeResult).catch((dbError) => {
+            this.logger.error(
+              `Failed to save trade result to DB: ${dbError.message}`,
+            );
           });
 
           // === UNLOCK: Release order submission lock ===
           this.isSubmittingOrder = false;
         });
-
-      // === ASYNC DB SAVE (non-blocking) ===
-      const tradeResult: RealTradeResult = {
-        signalId: 'pending',
-        success: true, // Optimistic - will be updated if we add result tracking
-        totalCost,
-        expectedPnl: opportunity.profitAbs,
-        timestampMs: Date.now(),
-      };
-
-      this.saveSignalAndTradeAsync(opportunity, tradeResult).catch((error) => {
-        this.logger.error(
-          `Failed to save signal/trade to DB: ${error.message}`,
-        );
-      });
     } catch (error: any) {
       this.logger.error(
         `Failed to handle opportunity: ${error.message}`,
@@ -403,6 +520,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   /**
    * Synchronous fill size calculation using cached balances (HFT optimized)
    * NO awaits - uses localUsdcBalance and mintedAssetCacheByGroup
+   * Returns 0 immediately if any size candidate is 0 (insufficient liquidity)
    */
   private calculateFillSizeSync(
     candidates: OrderCandidate[],
@@ -422,7 +540,14 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
         const bookCap = leg.orderbookSize && leg.orderbookSize > 0
           ? leg.orderbookSize
           : Number.POSITIVE_INFINITY;
-        sizeCandidates.push(Math.min(sizeFromCash, bookCap));
+        const legSize = Math.min(sizeFromCash, bookCap);
+        
+        // Early return if any leg has 0 size
+        if (legSize <= 0) {
+          return 0;
+        }
+        
+        sizeCandidates.push(legSize);
       }
     }
 
@@ -434,7 +559,14 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
         const bookCap = leg.orderbookSize && leg.orderbookSize > 0
           ? leg.orderbookSize
           : Number.POSITIVE_INFINITY;
-        sizeCandidates.push(Math.min(mintedAvailable, bookCap));
+        const legSize = Math.min(mintedAvailable, bookCap);
+        
+        // Early return if any leg has 0 size
+        if (legSize <= 0) {
+          return 0;
+        }
+        
+        sizeCandidates.push(legSize);
       }
     }
 
@@ -471,6 +603,55 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       }
     }
     return totalCost;
+  }
+
+  /**
+   * Calculate actual total cost for batch orders including both BUY and SELL legs
+   * For BUY: cost = price * size
+   * For SELL: cost = (1 - price) * size (minting cost)
+   */
+  private calculateActualCost(
+    orders: BatchOrderParams[],
+    size: number,
+  ): number {
+    let totalCost = 0;
+    for (const order of orders) {
+      if (order.side === 'BUY') {
+        totalCost += order.price * size;
+      } else {
+        // SELL requires minting: cost is (1 - price) per token
+        totalCost += (1 - order.price) * size;
+      }
+    }
+    return totalCost;
+  }
+
+  /**
+   * Build mapping from tokenID to marketSlug for all tokens in opportunity
+   */
+  private buildTokenToMarketSlugMap(
+    opportunity: ArbOpportunity,
+  ): Map<string, string> {
+    const map = new Map<string, string>();
+
+    // Add parent token
+    if (opportunity.parent.assetId && opportunity.parent.marketSlug) {
+      map.set(opportunity.parent.assetId, opportunity.parent.marketSlug);
+    }
+
+    // Add parent upper token
+    if (opportunity.parentUpper?.assetId && opportunity.parentUpper.marketSlug) {
+      map.set(opportunity.parentUpper.assetId, opportunity.parentUpper.marketSlug);
+    }
+
+    // Add children tokens
+    for (const child of opportunity.children) {
+      if (child.assetId && child.marketSlug) {
+        map.set(child.assetId, child.marketSlug);
+      }
+    }
+
+    return map;
   }
 
   /**
@@ -1104,29 +1285,40 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Save signal and trade result to database asynchronously (non-blocking)
-   * This runs AFTER trade execution to optimize speed
+   * Save signal to database asynchronously (non-blocking)
    */
-  private async saveSignalAndTradeAsync(
+  private async saveSignalAsync(opportunity: ArbOpportunity): Promise<string> {
+    try {
+      const signal = await this.saveSignal(opportunity);
+      return signal.id;
+    } catch (error) {
+      this.logger.error(
+        `Error in saveSignalAsync: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Save trade result to database asynchronously (non-blocking)
+   */
+  private async saveTradeResultAsync(
     opportunity: ArbOpportunity,
     tradeResult: RealTradeResult,
   ): Promise<void> {
     try {
-      // Save signal first
+      // Get or create signal
       const signal = await this.saveSignal(opportunity);
-
+      
       // Update trade result with real signal ID
       tradeResult.signalId = signal.id;
 
       // Save trade result
       await this.saveRealTrade(tradeResult);
-
-      this.logger.debug(
-        `Saved signal ${signal.id} and trade result to database`,
-      );
     } catch (error) {
       this.logger.error(
-        `Error in saveSignalAndTradeAsync: ${error.message}`,
+        `Error in saveTradeResultAsync: ${error.message}`,
         error.stack,
       );
       throw error;
@@ -1142,6 +1334,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       success: result.success,
       orderIds: result.orderIds,
       error: result.error,
+      errorMessages: result.errorMessages,
       totalCost: this.toFiniteOrNull(result.totalCost) ?? 0,
       expectedPnl: this.toFiniteOrNull(result.expectedPnl) ?? 0,
       timestampMs: result.timestampMs,

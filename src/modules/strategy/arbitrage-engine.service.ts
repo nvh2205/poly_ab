@@ -568,14 +568,10 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
   }
 
   private handleTopOfBook(update: TopOfBookUpdate): void {
-    const startTime = performance.now();
-    let stepTimes: { step: string; time: number }[] = [];
-    
     // Ignore updates with zero bid/ask to avoid invalid spreads
     if (update.bestBid === 0 || update.bestAsk === 0) return;
 
-    // === STEP 1: FAST FAIL - Dirty Checking ===
-    const step1Start = performance.now();
+    // === FAST FAIL - Dirty Checking ===
     const cacheKey = update.assetId;
     if (cacheKey) {
       const cached = this.lastPriceCache.get(cacheKey);
@@ -606,7 +602,6 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
         askSize: update.bestAskSize,
       });
     }
-    stepTimes.push({ step: 'DirtyCheck', time: performance.now() - step1Start });
 
     // Update allTokenIndex immediately when receiving update
     // this.updateAllTokenIndex(update);
@@ -615,47 +610,29 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     // Binary chill needs parent token updates too, and it has its own tokenIndex
     // this.binaryChillManager.handleTopOfBook(update);
 
-    // === STEP 2: Handle Triangle Arbitrage ===
-    const step2Start = performance.now();
+    // Handle Triangle Arbitrage
     this.handleTriangleTopOfBook(update);
-    stepTimes.push({ step: 'Triangle', time: performance.now() - step2Start });
 
-    // === STEP 3: Locator Lookup ===
-    const step3Start = performance.now();
+    // Locator Lookup
     const locator =
       (update.assetId && this.tokenIndex.get(update.assetId)) ||
       (update.marketSlug && this.slugIndex.get(update.marketSlug)) ||
       (update.marketId && this.marketIdIndex.get(update.marketId.toString()));
-    stepTimes.push({ step: 'LocatorLookup', time: performance.now() - step3Start });
 
     if (!locator) return;
 
     const state = this.groups.get(locator.groupKey);
     if (!state) return;
 
-    // === STEP 4: Update State & Scan ===
-    const step4Start = performance.now();
+    // Update State & Scan
     if (locator.role === 'child') {
       this.updateChild(state, locator.index, update);
       // Targeted scan: only evaluate parents affected by this child
       this.scanAffectedParents(state, locator.index);
-      stepTimes.push({ step: 'ChildUpdate+Scan', time: performance.now() - step4Start });
     } else if (locator.role === 'parent') {
       this.updateParent(state, locator.index, update);
       // Targeted scan: only evaluate this specific parent
       this.evaluateParentAllRanges(state, locator.index);
-      stepTimes.push({ step: 'ParentUpdate+Scan', time: performance.now() - step4Start });
-    }
-
-    // === PROFILING: Slow scan detection with step breakdown ===
-    const elapsed = performance.now() - startTime;
-    if (elapsed > SLOW_SCAN_THRESHOLD_MS) {
-      const stepDetails = stepTimes
-        .map(s => `${s.step}=${s.time.toFixed(2)}ms`)
-        .join(', ');
-      this.logger.warn(
-        `[Slow Scan] handleTopOfBook took ${elapsed.toFixed(2)}ms for ${update.assetId?.slice(0, 20)}... | Steps: ${stepDetails}`,
-      );
     }
   }
 

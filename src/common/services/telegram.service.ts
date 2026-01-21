@@ -1,11 +1,21 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as TelegramBot from 'node-telegram-bot-api';
 
+export interface OrderDetail {
+  tokenID: string;
+  marketSlug?: string;
+  side: 'BUY' | 'SELL';
+  price: number;
+  errorMsg?: string;
+}
+
 export interface OrderNotification {
   success: boolean;
   strategy: string;
   ordersPlaced?: number;
   ordersFailed?: number;
+  successfulOrders?: OrderDetail[];
+  failedOrders?: OrderDetail[];
   size?: number;
   pnlPercent?: number;
   totalCost?: number;
@@ -73,6 +83,8 @@ export class TelegramService implements OnModuleInit {
       const {
         ordersPlaced = 0,
         ordersFailed = 0,
+        successfulOrders = [],
+        failedOrders = [],
         size = 0,
         pnlPercent = 0,
         totalCost = 0,
@@ -81,17 +93,44 @@ export class TelegramService implements OnModuleInit {
         reserved = 0,
       } = notification;
 
-      return (
+      let message =
         `✅ <b>ORDER FILLED</b>\n\n` +
         `📊 Strategy: <code>${strategy}</code>\n` +
         `⏱ Latency: <b>${latencyMs}ms</b>\n\n` +
         `🎯 Orders: <b>${ordersPlaced}</b> placed${ordersFailed > 0 ? ` | <b>${ordersFailed}</b> failed` : ''}\n` +
-        `💰 Size: <b>${size.toFixed(2)}</b> USDC\n` +
+        `💰 Size: <b>${size.toFixed(2)}</b> tokens\n` +
         `📈 PnL: <b>${pnlPercent.toFixed(2)}%</b> (${expectedPnl.toFixed(4)} USDC)\n` +
-        `💵 Cost: <b>${totalCost.toFixed(2)}</b> USDC\n\n` +
-        `🏦 Reserved: <b>${reserved.toFixed(2)}</b> USDC\n` +
-        `💳 Balance: <b>${balance.toFixed(2)}</b> USDC`
-      );
+        `💵 Cost: <b>${totalCost.toFixed(2)}</b> USDC\n`;
+
+      // Add successful orders details
+      if (successfulOrders.length > 0) {
+        message += `\n✅ <b>Successful Orders:</b>\n`;
+        for (const order of successfulOrders) {
+          const marketName = order.marketSlug 
+            ? this.formatMarketName(order.marketSlug)
+            : order.tokenID.substring(0, 8) + '...';
+          message += `  • ${order.side} @ ${order.price.toFixed(3)} - <code>${marketName}</code>\n`;
+        }
+      }
+
+      // Add failed orders details
+      if (failedOrders.length > 0) {
+        message += `\n⚠️ <b>Failed Orders:</b>\n`;
+        for (const order of failedOrders) {
+          const marketName = order.marketSlug 
+            ? this.formatMarketName(order.marketSlug)
+            : order.tokenID.substring(0, 8) + '...';
+          const errorMsg = order.errorMsg || 'Unknown error';
+          message += `  • ${order.side} @ ${order.price.toFixed(3)} - <code>${marketName}</code>\n`;
+          message += `    ↳ <i>${this.truncateError(errorMsg, 60)}</i>\n`;
+        }
+      }
+
+      message +=
+        `\n🏦 Reserved: <b>${reserved.toFixed(2)}</b> USDC\n` +
+        `💳 Balance: <b>${balance.toFixed(2)}</b> USDC`;
+
+      return message;
     } else {
       const { error = 'Unknown error', reserved = 0, balance = 0 } = notification;
 
@@ -104,6 +143,18 @@ export class TelegramService implements OnModuleInit {
         `💳 Balance: <b>${balance.toFixed(2)}</b> USDC`
       );
     }
+  }
+
+  /**
+   * Format market slug to be more readable
+   * Example: "btc-101000-101500" -> "BTC 101K-101.5K"
+   */
+  private formatMarketName(marketSlug: string): string {
+    // If too long, truncate
+    if (marketSlug.length > 40) {
+      return marketSlug.substring(0, 40) + '...';
+    }
+    return marketSlug;
   }
 
   /**

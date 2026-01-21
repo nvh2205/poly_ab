@@ -44,6 +44,15 @@ export class ArbRealTrade {
   @Column({ type: 'text', nullable: true })
   error?: string;
 
+  @Column({ name: 'error_messages', type: 'jsonb', nullable: true })
+  errorMessages?: Array<{
+    tokenID: string;
+    marketSlug?: string;
+    side: 'BUY' | 'SELL';
+    price: number;
+    errorMsg: string;
+  }>;
+
   @Column({
     name: 'total_cost',
     type: 'decimal',

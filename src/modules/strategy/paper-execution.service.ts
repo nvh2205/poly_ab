@@ -9,7 +9,7 @@ import { Repository } from 'typeorm';
 import { Subscription } from 'rxjs';
 import { ArbSignal } from '../../database/entities/arb-signal.entity';
 import { ArbPaperTrade } from '../../database/entities/arb-paper-trade.entity';
-import { SellStatistics } from '../../database/entities/sell-statistics.entity';
+// import { SellStatistics } from '../../database/entities/sell-statistics.entity'; // DEPRECATED: No longer used
 import { ArbitrageEngineService } from './arbitrage-engine.service';
 import { ArbOpportunity } from './interfaces/arbitrage.interface';
 import { MarketStructureService } from './market-structure.service';
@@ -74,18 +74,18 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
     private readonly arbSignalRepository: Repository<ArbSignal>,
     @InjectRepository(ArbPaperTrade)
     private readonly arbPaperTradeRepository: Repository<ArbPaperTrade>,
-    @InjectRepository(SellStatistics)
-    private readonly sellStatisticsRepository: Repository<SellStatistics>,
+    // @InjectRepository(SellStatistics) // DEPRECATED: No longer used
+    // private readonly sellStatisticsRepository: Repository<SellStatistics>,
     private readonly arbitrageEngineService: ArbitrageEngineService,
     private readonly marketStructureService: MarketStructureService,
   ) {}
 
   async onModuleInit(): Promise<void> {
-    this.opportunitySub = this.arbitrageEngineService
-      .onOpportunity()
-      .subscribe((opportunity) => this.handleOpportunity(opportunity));
+    // this.opportunitySub = this.arbitrageEngineService
+    //   .onOpportunity()
+    //   .subscribe((opportunity) => this.handleOpportunity(opportunity));
 
-    this.logger.log('PaperExecutionService initialized');
+    // this.logger.log('PaperExecutionService initialized');
   }
 
   onModuleDestroy(): void {
@@ -735,8 +735,8 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
 
     const saved = await this.arbPaperTradeRepository.save(paperTrade);
 
-    // Update sell statistics for the executed signal
-    await this.updateSellStatistics(result.signalId, result);
+    // DEPRECATED: SellStatistics no longer used
+    // await this.updateSellStatistics(result.signalId, result);
 
     return saved;
   }
@@ -753,178 +753,179 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * DEPRECATED: SellStatistics no longer used
    * Persist SellStatistics increments based on executed trade.
    * Only saves tokens that were SELL, using assetId from snapshot as tokenId.
    */
-  private async updateSellStatistics(
-    signalId: string,
-    result: PaperTradeResult,
-  ): Promise<void> {
-    try {
-      const signal = await this.arbSignalRepository.findOne({
-        where: { id: signalId },
-      });
-      if (!signal || !signal.snapshot) {
-        this.logger.warn(
-          `Cannot update SellStatistics: signal ${signalId} not found or missing snapshot`,
-        );
-        return;
-      }
+  // private async updateSellStatistics(
+  //   signalId: string,
+  //   result: PaperTradeResult,
+  // ): Promise<void> {
+  //   try {
+  //     const signal = await this.arbSignalRepository.findOne({
+  //       where: { id: signalId },
+  //     });
+  //     if (!signal || !signal.snapshot) {
+  //       this.logger.warn(
+  //         `Cannot update SellStatistics: signal ${signalId} not found or missing snapshot`,
+  //       );
+  //       return;
+  //     }
 
-      const snapshot = signal.snapshot as any;
-      const symbol = signal.crypto || '';
+  //     const snapshot = signal.snapshot as any;
+  //     const symbol = signal.crypto || '';
 
-      // Get all SELL fills
-      const sellFills = result.fills.filter((f) => f.side === 'sell');
-      if (sellFills.length === 0) {
-        return; // No sells, nothing to record
-      }
+  //     // Get all SELL fills
+  //     const sellFills = result.fills.filter((f) => f.side === 'sell');
+  //     if (sellFills.length === 0) {
+  //       return; // No sells, nothing to record
+  //     }
 
-      // Helper to parse bounds from market slug using MarketStructureService
-      const parseBoundsFromSlug = (slug: string): any => {
-        if (!slug) return null;
-        const parsed = this.marketStructureService.parseRange(slug, 'slug');
-        return parsed?.bounds || null;
-      };
+  //     // Helper to parse bounds from market slug using MarketStructureService
+  //     const parseBoundsFromSlug = (slug: string): any => {
+  //       if (!slug) return null;
+  //       const parsed = this.marketStructureService.parseRange(slug, 'slug');
+  //       return parsed?.bounds || null;
+  //     };
 
-      // Helper to create identifi from bounds
-      const createIdentifi = (bounds: any): string => {
-        if (!bounds) return 'unknown';
-        if (bounds.lower !== undefined && bounds.upper !== undefined) {
-          // Format: "90000-92000"
-          return `${bounds.lower}-${bounds.upper}`;
-        } else if (bounds.lower !== undefined) {
-          // Format: ">92000"
-          return `>${bounds.lower}`;
-        }
-        return 'unknown';
-      };
+  //     // Helper to create identifi from bounds
+  //     const createIdentifi = (bounds: any): string => {
+  //       if (!bounds) return 'unknown';
+  //       if (bounds.lower !== undefined && bounds.upper !== undefined) {
+  //         // Format: "90000-92000"
+  //         return `${bounds.lower}-${bounds.upper}`;
+  //       } else if (bounds.lower !== undefined) {
+  //         // Format: ">92000"
+  //         return `>${bounds.lower}`;
+  //       }
+  //       return 'unknown';
+  //     };
 
-      // Process each SELL fill
-      for (const fill of sellFills) {
-        let tokenId = '';
-        let marketSlug = '';
-        let marketId = '';
-        let identifi = 'unknown';
-        let tokenType: 'yes' | 'no' = signal.tokenType ?? 'yes';
+  //     // Process each SELL fill
+  //     for (const fill of sellFills) {
+  //       let tokenId = '';
+  //       let marketSlug = '';
+  //       let marketId = '';
+  //       let identifi = 'unknown';
+  //       let tokenType: 'yes' | 'no' = signal.tokenType ?? 'yes';
 
-        // Match fill with snapshot to get correct assetId and bounds
-        if (snapshot.parent && snapshot.parent.assetId === fill.assetId) {
-          // Parent lower token - use its own bounds or parse from slug
-          tokenId = snapshot.parent.assetId;
-          marketSlug = snapshot.parent.marketSlug || '';
-          marketId = signal.parentMarketId;
-          // Use parent's own bounds if available
-          if (snapshot.parent.bounds) {
-            identifi = createIdentifi(snapshot.parent.bounds);
-          } else {
-            // Try to parse from market slug
-            const parsedBounds = parseBoundsFromSlug(marketSlug);
-            if (parsedBounds) {
-              identifi = createIdentifi(parsedBounds);
-            } else if (snapshot.parent.coverage) {
-              // Fallback to coverage index if no bounds and can't parse from slug
-              const { startIndex, endIndex } = snapshot.parent.coverage;
-              identifi = `${startIndex}-${endIndex}`;
-            }
-          }
-        } else if (
-          snapshot.parentUpper &&
-          snapshot.parentUpper.assetId === fill.assetId
-        ) {
-          // Parent upper token
-          tokenId = snapshot.parentUpper.assetId;
-          marketSlug = snapshot.parentUpper.marketSlug || '';
-          marketId = signal.parentMarketId;
-          // Use bounds if available, otherwise parse from slug
-          if (snapshot.parentUpper.bounds) {
-            identifi = createIdentifi(snapshot.parentUpper.bounds);
-          } else {
-            const parsedBounds = parseBoundsFromSlug(marketSlug);
-            if (parsedBounds) {
-              identifi = createIdentifi(parsedBounds);
-            }
-          }
-        } else if (snapshot.children) {
-          // Check if it's a child token
-          const child = snapshot.children.find(
-            (c: any) => c.assetId === fill.assetId,
-          );
-          if (child) {
-            tokenId = child.assetId;
-            marketSlug = child.marketSlug || '';
-            marketId = signal.parentMarketId;
-            // Use bounds if available, otherwise parse from slug
-            if (child.bounds) {
-              identifi = createIdentifi(child.bounds);
-            } else {
-              const parsedBounds = parseBoundsFromSlug(marketSlug);
-              if (parsedBounds) {
-                identifi = createIdentifi(parsedBounds);
-              }
-            }
-          }
-        }
+  //       // Match fill with snapshot to get correct assetId and bounds
+  //       if (snapshot.parent && snapshot.parent.assetId === fill.assetId) {
+  //         // Parent lower token - use its own bounds or parse from slug
+  //         tokenId = snapshot.parent.assetId;
+  //         marketSlug = snapshot.parent.marketSlug || '';
+  //         marketId = signal.parentMarketId;
+  //         // Use parent's own bounds if available
+  //         if (snapshot.parent.bounds) {
+  //           identifi = createIdentifi(snapshot.parent.bounds);
+  //         } else {
+  //           // Try to parse from market slug
+  //           const parsedBounds = parseBoundsFromSlug(marketSlug);
+  //           if (parsedBounds) {
+  //             identifi = createIdentifi(parsedBounds);
+  //           } else if (snapshot.parent.coverage) {
+  //             // Fallback to coverage index if no bounds and can't parse from slug
+  //             const { startIndex, endIndex } = snapshot.parent.coverage;
+  //             identifi = `${startIndex}-${endIndex}`;
+  //           }
+  //         }
+  //       } else if (
+  //         snapshot.parentUpper &&
+  //         snapshot.parentUpper.assetId === fill.assetId
+  //       ) {
+  //         // Parent upper token
+  //         tokenId = snapshot.parentUpper.assetId;
+  //         marketSlug = snapshot.parentUpper.marketSlug || '';
+  //         marketId = signal.parentMarketId;
+  //         // Use bounds if available, otherwise parse from slug
+  //         if (snapshot.parentUpper.bounds) {
+  //           identifi = createIdentifi(snapshot.parentUpper.bounds);
+  //         } else {
+  //           const parsedBounds = parseBoundsFromSlug(marketSlug);
+  //           if (parsedBounds) {
+  //             identifi = createIdentifi(parsedBounds);
+  //           }
+  //         }
+  //       } else if (snapshot.children) {
+  //         // Check if it's a child token
+  //         const child = snapshot.children.find(
+  //           (c: any) => c.assetId === fill.assetId,
+  //         );
+  //         if (child) {
+  //           tokenId = child.assetId;
+  //           marketSlug = child.marketSlug || '';
+  //           marketId = signal.parentMarketId;
+  //           // Use bounds if available, otherwise parse from slug
+  //           if (child.bounds) {
+  //             identifi = createIdentifi(child.bounds);
+  //           } else {
+  //             const parsedBounds = parseBoundsFromSlug(marketSlug);
+  //             if (parsedBounds) {
+  //               identifi = createIdentifi(parsedBounds);
+  //             }
+  //           }
+  //         }
+  //       }
 
-        // Skip if we couldn't identify the token
-        if (!tokenId) {
-          this.logger.debug(
-            `Skipping sell fill: could not match assetId ${fill.assetId} with snapshot`,
-          );
-          continue;
-        }
+  //       // Skip if we couldn't identify the token
+  //       if (!tokenId) {
+  //         this.logger.debug(
+  //           `Skipping sell fill: could not match assetId ${fill.assetId} with snapshot`,
+  //         );
+  //         continue;
+  //       }
 
-        // Find or create statistics record
-        const existing = await this.sellStatisticsRepository.findOne({
-          where: {
-            marketId,
-            tokenType,
-            tokenId,
-            identifi,
-          },
-        });
+  //       // Find or create statistics record
+  //       const existing = await this.sellStatisticsRepository.findOne({
+  //         where: {
+  //           marketId,
+  //           tokenType,
+  //           tokenId,
+  //           identifi,
+  //         },
+  //       });
 
-        const stats =
-          existing ??
-          this.sellStatisticsRepository.create({
-            marketSlug,
-            marketId,
-            tokenType,
-            tokenId,
-            identifi,
-            symbol,
-            sellParentBuyChildrenCount: 0,
-            buyParentSellChildrenCount: 0,
-            polymarketTriangleSellCount: 0,
-          });
+  //       const stats =
+  //         existing ??
+  //         this.sellStatisticsRepository.create({
+  //           marketSlug,
+  //           marketId,
+  //           tokenType,
+  //           tokenId,
+  //           identifi,
+  //           symbol,
+  //           sellParentBuyChildrenCount: 0,
+  //           buyParentSellChildrenCount: 0,
+  //           polymarketTriangleSellCount: 0,
+  //         });
 
-        // Update counts based on strategy
-        switch (signal.strategy) {
-          case 'SELL_PARENT_BUY_CHILDREN':
-            stats.sellParentBuyChildrenCount += 1;
-            break;
-          case 'BUY_PARENT_SELL_CHILDREN':
-            stats.buyParentSellChildrenCount += 1;
-            break;
-          case 'POLYMARKET_TRIANGLE_SELL':
-            stats.polymarketTriangleSellCount += 1;
-            break;
-          default:
-            break;
-        }
+  //       // Update counts based on strategy
+  //       switch (signal.strategy) {
+  //         case 'SELL_PARENT_BUY_CHILDREN':
+  //           stats.sellParentBuyChildrenCount += 1;
+  //           break;
+  //         case 'BUY_PARENT_SELL_CHILDREN':
+  //           stats.buyParentSellChildrenCount += 1;
+  //           break;
+  //         case 'POLYMARKET_TRIANGLE_SELL':
+  //           stats.polymarketTriangleSellCount += 1;
+  //           break;
+  //         default:
+  //           break;
+  //       }
 
-        // Refresh slug/symbol if missing
-        if (!stats.marketSlug && marketSlug) stats.marketSlug = marketSlug;
-        if (!stats.symbol && symbol) stats.symbol = symbol;
+  //       // Refresh slug/symbol if missing
+  //       if (!stats.marketSlug && marketSlug) stats.marketSlug = marketSlug;
+  //       if (!stats.symbol && symbol) stats.symbol = symbol;
 
-        await this.sellStatisticsRepository.save(stats);
-      }
-    } catch (error) {
-      this.logger.warn(
-        `Failed to update SellStatistics for signal ${signalId}: ${error.message}`,
-      );
-    }
-  }
+  //       await this.sellStatisticsRepository.save(stats);
+  //     }
+  //   } catch (error) {
+  //     this.logger.warn(
+  //       `Failed to update SellStatistics for signal ${signalId}: ${error.message}`,
+  //     );
+  //   }
+  // }
 
   /**
    * Convert value to finite number or null
