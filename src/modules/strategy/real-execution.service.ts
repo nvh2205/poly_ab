@@ -741,17 +741,18 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     }
 
     // 4. Polymarket Triangle: SELL
+    // TEMPORARILY DISABLED: POLYMARKET_TRIANGLE_SELL strategy
     // Logic: Must mint all legs first (cost = payout), then sell them (revenue = totalBid)
     // Cost = payout (collateral to mint)
     // Revenue = totalBid (already reflected in profitAbs)
-    if (strategy === 'POLYMARKET_TRIANGLE_SELL') {
-      const ctx = opportunity.polymarketTriangleContext;
-      const payout = ctx?.payout || 0; // Total Collateral needed to mint all legs
+    // if (strategy === 'POLYMARKET_TRIANGLE_SELL') {
+    //   const ctx = opportunity.polymarketTriangleContext;
+    //   const payout = ctx?.payout || 0; // Total Collateral needed to mint all legs
 
-      // Cost is the payout (amount needed to mint)
-      // The revenue (totalBid) is already calculated in profitAbs
-      return payout;
-    }
+    //   // Cost is the payout (amount needed to mint)
+    //   // The revenue (totalBid) is already calculated in profitAbs
+    //   return payout;
+    // }
 
     // 5. Binary Chill Strategies (Đã fix trước đó)
     // Logic: Cost = Buy Ask + (1 - Sell Bid)
@@ -1030,36 +1031,38 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
           });
         }
       }
-    } else if (strategy === 'POLYMARKET_TRIANGLE_SELL') {
-      if (opportunity.parent.assetId && opportunity.parent.bestBid) {
-        orders.push({
-          tokenID: opportunity.parent.assetId,
-          price: opportunity.parent.bestBid,
-          side: 'SELL',
-          orderbookSize: opportunity.parent.bestBidSize,
-        });
-      }
+    } 
+    // TEMPORARILY DISABLED: POLYMARKET_TRIANGLE_SELL strategy
+    // else if (strategy === 'POLYMARKET_TRIANGLE_SELL') {
+    //   if (opportunity.parent.assetId && opportunity.parent.bestBid) {
+    //     orders.push({
+    //       tokenID: opportunity.parent.assetId,
+    //       price: opportunity.parent.bestBid,
+    //       side: 'SELL',
+    //       orderbookSize: opportunity.parent.bestBidSize,
+    //     });
+    //   }
 
-      if (opportunity.parentUpper?.assetId && opportunity.parentUpper.bestBid) {
-        orders.push({
-          tokenID: opportunity.parentUpper.assetId,
-          price: opportunity.parentUpper.bestBid,
-          side: 'SELL',
-          orderbookSize: opportunity.parentUpper.bestBidSize,
-        });
-      }
+    //   if (opportunity.parentUpper?.assetId && opportunity.parentUpper.bestBid) {
+    //     orders.push({
+    //       tokenID: opportunity.parentUpper.assetId,
+    //       price: opportunity.parentUpper.bestBid,
+    //       side: 'SELL',
+    //       orderbookSize: opportunity.parentUpper.bestBidSize,
+    //     });
+    //   }
 
-      for (const child of opportunity.children) {
-        if (child.assetId && child.bestBid) {
-          orders.push({
-            tokenID: child.assetId,
-            price: child.bestBid,
-            side: 'SELL',
-            orderbookSize: child.bestBidSize,
-          });
-        }
-      }
-    }
+    //   for (const child of opportunity.children) {
+    //     if (child.assetId && child.bestBid) {
+    //       orders.push({
+    //         tokenID: child.assetId,
+    //         price: child.bestBid,
+    //         side: 'SELL',
+    //         orderbookSize: child.bestBidSize,
+    //       });
+    //     }
+    //   }
+    // }
 
     return orders.filter((o) => Number.isFinite(o.price) && o.price > 0);
   }

@@ -1036,19 +1036,20 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       };
     }
 
-    if (profitResult.meetsSell) {
-      return {
-        profitAbs: profitResult.profitSellAbs,
-        profitBps: profitResult.profitSellBps,
-        opportunity: buildOpportunity(
-          'SELL',
-          profitResult.profitSellAbs,
-          profitResult.profitSellBps,
-        ),
-        emitKey: `${emitKeyBase}:SELL`,
-        mode: 'SELL',
-      };
-    }
+    // TEMPORARILY DISABLED: POLYMARKET_TRIANGLE_SELL strategy
+    // if (profitResult.meetsSell) {
+    //   return {
+    //     profitAbs: profitResult.profitSellAbs,
+    //     profitBps: profitResult.profitSellBps,
+    //     opportunity: buildOpportunity(
+    //       'SELL',
+    //       profitResult.profitSellAbs,
+    //       profitResult.profitSellBps,
+    //     ),
+    //     emitKey: `${emitKeyBase}:SELL`,
+    //     mode: 'SELL',
+    //   };
+    // }
 
     return null;
   }
