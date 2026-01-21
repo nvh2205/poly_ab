@@ -27,6 +27,9 @@ Thumbs.db
 # Build
 tsconfig.tsbuildinfo
 
+# Deployment
+.package-lock.hash
+
 # Helm secrets (if you create separate secret files)
 helm/**/secrets.yaml
 helm/**/values.production.yaml
