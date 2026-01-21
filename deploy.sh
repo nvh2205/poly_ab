@@ -163,12 +163,12 @@ if [ -f "$PACKAGE_HASH_FILE" ]; then
         info "Dependencies are up to date. Skipping npm install..."
     else
         log "Dependencies changed. Running npm install..."
-        npm install --omit=dev
+        npm install
         echo "$CURRENT_HASH" > "$PACKAGE_HASH_FILE"
     fi
 else
     log "Installing dependencies (npm install)..."
-    npm install --omit=dev
+    npm install
     echo "$CURRENT_HASH" > "$PACKAGE_HASH_FILE"
 fi
 
