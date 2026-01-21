@@ -18,6 +18,15 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PM2_APP_NAME="polymarket-ab"
 TARGET=${1:-""}
 
+# Detect docker compose command (docker-compose or docker compose)
+if command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+elif docker compose version &> /dev/null 2>&1; then
+    DOCKER_COMPOSE="docker compose"
+else
+    DOCKER_COMPOSE=""
+fi
+
 # Logging function
 log() {
     echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1"
@@ -56,17 +65,17 @@ fi
 
 # Handle services-only restart: ./deploy.sh services
 if [ "$TARGET" = "services" ]; then
-    if ! command -v docker &> /dev/null || ! command -v docker-compose &> /dev/null; then
-        error "docker or docker-compose is not installed."
+    if [ -z "$DOCKER_COMPOSE" ]; then
+        error "docker compose is not available. Please install Docker and Docker Compose."
     fi
 
     log "Docker Compose services restart requested (./deploy.sh services)..."
     cd "$PROJECT_DIR"
     
-    docker-compose restart
+    $DOCKER_COMPOSE restart
     log "Docker Compose services restarted successfully"
     echo ""
-    docker-compose ps
+    $DOCKER_COMPOSE ps
     exit 0
 fi
 
@@ -95,17 +104,17 @@ log "Branch: $BRANCH"
 log "Step 1: Checking Docker Compose services..."
 cd "$PROJECT_DIR"
 
-if command -v docker &> /dev/null && [ -f "docker-compose.yml" ]; then
-    if docker-compose ps | grep -q "Up"; then
+if [ -n "$DOCKER_COMPOSE" ] && [ -f "docker-compose.yml" ]; then
+    if $DOCKER_COMPOSE ps | grep -q "Up"; then
         info "Docker Compose services are running"
-        docker-compose ps
+        $DOCKER_COMPOSE ps
     else
         warning "Docker Compose services are not running. Starting them..."
-        docker-compose up -d
+        $DOCKER_COMPOSE up -d
         log "Docker Compose services started"
     fi
 else
-    warning "Docker or docker-compose.yml not found. Skipping service check."
+    warning "Docker Compose or docker-compose.yml not found. Skipping service check."
 fi
 
 echo ""
@@ -168,16 +177,16 @@ log "Step 5: Building application..."
 npm run build
 
 # Step 6: Wait for services to be healthy
-if command -v docker &> /dev/null && [ -f "docker-compose.yml" ]; then
+if [ -n "$DOCKER_COMPOSE" ] && [ -f "docker-compose.yml" ]; then
     log "Step 6: Waiting for Docker services to be healthy..."
     sleep 3
     
     # Check if services are up
-    if docker-compose ps | grep -q "Up"; then
+    if $DOCKER_COMPOSE ps | grep -q "Up"; then
         info "Docker services are healthy"
     else
         warning "Some Docker services may not be running properly"
-        docker-compose ps
+        $DOCKER_COMPOSE ps
     fi
 fi
 
@@ -208,9 +217,9 @@ log "PM2 status:"
 pm2 status "$PM2_APP_NAME"
 
 echo ""
-if command -v docker &> /dev/null && [ -f "docker-compose.yml" ]; then
+if [ -n "$DOCKER_COMPOSE" ] && [ -f "docker-compose.yml" ]; then
     log "Docker Compose services status:"
-    docker-compose ps
+    $DOCKER_COMPOSE ps
 fi
 
 echo ""
