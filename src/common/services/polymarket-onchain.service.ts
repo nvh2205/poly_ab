@@ -562,29 +562,14 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
         }
       }
 
-      const totalTime = performance.now() - startTime;
-      this.logger.log(
-        `Batch complete: ${successCount} success, ${failureCount} failed | ` +
-          `Timing - Total: ${totalTime.toFixed(2)}ms, ` +
-          `Load: ${loadTime.toFixed(2)}ms, ` +
-          `Create: ${createTime.toFixed(2)}ms, ` +
-          `Post: ${postTime.toFixed(2)}ms`,
-      );
+
 
       return {
         success: true,
         results,
       };
     } catch (error: any) {
-      const totalTime = performance.now() - startTime;
-      this.logger.error(
-        `Error placing batch orders: ${error.message} | Execution time: ${totalTime.toFixed(2)}ms`,
-      );
-      if (error.response?.data) {
-        this.logger.error(
-          `Server response: ${JSON.stringify(error.response.data)}`,
-        );
-      }
+
       return { success: false, error: error.message };
     }
   }

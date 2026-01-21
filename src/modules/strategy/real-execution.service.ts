@@ -104,12 +104,12 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   ) { }
 
   async onModuleInit(): Promise<void> {
-    if (!this.enabled) {
-      this.logger.warn(
-        'Real trading is DISABLED. Set REAL_TRADING_ENABLED=true to enable.',
-      );
-      return;
-    }
+    // if (!this.enabled) {
+    //   this.logger.warn(
+    //     'Real trading is DISABLED. Set REAL_TRADING_ENABLED=true to enable.',
+    //   );
+    //   return;
+    // }
 
     this.logger.log('Real Execution Service initializing (HFT Mode)...');
     this.logger.log(
@@ -149,9 +149,9 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     );
 
     // Subscribe to opportunities
-    // this.opportunitySub = this.arbitrageEngineService
-    //   .onOpportunity()
-    //   .subscribe((opportunity) => this.handleOpportunity(opportunity));
+    this.opportunitySub = this.arbitrageEngineService
+      .onOpportunity()
+      .subscribe((opportunity) => this.handleOpportunity(opportunity));
 
     this.logger.log('Real Execution Service initialized and ACTIVE (HFT Mode)');
   }
@@ -310,10 +310,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
 
       // === UPDATE: Mark opportunity execution timestamp ===
       this.lastOpportunityExecutedAt = Date.now();
-      this.logger.log(
-        `✅ Opportunity accepted: ${opportunity.strategy} | PnL: ${pnlPercent.toFixed(2)}% | Size: ${size.toFixed(2)} | Next opportunity in ${OPPORTUNITY_TIMEOUT_MS}ms`
-      );
-
+      
       // === LOCK: Mark as submitting order ===
       this.isSubmittingOrder = true;
 
