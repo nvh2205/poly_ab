@@ -31,6 +31,10 @@ tsconfig.tsbuildinfo
 .package-lock.hash
 .package.hash
 
+# Lock files (ignore due to different Node versions on different machines)
+package-lock.json
+yarn.lock
+
 # Helm secrets (if you create separate secret files)
 helm/**/secrets.yaml
 helm/**/values.production.yaml
