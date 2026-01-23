@@ -101,8 +101,8 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   // === Configuration (from environment variables) ===
   private readonly enabled = this.boolFromEnv('REAL_TRADING_ENABLED', false);
   private runtimeEnabled: boolean = this.boolFromEnv('REAL_TRADING_ENABLED', false);
-  private slippageEnabled: boolean = this.boolFromEnv('SLIPPAGE_ENABLED', true); // Slippage enabled by default
-  private readonly minPnlThresholdPercent = this.numFromEnv('REAL_TRADING_MIN_PNL_PERCENT', 1.0);
+  private slippageEnabled: boolean = this.boolFromEnv('SLIPPAGE_ENABLED', false); // Slippage enabled by default
+  private readonly minPnlThresholdPercent = this.numFromEnv('REAL_TRADING_MIN_PNL_PERCENT', 1);
   private readonly defaultSize = this.numFromEnv('REAL_TRADE_SIZE', 5);
   private readonly enforceMinOrderValue = this.boolFromEnv('ENFORCE_MIN_ORDER_VALUE', true);
 
@@ -117,6 +117,8 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   ) { }
 
   async onModuleInit(): Promise<void> {
+
+
     // if (!this.enabled) {
     //   this.logger.warn(
     //     'Real trading is DISABLED. Set REAL_TRADING_ENABLED=true to enable.',
@@ -660,7 +662,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       ? orders.map((order) => {
           const orderValue = order.size * order.price;
           
-          if (orderValue < MIN_ORDER_VALUE) {
+          if (orderValue < MIN_ORDER_VALUE && order.side === 'BUY') {
             const adjustedPrice = MIN_ORDER_VALUE / order.size;
             // Cap at MAX_PRICE for probability markets (can't be >= 1.0)
             const finalPrice = Math.min(adjustedPrice, MAX_PRICE);
