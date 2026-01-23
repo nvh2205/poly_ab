@@ -9,11 +9,11 @@ const CONFIG = {
   privateKey:
     '',
   // Địa chỉ Proxy của bạn
-  proxyAddress: '0x33568DB0DfB9890f5107Fb50F566a159F6f612ED',
+  proxyAddress: '',
 
   // Condition ID của market "Bitcoin 92k-94k" (Lấy từ JSON bạn gửi)
   conditionId:
-    '0xbd934f489afd85df62a1ee09c27fa7ab711b8bdde464c4d15c0af776f6400724',
+    '0xad756823ed9304a1073e5bf4e008fed4da19856d7f196dcd1f861a7f0212f734',
 };
 
 const ADDR = {
@@ -71,7 +71,7 @@ const main = async () => {
   });
 
   console.log('feeData:----', feeData);
-  return;
+  // return;
   console.log(`\n🤖 BOT PROXY MERGE KHỞI ĐỘNG...`);
   console.log(`   Proxy: ${CONFIG.proxyAddress}`);
   console.log(`   Condition ID: ${CONFIG.conditionId}`);
@@ -96,6 +96,8 @@ const main = async () => {
   console.log(`\n📊 SỐ DƯ RAW TOKEN (Minted):`);
   console.log(`   YES: ${utils.formatUnits(balYes, 6)}`);
   console.log(`   NO : ${utils.formatUnits(balNo, 6)}`);
+
+  // return
 
   // Lấy số lượng nhỏ nhất để Merge (Vì cần 1 Yes + 1 No = 1 USDC)
   let mergeAmount = balYes.lt(balNo) ? balYes : balNo;
@@ -192,7 +194,7 @@ const main = async () => {
       `   💵 Số dư USDC hiện tại của Proxy: ${utils.formatUnits(usdcBal, 6)} USDC`,
     );
   } catch (e: any) {
-    console.error(`   ❌ LỖI MERGE:`, e.reason || e.message);
+    console.error(`   ❌ LỖI MERGE:`,  e.message);
   }
 };
 

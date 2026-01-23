@@ -1079,9 +1079,6 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
           conditionId,
         );
 
-        console.log('yesTokenId:----', yesTokenId);
-        console.log('noTokenId:----', noTokenId);
-
         const balances = await ctfContract.balanceOfBatch(
           [targetAddress, targetAddress],
           [yesTokenId, noTokenId],
@@ -1538,5 +1535,156 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
         error: error.message || 'Mint via proxy failed',
       };
     }
+  }
+
+  /**
+   * Export Redis data for sync purposes
+   * Returns all keys matching the pattern with their values and metadata
+   * Default pattern: mint:* (includes mint:inventory and mint:history)
+   */
+  async exportRedisData(pattern: string = 'mint:*'): Promise<
+    Array<{
+      key: string;
+      type: string;
+      value: any;
+      ttl?: number;
+    }>
+  > {
+    try {
+      const client = this.redisService.getClient();
+      const keys = await client.keys(pattern);
+
+      this.logger.log(`Found ${keys.length} keys matching pattern: ${pattern}`);
+
+      const results = [];
+
+      for (const key of keys) {
+        const type = await client.type(key);
+        const ttl = await client.ttl(key);
+        let value: any;
+
+        switch (type) {
+          case 'string':
+            value = await client.get(key);
+            break;
+          case 'hash':
+            value = await client.hgetall(key);
+            break;
+          case 'list':
+            value = await client.lrange(key, 0, -1);
+            break;
+          case 'set':
+            value = await client.smembers(key);
+            break;
+          case 'zset':
+            value = await client.zrange(key, 0, -1, 'WITHSCORES');
+            break;
+          default:
+            this.logger.warn(`Unsupported type ${type} for key ${key}`);
+            continue;
+        }
+
+        results.push({
+          key,
+          type,
+          value,
+          ttl: ttl > 0 ? ttl : undefined, // Only include TTL if it's positive
+        });
+      }
+
+      return results;
+    } catch (error: any) {
+      this.logger.error(`Error exporting Redis data: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Import Redis data from exported format
+   * Overwrites existing keys with new data
+   */
+  async importRedisData(
+    data: Array<{
+      key: string;
+      type: string;
+      value: any;
+      ttl?: number;
+    }>,
+  ): Promise<{
+    imported: number;
+    failed: number;
+    errors: Array<{ key: string; error: string }>;
+  }> {
+    const client = this.redisService.getClient();
+    let imported = 0;
+    let failed = 0;
+    const errors: Array<{ key: string; error: string }> = [];
+
+    this.logger.log(`Starting import of ${data.length} Redis keys`);
+
+    for (const item of data) {
+      try {
+        const { key, type, value, ttl } = item;
+
+        // Delete existing key first to ensure clean overwrite
+        await client.del(key);
+
+        // Set value based on type
+        switch (type) {
+          case 'string':
+            await client.set(key, value);
+            break;
+          case 'hash':
+            if (Object.keys(value).length > 0) {
+              await client.hset(key, value);
+            }
+            break;
+          case 'list':
+            if (Array.isArray(value) && value.length > 0) {
+              await client.rpush(key, ...value);
+            }
+            break;
+          case 'set':
+            if (Array.isArray(value) && value.length > 0) {
+              await client.sadd(key, ...value);
+            }
+            break;
+          case 'zset':
+            if (Array.isArray(value) && value.length > 0) {
+              // value format: [member1, score1, member2, score2, ...]
+              const args: Array<string | number> = [];
+              for (let i = 0; i < value.length; i += 2) {
+                args.push(value[i + 1]); // score
+                args.push(value[i]); // member
+              }
+              if (args.length > 0) {
+                await client.zadd(key, ...args);
+              }
+            }
+            break;
+          default:
+            throw new Error(`Unsupported type: ${type}`);
+        }
+
+        // Set TTL if provided
+        if (ttl && ttl > 0) {
+          await client.expire(key, ttl);
+        }
+
+        imported++;
+        this.logger.log(`Imported key: ${key} (type: ${type})`);
+      } catch (error: any) {
+        failed++;
+        const errorMsg = error.message || 'Unknown error';
+        errors.push({ key: item.key, error: errorMsg });
+        this.logger.error(`Failed to import key ${item.key}: ${errorMsg}`);
+      }
+    }
+
+    this.logger.log(
+      `Import complete: ${imported} successful, ${failed} failed`,
+    );
+
+    return { imported, failed, errors };
   }
 }

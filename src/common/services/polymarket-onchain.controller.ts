@@ -8,7 +8,18 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Market } from '../../database/entities/market.entity';
+import { 
+  ApiProperty, 
+  ApiPropertyOptional, 
+  ApiQuery, 
+  ApiTags, 
+  ApiOperation, 
+  ApiResponse, 
+  ApiBody 
+} from '@nestjs/swagger';
 import {
   IsArray,
   IsBoolean,
@@ -255,6 +266,22 @@ export class MintTokensProxyDto {
 }
 
 /**
+ * Simplified DTO for mint-proxy operations (query database for market details)
+ */
+export class MintTokensProxySimpleDto {
+  @ApiProperty({
+    example: 'will-bitcoin-btc-hit-120000-on-january-21',
+    description: 'Market slug to query from database',
+  })
+  @IsString()
+  marketSlug: string;
+
+  @ApiProperty({ example: 100, description: 'Amount in USDC to mint' })
+  @IsNumber()
+  amountUSDC: number;
+}
+
+/**
  * DTO for merge operations
  */
 export class MergePositionsDto {
@@ -320,6 +347,55 @@ export class CancelOrdersDto {
 }
 
 /**
+ * DTO for Redis data item
+ */
+export class RedisDataItemDto {
+  @ApiProperty({
+    example: 'mint:inventory:btc-2026-01-22:0x123...',
+    description: 'Redis key',
+  })
+  @IsString()
+  key: string;
+
+  @ApiProperty({
+    example: 'hash',
+    enum: ['string', 'hash', 'list', 'set', 'zset'],
+    description: 'Redis data type',
+  })
+  @IsString()
+  @IsIn(['string', 'hash', 'list', 'set', 'zset'])
+  type: string;
+
+  @ApiProperty({
+    example: { token1: '100.5', token2: '200.3' },
+    description: 'Redis value (format depends on type)',
+  })
+  value: any;
+
+  @ApiPropertyOptional({
+    example: 3600,
+    description: 'TTL in seconds',
+  })
+  @IsOptional()
+  @IsNumber()
+  ttl?: number;
+}
+
+/**
+ * DTO for importing Redis data
+ */
+export class ImportRedisDataDto {
+  @ApiProperty({
+    type: [RedisDataItemDto],
+    description: 'Array of Redis data items to import',
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RedisDataItemDto)
+  data: RedisDataItemDto[];
+}
+
+/**
  * Controller for Polymarket on-chain operations
  */
 @ApiTags('polymarket-onchain')
@@ -329,6 +405,8 @@ export class PolymarketOnchainController {
 
   constructor(
     private readonly polymarketOnchainService: PolymarketOnchainService,
+    @InjectRepository(Market)
+    private readonly marketRepository: Repository<Market>,
   ) {}
 
   /**
@@ -484,11 +562,62 @@ export class PolymarketOnchainController {
    * Mint tokens via proxy (Gnosis Safe)
    */
   @Post('mint-proxy')
-  async mintTokensProxy(@Body() dto: MintTokensProxyDto) {
+  async mintTokensProxy(@Body() dto: MintTokensProxySimpleDto) {
     try {
       this.logger.log(
-        `Received mint-proxy request for ${dto.amountUSDC} USDC, groupKey=${dto.groupKey}`,
+        `Received mint-proxy request for ${dto.amountUSDC} USDC, marketSlug=${dto.marketSlug}`,
       );
+
+      // Query market from database by slug
+      const market = await this.marketRepository.findOne({
+        where: { slug: dto.marketSlug },
+      });
+
+      if (!market) {
+        throw new HttpException(
+          `Market not found for slug: ${dto.marketSlug}`,
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      // Validate required fields
+      if (!market.conditionId) {
+        throw new HttpException(
+          `Market ${dto.marketSlug} does not have a conditionId`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      if (!market.endDate) {
+        throw new HttpException(
+          `Market ${dto.marketSlug} does not have an endDate`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      if (!market.type) {
+        throw new HttpException(
+          `Market ${dto.marketSlug} does not have a type`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // Build groupKey from type and endDate in UTC format
+      // Format: {type}-{endDate.toISOString()} e.g., "btc-2026-01-21T17:00:00.000Z"
+      const endDateUtc = new Date(market.endDate).toISOString();
+      const groupKey = `${market.type}-${endDateUtc}`;
+
+      // Build marketCondition from market entity
+      const marketCondition: MarketCondition = {
+        conditionId: market.conditionId,
+        negRisk: market.negRisk ?? false,
+        negRiskMarketID: market.negRiskMarketID ?? undefined,
+      };
+
+      this.logger.log(
+        `Resolved market: conditionId=${market.conditionId}, negRisk=${market.negRisk}, groupKey=${groupKey}`,
+      );
+
       const config = this.polymarketOnchainService.getDefaultConfig();
       if (!config) {
         throw new HttpException(
@@ -497,11 +626,12 @@ export class PolymarketOnchainController {
         );
       }
 
+
       const result = await this.polymarketOnchainService.mintTokensViaProxy(
         config,
-        dto.marketCondition,
+        marketCondition,
         dto.amountUSDC,
-        dto.groupKey,
+        groupKey,
       );
 
       if (!result.success) {
@@ -514,6 +644,8 @@ export class PolymarketOnchainController {
       return {
         success: true,
         txHash: result.txHash,
+        groupKey,
+        conditionId: market.conditionId,
         message: 'Tokens minted via proxy successfully',
       };
     } catch (error: any) {
@@ -696,5 +828,160 @@ export class PolymarketOnchainController {
       service: 'polymarket-onchain',
       timestamp: new Date().toISOString(),
     };
+  }
+
+  /**
+   * GET /polymarket-onchain/redis-data
+   * Get all Redis data related to mint operations (inventory and history)
+   * Purpose: Export Redis data from server to sync with local environment
+   */
+  @Get('redis-data')
+  @ApiOperation({
+    summary: 'Export Redis data',
+    description: 'Get all Redis keys and values matching the pattern. Used to export data from server to sync with local environment.',
+  })
+  @ApiQuery({
+    name: 'pattern',
+    required: false,
+    type: String,
+    description: 'Redis key pattern to filter keys (default: mint:*)',
+    example: 'mint:*',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully exported Redis data',
+    schema: {
+      example: {
+        success: true,
+        totalKeys: 2,
+        data: [
+          {
+            key: 'mint:inventory:btc-2026-01-22:0xb9b5cde0...',
+            type: 'hash',
+            value: { '12345': '100.5', '67890': '200.3' },
+            ttl: 3600,
+          },
+          {
+            key: 'mint:history:btc-2026-01-22:0xb9b5cde0...',
+            type: 'list',
+            value: ['{"type":"MINT","walletAddress":"0x123...","amount":100}'],
+            ttl: 3600,
+          },
+        ],
+        timestamp: '2026-01-22T10:00:00.000Z',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  async getRedisData(
+    @Query('pattern') pattern?: string,
+  ) {
+    try {
+      this.logger.log('Received get Redis data request');
+      const data = await this.polymarketOnchainService.exportRedisData(pattern);
+      
+      return {
+        success: true,
+        totalKeys: data.length,
+        data,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error: any) {
+      this.logger.error(`Error in getRedisData: ${error.message}`);
+      throw new HttpException(
+        error.message || 'Internal server error',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * POST /polymarket-onchain/redis-data
+   * Import Redis data to sync from server to local or vice versa
+   * Purpose: Overwrite local Redis data with data from server
+   */
+  @Post('redis-data')
+  @ApiOperation({
+    summary: 'Import Redis data',
+    description: 'Import and overwrite Redis data. Used to sync data from server to local or vice versa. WARNING: This will delete existing keys before importing.',
+  })
+  @ApiBody({
+    type: ImportRedisDataDto,
+    description: 'Redis data to import',
+    examples: {
+      example1: {
+        summary: 'Import inventory and history data',
+        value: {
+          data: [
+            {
+              key: 'mint:inventory:btc-2026-01-22:0xb9b5cde0...',
+              type: 'hash',
+              value: { '12345': '100.5', '67890': '200.3' },
+              ttl: 3600,
+            },
+            {
+              key: 'mint:history:btc-2026-01-22:0xb9b5cde0...',
+              type: 'list',
+              value: ['{"type":"MINT","walletAddress":"0x123...","amount":100}'],
+              ttl: 3600,
+            },
+          ],
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully imported Redis data',
+    schema: {
+      example: {
+        success: true,
+        imported: 2,
+        failed: 0,
+        errors: [],
+        timestamp: '2026-01-22T10:00:00.000Z',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request body',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  async setRedisData(
+    @Body() dto: ImportRedisDataDto,
+  ) {
+    try {
+      this.logger.log(`Received set Redis data request with ${dto.data?.length || 0} keys`);
+      
+      if (!dto.data || !Array.isArray(dto.data)) {
+        throw new HttpException(
+          'Invalid request body. Expected { data: Array<{ key, type, value, ttl? }> }',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const result = await this.polymarketOnchainService.importRedisData(dto.data);
+      
+      return {
+        success: true,
+        imported: result.imported,
+        failed: result.failed,
+        errors: result.errors,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error: any) {
+      this.logger.error(`Error in setRedisData: ${error.message}`);
+      throw new HttpException(
+        error.message || 'Internal server error',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 }

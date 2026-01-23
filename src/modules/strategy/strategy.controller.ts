@@ -383,6 +383,42 @@ export class StrategyController {
   }
 
   /**
+   * POST /strategy/real-trading/slippage/enable
+   * Enable slippage independently at runtime
+   */
+  @Post('real-trading/slippage/enable')
+  async enableSlippage() {
+    try {
+      this.logger.log('Slippage enable requested via API');
+      return this.realExecutionService.enableSlippage();
+    } catch (error) {
+      this.logger.error(
+        `Failed to enable slippage: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * POST /strategy/real-trading/slippage/disable
+   * Disable slippage independently at runtime
+   */
+  @Post('real-trading/slippage/disable')
+  async disableSlippage() {
+    try {
+      this.logger.log('Slippage disable requested via API');
+      return this.realExecutionService.disableSlippage();
+    } catch (error) {
+      this.logger.error(
+        `Failed to disable slippage: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Normalize query params to a date range.
    * Defaults to the current day when params are omitted.
    */

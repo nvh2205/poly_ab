@@ -56,7 +56,19 @@ const OPPORTUNITY_TIMEOUT_MS = 5000; // 5 seconds between opportunities
 /** Polymarket Constraints */
 const MAX_BATCH_SIZE = 15; // Polymarket batch order limit
 const MAX_PRICE = 0.99; // Maximum price for probability markets (must be < 1.0)
+const MIN_PRICE = 0.01; // Minimum price for probability markets (must be > 0.0)
 const MIN_ORDER_VALUE = 1.0; // Polymarket minimum order value in test mode (USDC)
+
+/**
+ * Slippage/Spread Constants (based on Polymarket tick size mechanism)
+ * Reference: https://docs.polymarket.com
+ * - Normal tick size: 0.01 (1 cent) when price is between 0.04 and 0.96
+ * - Extreme tick size: 0.001 (0.1 cent) when price > 0.96 or price < 0.04
+ */
+const SLIPPAGE_EXTREME_THRESHOLD_HIGH = 0.96; // Price above this uses smaller tick
+const SLIPPAGE_EXTREME_THRESHOLD_LOW = 0.04; // Price below this uses smaller tick
+const NORMAL_SPREAD = 0.01; // 1 cent spread for normal prices
+const EXTREME_SPREAD = 0.001; // 0.1 cent spread for extreme prices (near 0 or 1)
 
 /**
  * Real Execution Service
@@ -89,6 +101,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   // === Configuration (from environment variables) ===
   private readonly enabled = this.boolFromEnv('REAL_TRADING_ENABLED', false);
   private runtimeEnabled: boolean = this.boolFromEnv('REAL_TRADING_ENABLED', false);
+  private slippageEnabled: boolean = this.boolFromEnv('SLIPPAGE_ENABLED', true); // Slippage enabled by default
   private readonly minPnlThresholdPercent = this.numFromEnv('REAL_TRADING_MIN_PNL_PERCENT', 1.0);
   private readonly defaultSize = this.numFromEnv('REAL_TRADE_SIZE', 5);
   private readonly enforceMinOrderValue = this.boolFromEnv('ENFORCE_MIN_ORDER_VALUE', true);
@@ -118,6 +131,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     this.logger.log(`Default trade size: ${this.defaultSize} USDC`);
     this.logger.log(`Opportunity timeout: ${OPPORTUNITY_TIMEOUT_MS}ms between opportunities`);
     this.logger.log(`Min order value enforcement: ${this.enforceMinOrderValue ? 'ENABLED' : 'DISABLED'} (${MIN_ORDER_VALUE} USDC)`);
+    this.logger.log(`Slippage: ${this.slippageEnabled ? 'ENABLED' : 'DISABLED'} (Normal: ${NORMAL_SPREAD}, Extreme: ${EXTREME_SPREAD})`);
 
     // === HFT: Load config ONCE at startup ===
     this.config = loadPolymarketConfig();
@@ -222,21 +236,35 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Generate group keys for ETH and BTC with 17:00 UTC expiration on current date
+   * Generate group keys for ETH and BTC with 17:00 UTC expiration
+   * If current time is before 17:00 UTC today, uses today's date
+   * If current time is after 17:00 UTC today, uses tomorrow's date
    * Format: {symbol}-{ISO8601 expiration time}
    * Example: "eth-2026-01-20T17:00:00.000Z"
    */
   private generateGroupKeys(): string[] {
     const now = new Date();
-    const expirationDate = new Date(Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate(),
-      17, // 17:00 UTC
-      0,  // 0 minutes
-      0,  // 0 seconds
-      0   // 0 milliseconds
-    ));
+    const currentHourUTC = now.getUTCHours();
+    
+    // If current time is >= 17:00 UTC, use next day
+    let expirationDate: Date;
+    if (currentHourUTC >= 17) {
+      // Move to next day at 17:00 UTC
+      expirationDate = new Date(Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate() + 1,
+        17, 0, 0, 0
+      ));
+    } else {
+      // Use today at 17:00 UTC
+      expirationDate = new Date(Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate(),
+        17, 0, 0, 0
+      ));
+    }
 
     const expirationISO = expirationDate.toISOString();
     const symbols = ['eth', 'btc'];
@@ -254,55 +282,13 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
    */
   private handleOpportunity(opportunity: ArbOpportunity): void {
     try {
-      // === CHECK: Skip if trading is disabled ===
-      if (!this.runtimeEnabled) {
+      // === VALIDATION: Check if opportunity should be skipped ===
+      const validation = this.shouldSkipOpportunity(opportunity);
+      if (validation.shouldSkip) {
         return;
       }
 
-      // === CHECK: Skip if already submitting an order ===
-      if (this.isSubmittingOrder) {
-        return;
-      }
-
-      // === CHECK: Skip if within 5 second timeout from last opportunity ===
-      const now = Date.now();
-      const timeSinceLastOpportunity = now - this.lastOpportunityExecutedAt;
-      if (this.lastOpportunityExecutedAt > 0 && timeSinceLastOpportunity < OPPORTUNITY_TIMEOUT_MS) {
-        const remainingMs = OPPORTUNITY_TIMEOUT_MS - timeSinceLastOpportunity;
-        this.logger.debug(
-          `Skipping opportunity: timeout (${remainingMs}ms remaining until next opportunity)`
-        );
-        return;
-      }
-
-      // === FAST PATH: All synchronous calculations ===
-      const totalCost = this.calculateTotalCost(opportunity);
-      const pnlPercent = (opportunity.profitAbs / totalCost) * 100;
-
-      // Check PnL threshold (synchronous)
-      if (pnlPercent < this.minPnlThresholdPercent) {
-        console.log('pnlPercent: ', pnlPercent, ' < ', this.minPnlThresholdPercent, '%');
-
-        console.log("---SKIP OPPORTUNITY---");
-        return;
-      }
-
-      // === Calculate order size using cached balance (NO awaits) ===
-      const candidates = this.buildOrderCandidates(opportunity);
-      if (candidates.length === 0) {
-        return;
-      }
-
-      const size = this.calculateFillSizeSync(candidates, opportunity.groupKey);
-      if (!Number.isFinite(size) || size <= 0) {
-        return;
-      }
-
-      // === Check if localUsdcBalance is sufficient ===
-      const requiredCost = this.estimateRequiredCost(candidates, size);
-      if (this.localUsdcBalance < requiredCost) {
-        return;
-      }
+      const { candidates, size, requiredCost, totalCost } = validation;
 
       // === OPTIMISTIC UPDATE: Deduct balance BEFORE sending order ===
       const reservedAmount = requiredCost;
@@ -314,44 +300,8 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       // === LOCK: Mark as submitting order ===
       this.isSubmittingOrder = true;
 
-      // Build batch orders
-      const orders = candidates.map((candidate) => ({
-        tokenID: candidate.tokenID,
-        price: candidate.price,
-        size,
-        side: candidate.side,
-        feeRateBps: 0,
-        orderType: 'GTC' as const,
-      }));
-
-      // Adjust prices to meet minimum order value ($1) for test mode
-      const adjustedOrders = this.enforceMinOrderValue 
-        ? orders.map((order) => {
-            const orderValue = order.size * order.price;
-            
-            if (orderValue < MIN_ORDER_VALUE) {
-              const adjustedPrice = MIN_ORDER_VALUE / order.size;
-              // Cap at MAX_PRICE for probability markets (can't be >= 1.0)
-              const finalPrice = Math.min(adjustedPrice, MAX_PRICE);
-              
-              this.logger.debug(
-                `Adjusting price for ${order.side} order: ${order.price.toFixed(4)} -> ${finalPrice.toFixed(4)} (value: ${orderValue.toFixed(2)} -> ${(order.size * finalPrice).toFixed(2)})`
-              );
-              
-              return {
-                ...order,
-                price: finalPrice,
-              };
-            }
-            
-            return order;
-          })
-        : orders;
-
-      // Truncate if exceeds max batch size
-      const batchOrders = adjustedOrders.length > MAX_BATCH_SIZE
-        ? adjustedOrders.slice(0, MAX_BATCH_SIZE)
-        : adjustedOrders;
+      // Prepare batch orders
+      const batchOrders = this.prepareBatchOrdersSync(candidates, size);
 
       const tradeStartTime = Date.now();
 
@@ -551,6 +501,181 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
         error.stack,
       );
     }
+  }
+
+  /**
+   * Validate opportunity and return skip decision with calculated values
+   * Returns shouldSkip=true if opportunity should be rejected
+   */
+  private shouldSkipOpportunity(opportunity: ArbOpportunity): {
+    shouldSkip: boolean;
+    candidates?: OrderCandidate[];
+    size?: number;
+    requiredCost?: number;
+    totalCost?: number;
+  } {
+    // === CHECK: Skip if trading is disabled ===
+    if (!this.runtimeEnabled) {
+      return { shouldSkip: true };
+    }
+
+    // === CHECK: Skip if already submitting an order ===
+    if (this.isSubmittingOrder) {
+      return { shouldSkip: true };
+    }
+
+    // === CHECK: Skip if within 5 second timeout from last opportunity ===
+    const now = Date.now();
+    const timeSinceLastOpportunity = now - this.lastOpportunityExecutedAt;
+    if (this.lastOpportunityExecutedAt > 0 && timeSinceLastOpportunity < OPPORTUNITY_TIMEOUT_MS) {
+      const remainingMs = OPPORTUNITY_TIMEOUT_MS - timeSinceLastOpportunity;
+      this.logger.debug(
+        `Skipping opportunity: timeout (${remainingMs}ms remaining until next opportunity)`
+      );
+      return { shouldSkip: true };
+    }
+
+    // === FAST PATH: All synchronous calculations ===
+    const totalCost = this.calculateTotalCost(opportunity);
+    const pnlPercent = (opportunity.profitAbs / totalCost) * 100;
+
+    // Check PnL threshold (synchronous)
+    if (pnlPercent < this.minPnlThresholdPercent) {
+      console.log('pnlPercent: ', pnlPercent, ' < ', this.minPnlThresholdPercent, '%');
+      console.log("---SKIP OPPORTUNITY---");
+      return { shouldSkip: true };
+    }
+
+    // === Calculate order size using cached balance (NO awaits) ===
+    const candidates = this.buildOrderCandidates(opportunity);
+    if (candidates.length === 0) {
+      return { shouldSkip: true };
+    }
+
+    const size = this.calculateFillSizeSync(candidates, opportunity.groupKey);
+    
+    // Validate size: must be finite, positive, and >= 5 (Polymarket minimum)
+    if (!Number.isFinite(size) || size < 5) {
+      if (size > 0 && size < 5) {
+        this.logger.debug(
+          `Order size ${size} is below Polymarket minimum (5). Skip opportunity.`,
+        );
+      }
+      return { shouldSkip: true };
+    }
+
+    // === Check if localUsdcBalance is sufficient ===
+    const requiredCost = this.estimateRequiredCost(candidates, size);
+    if (this.localUsdcBalance < requiredCost) {
+      return { shouldSkip: true };
+    }
+
+    // All checks passed - return calculated values
+    return {
+      shouldSkip: false,
+      candidates,
+      size,
+      requiredCost,
+      totalCost,
+    };
+  }
+
+
+  /**
+   * Get the appropriate spread/tick size based on price
+   * Following Polymarket tick size mechanism:
+   * - Normal: 0.01 (1 cent) when price is between 0.04 and 0.96
+   * - Extreme: 0.001 (0.1 cent) when price >= 0.96 or price <= 0.04
+   */
+  private getSpreadForPrice(price: number): number {
+    if (price >= SLIPPAGE_EXTREME_THRESHOLD_HIGH || price <= SLIPPAGE_EXTREME_THRESHOLD_LOW) {
+      return EXTREME_SPREAD;
+    }
+    return NORMAL_SPREAD;
+  }
+
+  /**
+   * Apply slippage to order price based on side
+   * - BUY: Add spread (pay higher price to ensure fill)
+   * - SELL: Subtract spread (accept lower price to ensure fill)
+   * 
+   * Important: Slippage should NEVER make the price worse for filling:
+   * - BUY: adjusted price should be >= original price (willing to pay more, not less)
+   * - SELL: adjusted price should be <= original price (accepting less, not demanding more)
+   * 
+   * Key rules:
+   * - BUY: Final price = max(original_price, min(original_price + spread, MAX_PRICE))
+   *   This ensures we never bid BELOW the best ask (which would prevent fill)
+   * - SELL: Final price = min(original_price, max(original_price - spread, MIN_PRICE))
+   *   This ensures we never ask ABOVE the best bid (which would prevent fill)
+   */
+  private applySlippage(price: number, side: 'BUY' | 'SELL'): number {
+    if (!this.slippageEnabled) {
+      return price;
+    }
+
+    const spread = this.getSpreadForPrice(price);
+
+    if (side === 'BUY') {
+      // BUY: Add spread to best ask (willing to pay more to ensure fill)
+      // Cap at MAX_PRICE, but NEVER go below original price
+      const withSlippage = Math.min(price + spread, MAX_PRICE);
+      // Ensure we always pay at least the original ask price
+      return Math.max(price, withSlippage);
+    } else {
+      // SELL: Subtract spread from best bid (accept lower price to ensure fill)
+      // Floor at MIN_PRICE, but NEVER go above original price
+      const withSlippage = Math.max(price - spread, MIN_PRICE);
+      // Ensure we never ask more than the original bid price
+      return Math.min(price, withSlippage);
+    }
+  }
+
+  /**
+   * Prepare batch orders from candidates with price adjustments
+   * Synchronous - no awaits
+   * Applies slippage and minimum order value adjustments
+   */
+  private prepareBatchOrdersSync(
+    candidates: OrderCandidate[],
+    size: number,
+  ): BatchOrderParams[] {
+    // Build batch orders with slippage applied
+    const orders = candidates.map((candidate) => {
+      // Apply slippage to price if enabled
+      const slippageAdjustedPrice = this.applySlippage(candidate.price, candidate.side);
+      
+      return {
+        tokenID: candidate.tokenID,
+        price: slippageAdjustedPrice,
+        size,
+        side: candidate.side,
+        feeRateBps: 0,
+        orderType: 'GTC' as const,
+      };
+    });
+
+    // Adjust prices to meet minimum order value ($1) for test mode
+    const adjustedOrders = this.enforceMinOrderValue 
+      ? orders.map((order) => {
+          const orderValue = order.size * order.price;
+          
+          if (orderValue < MIN_ORDER_VALUE) {
+            const adjustedPrice = MIN_ORDER_VALUE / order.size;
+            // Cap at MAX_PRICE for probability markets (can't be >= 1.0)
+            const finalPrice = Math.min(adjustedPrice, MAX_PRICE);
+            
+            return {
+              ...order,
+              price: finalPrice,
+            };
+          }
+          
+          return order;
+        })
+      : orders;
+
+    return adjustedOrders;
   }
 
   /**
@@ -910,6 +1035,14 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     if (!Number.isFinite(size) || size <= 0) {
       this.logger.warn(
         `Calculated executable size is invalid (${size}). Skip placing orders.`,
+      );
+      return [];
+    }
+
+    // Polymarket minimum order size is 5
+    if (size < 5) {
+      this.logger.warn(
+        `Order size ${size} is below Polymarket minimum (5). Skip placing orders.`,
       );
       return [];
     }
@@ -1383,28 +1516,58 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Enable real trading at runtime
+   * Enable real trading at runtime (also enables slippage)
    */
-  enableTrading(): { success: boolean; message: string; enabled: boolean } {
+  enableTrading(): { success: boolean; message: string; enabled: boolean; slippageEnabled: boolean } {
     this.runtimeEnabled = true;
-    this.logger.log('Real trading ENABLED via API');
+    // this.slippageEnabled = true;
+    this.logger.log('Real trading ENABLED via API (slippage: ON)');
     return {
       success: true,
-      message: 'Real trading has been enabled',
+      message: 'Real trading has been enabled with slippage',
       enabled: true,
+      slippageEnabled: true,
     };
   }
 
   /**
-   * Disable real trading at runtime
+   * Disable real trading at runtime (also disables slippage)
    */
-  disableTrading(): { success: boolean; message: string; enabled: boolean } {
+  disableTrading(): { success: boolean; message: string; enabled: boolean; slippageEnabled: boolean } {
     this.runtimeEnabled = false;
-    this.logger.log('Real trading DISABLED via API');
+    this.slippageEnabled = false;
+    this.logger.log('Real trading DISABLED via API (slippage: OFF)');
     return {
       success: true,
-      message: 'Real trading has been disabled',
+      message: 'Real trading has been disabled with slippage',
       enabled: false,
+      slippageEnabled: false,
+    };
+  }
+
+  /**
+   * Enable slippage independently
+   */
+  enableSlippage(): { success: boolean; message: string; slippageEnabled: boolean } {
+    this.slippageEnabled = true;
+    this.logger.log('Slippage ENABLED via API');
+    return {
+      success: true,
+      message: 'Slippage has been enabled',
+      slippageEnabled: true,
+    };
+  }
+
+  /**
+   * Disable slippage independently
+   */
+  disableSlippage(): { success: boolean; message: string; slippageEnabled: boolean } {
+    this.slippageEnabled = false;
+    this.logger.log('Slippage DISABLED via API');
+    return {
+      success: true,
+      message: 'Slippage has been disabled',
+      slippageEnabled: false,
     };
   }
 
@@ -1414,6 +1577,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   getTradingStatus(): {
     enabled: boolean;
     runtimeEnabled: boolean;
+    slippageEnabled: boolean;
     config: {
       minPnlThresholdPercent: number;
       defaultSize: number;
@@ -1421,6 +1585,12 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       opportunityTimeoutMs: number;
       balanceRefreshMs: number;
       mintedRefreshMs: number;
+      slippage: {
+        normalSpread: number;
+        extremeSpread: number;
+        extremeThresholdHigh: number;
+        extremeThresholdLow: number;
+      };
     };
     state: {
       isSubmittingOrder: boolean;
@@ -1434,6 +1604,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     return {
       enabled: this.enabled,
       runtimeEnabled: this.runtimeEnabled,
+      slippageEnabled: this.slippageEnabled,
       config: {
         minPnlThresholdPercent: this.minPnlThresholdPercent,
         defaultSize: this.defaultSize,
@@ -1441,6 +1612,12 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
         opportunityTimeoutMs: OPPORTUNITY_TIMEOUT_MS,
         balanceRefreshMs: BALANCE_REFRESH_MS,
         mintedRefreshMs: MINTED_REFRESH_MS,
+        slippage: {
+          normalSpread: NORMAL_SPREAD,
+          extremeSpread: EXTREME_SPREAD,
+          extremeThresholdHigh: SLIPPAGE_EXTREME_THRESHOLD_HIGH,
+          extremeThresholdLow: SLIPPAGE_EXTREME_THRESHOLD_LOW,
+        },
       },
       state: {
         isSubmittingOrder: this.isSubmittingOrder,
