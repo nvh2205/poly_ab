@@ -35,6 +35,14 @@ interface MatchedTransaction {
   slippagePercent?: number;
   slippageUsdc?: number;
   pnlContribution?: number;
+  suspectedMatch?: {
+    signalId: string;
+    strategy: string;
+    expectedPrice: number;
+    priceDiffPercent: number;
+    timeDiffSec: number;
+    reason: string;
+  };
 }
 
 /**
@@ -406,51 +414,70 @@ export class TradeAnalysisService {
 
   /**
    * Check if transaction market name matches snapshot market slug
+   * Requires: same asset + same market type (above/between) + ALL numbers match
    */
   private marketMatchesSlug(marketName: string, marketSlug: string): boolean {
-    // Normalize market name to compare with slug
-    const normalizedName = marketName
-      .toLowerCase()
-      .replace(/will the price of /gi, '')
-      .replace(/be (above|between) /gi, '$1-')
-      .replace(/\$/g, '')
-      .replace(/,/g, '')
-      .replace(/ and /gi, '-')
-      .replace(/ on /gi, '-on-')
-      .replace(/\?/g, '')
-      .replace(/\s+/g, '-');
+    const nameLower = marketName.toLowerCase();
+    const slugLower = marketSlug.toLowerCase();
 
-    const normalizedSlug = marketSlug.toLowerCase();
+    // Check same asset (bitcoin or ethereum)
+    const nameIsBitcoin = nameLower.includes('bitcoin');
+    const nameIsEthereum = nameLower.includes('ethereum');
+    const slugIsBitcoin = slugLower.includes('bitcoin');
+    const slugIsEthereum = slugLower.includes('ethereum');
 
-    // Extract key identifiers for matching
-    // e.g., "bitcoin", "ethereum", "86000", "88000"
-    const nameNumbers: string[] = marketName.match(/\d+/g) || [];
-    const slugNumbers: string[] = marketSlug.match(/\d+/g) || [];
+    if (nameIsBitcoin !== slugIsBitcoin) return false;
+    if (nameIsEthereum !== slugIsEthereum) return false;
+    if (!nameIsBitcoin && !nameIsEthereum) return false;
 
-    // Check if slug contains key parts
-    const isBitcoin = normalizedName.includes('bitcoin') && normalizedSlug.includes('bitcoin');
-    const isEthereum = normalizedName.includes('ethereum') && normalizedSlug.includes('ethereum');
+    // Check market type: "above" vs "between"
+    const nameIsAbove = nameLower.includes('above');
+    const nameIsBetween = nameLower.includes('between');
+    const slugIsAbove = slugLower.includes('above');
+    const slugIsBetween = slugLower.includes('between');
 
-    // Check if it's the same asset
-    if (!isBitcoin && !isEthereum) return false;
-    if (isBitcoin && !normalizedSlug.includes('bitcoin')) return false;
-    if (isEthereum && !normalizedSlug.includes('ethereum')) return false;
+    if (nameIsAbove !== slugIsAbove) return false;
+    if (nameIsBetween !== slugIsBetween) return false;
 
-    // Check if key numbers match
-    // Convert 86000 to 86k format for slug matching
-    for (const num of nameNumbers) {
-      const shortNum = num.replace(/000$/, 'k');
-      if (normalizedSlug.includes(shortNum) || normalizedSlug.includes(num)) {
-        return true;
-      }
+    // Extract price numbers from both
+    // From name: "between $2,800 and $2,900" → [2800, 2900]
+    // From slug: "between-2800-2900" or "between-2-8k-2-9k" → need to handle both
+    const nameNumbers: string[] = (marketName.match(/[\d,]+/g) || [])
+      .map(n => n.replace(/,/g, ''))
+      .filter(n => n.length >= 2); // Filter out single digits like day numbers
+    
+    // For slug, convert k notation: "86k" → "86000"
+    const slugNormalized = slugLower.replace(/(\d+)k/g, '$1000');
+    const slugNumbers: string[] = (slugNormalized.match(/\d+/g) || [])
+      .filter(n => parseInt(n) >= 1000 || n.length >= 4); // Only keep price-like numbers
+
+    // For "above" markets: must have same threshold
+    if (nameIsAbove && slugIsAbove) {
+      // Find the main price threshold
+      const namePrice = nameNumbers.find(n => parseInt(n) >= 1000);
+      const slugPrice = slugNumbers.find(n => parseInt(n) >= 1000);
+      
+      if (!namePrice || !slugPrice) return false;
+      return namePrice === slugPrice;
     }
 
-    // Also check reverse - numbers from slug in name
-    for (const num of slugNumbers) {
-      const longNum = num.replace(/k$/i, '000');
-      if (nameNumbers.indexOf(longNum) !== -1 || nameNumbers.indexOf(num) !== -1) {
-        return true;
-      }
+    // For "between" markets: both lower and upper bounds must match
+    if (nameIsBetween && slugIsBetween) {
+      // Extract lower and upper from name (e.g., "between $2,800 and $2,900")
+      const namePrices = nameNumbers
+        .map(n => parseInt(n))
+        .filter(n => n >= 1000)
+        .sort((a, b) => a - b);
+      
+      const slugPrices = slugNumbers
+        .map(n => parseInt(n))
+        .filter(n => n >= 1000)
+        .sort((a, b) => a - b);
+
+      if (namePrices.length < 2 || slugPrices.length < 2) return false;
+
+      // Both lower and upper bound must match
+      return namePrices[0] === slugPrices[0] && namePrices[1] === slugPrices[1];
     }
 
     return false;
@@ -730,8 +757,8 @@ export class TradeAnalysisService {
     // Sheet 3: Slippage Analysis
     this.addSlippageSheet(workbook, analysis.slippageAnalysis);
 
-    // Sheet 4: Failed/Unmatched
-    this.addUnmatchedSheet(workbook, analysis.failedUnmatched);
+    // Sheet 4: Failed/Unmatched with suspected matches
+    this.addUnmatchedSheet(workbook, analysis.failedUnmatched, analysis.matchedTransactions);
 
     // Sheet 5: Strategy Performance
     this.addStrategySheet(workbook, analysis.summary);
@@ -919,15 +946,16 @@ export class TradeAnalysisService {
   }
 
   /**
-   * Add Unmatched sheet
+   * Add Unmatched sheet with suspected match detection
    */
   private addUnmatchedSheet(
     workbook: ExcelJS.Workbook,
-    transactions: MatchedTransaction[],
+    unmatchedTransactions: MatchedTransaction[],
+    matchedTransactions: MatchedTransaction[],
   ): void {
     const sheet = workbook.addWorksheet('Failed-Unmatched');
 
-    // Header
+    // Header with new Suspected Match columns
     const headers = [
       'Timestamp',
       'Market',
@@ -938,6 +966,11 @@ export class TradeAnalysisService {
       'Actual Price',
       'Hash',
       'Possible Reason',
+      'Suspected Signal ID',
+      'Suspected Strategy',
+      'Expected Price',
+      'Price Diff %',
+      'Time Diff (sec)',
     ];
 
     sheet.addRow(headers);
@@ -948,9 +981,23 @@ export class TradeAnalysisService {
       fgColor: { argb: 'FFFF6666' },
     };
 
-    for (const m of transactions) {
+    // Build index of matched transactions by market name for faster lookup
+    const matchedByMarket = new Map<string, MatchedTransaction[]>();
+    for (const m of matchedTransactions) {
+      const key = m.transaction.marketName.toLowerCase();
+      if (!matchedByMarket.has(key)) {
+        matchedByMarket.set(key, []);
+      }
+      matchedByMarket.get(key)!.push(m);
+    }
+
+    for (const m of unmatchedTransactions) {
       const tx = m.transaction;
-      sheet.addRow([
+      
+      // Try to find a suspected match
+      const suspected = this.findSuspectedMatch(tx, matchedTransactions, matchedByMarket);
+
+      const row = sheet.addRow([
         new Date(tx.timestamp * 1000).toISOString(),
         tx.marketName,
         tx.action,
@@ -959,16 +1006,124 @@ export class TradeAnalysisService {
         tx.usdcAmount,
         m.actualPrice?.toFixed(4) || '',
         tx.hash,
-        'No matching signal found within timestamp window',
+        suspected ? suspected.reason : 'No matching signal found',
+        suspected?.signalId || '',
+        suspected?.strategy || '',
+        suspected?.expectedPrice?.toFixed(4) || '',
+        suspected?.priceDiffPercent?.toFixed(2) || '',
+        suspected?.timeDiffSec?.toFixed(0) || '',
       ]);
+
+      // Highlight rows with suspected matches in yellow
+      if (suspected) {
+        row.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFFF99' }, // Light yellow
+        };
+      }
     }
 
     sheet.columns.forEach((col) => {
       col.width = 15;
     });
-    sheet.getColumn(2).width = 50;
-    sheet.getColumn(8).width = 70;
-    sheet.getColumn(9).width = 40;
+    sheet.getColumn(2).width = 50;  // Market
+    sheet.getColumn(8).width = 70;  // Hash
+    sheet.getColumn(9).width = 50;  // Possible Reason
+    sheet.getColumn(10).width = 40; // Suspected Signal ID
+    sheet.getColumn(11).width = 25; // Strategy
+  }
+
+  /**
+   * Find suspected match for an unmatched transaction
+   * Criteria: same market, time within 1 minute of a matched tx, price within ±5%
+   */
+  private findSuspectedMatch(
+    tx: CsvTransaction,
+    matchedTransactions: MatchedTransaction[],
+    matchedByMarket: Map<string, MatchedTransaction[]>,
+  ): {
+    signalId: string;
+    strategy: string;
+    expectedPrice: number;
+    priceDiffPercent: number;
+    timeDiffSec: number;
+    reason: string;
+  } | undefined {
+    const TIME_TOLERANCE_SEC = 60; // 1 minute
+    const PRICE_TOLERANCE_PERCENT = 5; // 5%
+
+    const actualPrice = tx.tokenAmount > 0 ? tx.usdcAmount / tx.tokenAmount : 0;
+    if (actualPrice === 0) return undefined;
+
+    // First, try to find matched transactions with same market
+    const marketKey = tx.marketName.toLowerCase();
+    const sameMarketMatches = matchedByMarket.get(marketKey) || [];
+
+    for (const matched of sameMarketMatches) {
+      if (!matched.signal) continue;
+
+      const timeDiff = Math.abs(tx.timestamp - matched.transaction.timestamp);
+      if (timeDiff > TIME_TOLERANCE_SEC) continue;
+
+      // Get expected price from the matched transaction's signal
+      const expectedPrice = matched.expectedPrice;
+      if (!expectedPrice) continue;
+
+      const priceDiff = Math.abs(actualPrice - expectedPrice);
+      const priceDiffPercent = (priceDiff / expectedPrice) * 100;
+
+      if (priceDiffPercent <= PRICE_TOLERANCE_PERCENT) {
+        return {
+          signalId: matched.signal.id,
+          strategy: matched.signal.strategy,
+          expectedPrice,
+          priceDiffPercent,
+          timeDiffSec: timeDiff,
+          reason: `Suspected match: same market, time diff ${timeDiff}s, price diff ${priceDiffPercent.toFixed(2)}%`,
+        };
+      }
+    }
+
+    // If no same-market match, try to find any signal within time window
+    // that matches the market pattern
+    for (const matched of matchedTransactions) {
+      if (!matched.signal?.snapshot) continue;
+
+      const timeDiff = Math.abs(tx.timestamp - matched.transaction.timestamp);
+      if (timeDiff > TIME_TOLERANCE_SEC) continue;
+
+      // Parse snapshot and check if any market matches
+      const snapshot = this.parseSnapshot(matched.signal.snapshot);
+      if (!snapshot) continue;
+
+      const snapshotMarkets = this.extractSnapshotMarkets(snapshot);
+      for (const snapshotMarket of snapshotMarkets) {
+        if (!this.marketMatchesSlug(tx.marketName, snapshotMarket.marketSlug)) {
+          continue;
+        }
+
+        const expectedPrice = tx.action === 'Buy' 
+          ? snapshotMarket.bestAsk 
+          : snapshotMarket.bestBid;
+
+        const priceDiff = Math.abs(actualPrice - expectedPrice);
+        const priceDiffPercent = (priceDiff / expectedPrice) * 100;
+
+        if (priceDiffPercent <= PRICE_TOLERANCE_PERCENT) {
+          return {
+            signalId: matched.signal.id,
+            strategy: matched.signal.strategy,
+            expectedPrice,
+            priceDiffPercent,
+            timeDiffSec: timeDiff,
+            reason: `Suspected: market ${snapshotMarket.marketSlug}, time ${timeDiff}s, price diff ${priceDiffPercent.toFixed(2)}%`,
+          };
+        }
+      }
+    }
+
+    return undefined;
   }
 
   /**
