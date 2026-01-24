@@ -246,7 +246,8 @@ export class TradeAnalysisService {
   }
 
   /**
-   * Match transactions with signals
+   * Match transactions with signals - NEW LOGIC
+   * Flow: RealTrade → Signal → Snapshot → Find matching CSV transaction by market + price
    */
   matchTransactions(
     transactions: CsvTransaction[],
@@ -258,105 +259,201 @@ export class TradeAnalysisService {
     const marketMap = new Map(markets.map((m) => [m.question, m]));
 
     const matched: MatchedTransaction[] = [];
+    const usedTransactionHashes = new Set<string>();
 
+    // First, process all real trades and find matching transactions
+    for (const trade of realTrades) {
+      const signal = signalMap.get(trade.signalId);
+      if (!signal || !signal.snapshot) continue;
+
+      const snapshot = this.parseSnapshot(signal.snapshot);
+      if (!snapshot) continue;
+
+      // Get all market entries from snapshot
+      const snapshotMarkets = this.extractSnapshotMarkets(snapshot);
+
+      // For each market in snapshot, try to find matching transaction
+      for (const snapshotMarket of snapshotMarkets) {
+        const matchingTx = this.findMatchingTransaction(
+          transactions,
+          snapshotMarket,
+          usedTransactionHashes,
+        );
+
+        if (matchingTx) {
+          usedTransactionHashes.add(matchingTx.hash);
+          
+          const market = marketMap.get(matchingTx.marketName);
+          const actualPrice = matchingTx.tokenAmount > 0 
+            ? matchingTx.usdcAmount / matchingTx.tokenAmount 
+            : 0;
+          
+          // Expected price from snapshot
+          const expectedPrice = matchingTx.action === 'Buy' 
+            ? snapshotMarket.bestAsk 
+            : snapshotMarket.bestBid;
+
+          // Calculate slippage
+          const slippagePercent = expectedPrice > 0
+            ? ((actualPrice - expectedPrice) / expectedPrice) * 100
+            : 0;
+          const slippageUsdc = matchingTx.tokenAmount * (actualPrice - expectedPrice);
+
+          matched.push({
+            transaction: matchingTx,
+            realTrade: trade,
+            signal,
+            market,
+            matchStatus: 'matched',
+            expectedPrice,
+            actualPrice,
+            slippagePercent,
+            slippageUsdc,
+            pnlContribution: this.calculatePnlContribution(matchingTx, expectedPrice),
+          });
+        }
+      }
+    }
+
+    // Then, add unmatched transactions
     for (const tx of transactions) {
-      // Skip Split/Merge/Redeem/Lost - these are not trading actions
+      if (usedTransactionHashes.has(tx.hash)) continue;
+
       if (['Split', 'Merge', 'Redeem', 'Lost'].includes(tx.action)) {
         matched.push({
           transaction: tx,
           matchStatus: 'split_merge_redeem',
         });
-        continue;
-      }
-
-      // Find matching market by question
-      const market = marketMap.get(tx.marketName);
-
-      // Find matching real trade by timestamp
-      const matchingTrade = this.findMatchingTrade(tx, realTrades, signalMap);
-
-      if (matchingTrade) {
-        const signal = signalMap.get(matchingTrade.signalId);
-
-        // Calculate actual price from transaction
-        const actualPrice =
-          tx.tokenAmount > 0 ? tx.usdcAmount / tx.tokenAmount : 0;
-
-        // Get expected price from signal snapshot
-        const expectedPrice = this.getExpectedPrice(signal, tx.action, tx.marketName);
-
-        // Calculate slippage
-        const slippagePercent =
-          expectedPrice > 0
-            ? ((actualPrice - expectedPrice) / expectedPrice) * 100
-            : 0;
-
-        const slippageUsdc =
-          tx.tokenAmount * (actualPrice - (expectedPrice || 0));
-
-        matched.push({
-          transaction: tx,
-          realTrade: matchingTrade,
-          signal,
-          market,
-          matchStatus: 'matched',
-          expectedPrice,
-          actualPrice,
-          slippagePercent,
-          slippageUsdc,
-          pnlContribution: this.calculatePnlContribution(tx, expectedPrice),
-        });
       } else {
+        const market = marketMap.get(tx.marketName);
         matched.push({
           transaction: tx,
           market,
           matchStatus: 'unmatched',
-          actualPrice:
-            tx.tokenAmount > 0 ? tx.usdcAmount / tx.tokenAmount : undefined,
+          actualPrice: tx.tokenAmount > 0 ? tx.usdcAmount / tx.tokenAmount : undefined,
         });
       }
     }
 
+    this.logger.log(`Matched ${matched.filter(m => m.matchStatus === 'matched').length} transactions with signals`);
     return matched;
   }
 
   /**
-   * Find matching trade by timestamp and other criteria
+   * Extract all markets from snapshot with their prices
    */
-  private findMatchingTrade(
-    tx: CsvTransaction,
-    realTrades: ArbRealTrade[],
-    signalMap: Map<string, ArbSignal>,
-  ): ArbRealTrade | undefined {
-    const txTimestampMs = tx.timestamp * 1000;
+  private extractSnapshotMarkets(snapshot: {
+    parent?: { marketSlug: string; bestAsk: number; bestBid: number };
+    parentUpper?: { marketSlug: string; bestAsk: number; bestBid: number };
+    children?: Array<{ marketSlug: string; bestAsk: number; bestBid: number }>;
+  }): Array<{ marketSlug: string; bestAsk: number; bestBid: number }> {
+    const markets: Array<{ marketSlug: string; bestAsk: number; bestBid: number }> = [];
 
-    for (const trade of realTrades) {
-      const tradeTimestampMs = Number(trade.timestampMs);
-      const timeDiff = Math.abs(txTimestampMs - tradeTimestampMs);
+    if (snapshot.parent) {
+      markets.push(snapshot.parent);
+    }
+    if (snapshot.parentUpper) {
+      markets.push(snapshot.parentUpper);
+    }
+    if (snapshot.children) {
+      markets.push(...snapshot.children);
+    }
 
-      // Check timestamp within tolerance
-      if (timeDiff <= this.TIMESTAMP_TOLERANCE_SEC * 1000) {
-        const signal = signalMap.get(trade.signalId);
-        if (!signal) continue;
+    return markets;
+  }
 
-        // Additional matching: check if action aligns with strategy
-        const strategyMatchesBuy =
-          tx.action === 'Buy' &&
-          (signal.strategy.includes('BUY') ||
-            signal.strategy === 'POLYMARKET_TRIANGLE');
+  /**
+   * Find matching transaction by market slug AND price
+   */
+  private findMatchingTransaction(
+    transactions: CsvTransaction[],
+    snapshotMarket: { marketSlug: string; bestAsk: number; bestBid: number },
+    usedHashes: Set<string>,
+  ): CsvTransaction | undefined {
+    // Price tolerance for matching (0.5% or 0.005 absolute)
+    const PRICE_TOLERANCE_PERCENT = 0.5;
+    const PRICE_TOLERANCE_ABS = 0.005;
 
-        const strategyMatchesSell =
-          tx.action === 'Sell' &&
-          (signal.strategy.includes('SELL') ||
-            signal.strategy === 'POLYMARKET_TRIANGLE');
+    for (const tx of transactions) {
+      if (usedHashes.has(tx.hash)) continue;
+      if (['Split', 'Merge', 'Redeem', 'Lost'].includes(tx.action)) continue;
 
-        if (strategyMatchesBuy || strategyMatchesSell) {
-          return trade;
-        }
+      // Check if market matches
+      if (!this.marketMatchesSlug(tx.marketName, snapshotMarket.marketSlug)) {
+        continue;
+      }
+
+      // Calculate actual price from transaction
+      const actualPrice = tx.tokenAmount > 0 ? tx.usdcAmount / tx.tokenAmount : 0;
+      if (actualPrice === 0) continue;
+
+      // Check if price matches with tolerance
+      const expectedPrice = tx.action === 'Buy' 
+        ? snapshotMarket.bestAsk 
+        : snapshotMarket.bestBid;
+
+      const priceDiff = Math.abs(actualPrice - expectedPrice);
+      const priceDiffPercent = expectedPrice > 0 ? (priceDiff / expectedPrice) * 100 : 100;
+
+      // Match if within tolerance
+      if (priceDiff <= PRICE_TOLERANCE_ABS || priceDiffPercent <= PRICE_TOLERANCE_PERCENT) {
+        return tx;
       }
     }
 
     return undefined;
+  }
+
+  /**
+   * Check if transaction market name matches snapshot market slug
+   */
+  private marketMatchesSlug(marketName: string, marketSlug: string): boolean {
+    // Normalize market name to compare with slug
+    const normalizedName = marketName
+      .toLowerCase()
+      .replace(/will the price of /gi, '')
+      .replace(/be (above|between) /gi, '$1-')
+      .replace(/\$/g, '')
+      .replace(/,/g, '')
+      .replace(/ and /gi, '-')
+      .replace(/ on /gi, '-on-')
+      .replace(/\?/g, '')
+      .replace(/\s+/g, '-');
+
+    const normalizedSlug = marketSlug.toLowerCase();
+
+    // Extract key identifiers for matching
+    // e.g., "bitcoin", "ethereum", "86000", "88000"
+    const nameNumbers: string[] = marketName.match(/\d+/g) || [];
+    const slugNumbers: string[] = marketSlug.match(/\d+/g) || [];
+
+    // Check if slug contains key parts
+    const isBitcoin = normalizedName.includes('bitcoin') && normalizedSlug.includes('bitcoin');
+    const isEthereum = normalizedName.includes('ethereum') && normalizedSlug.includes('ethereum');
+
+    // Check if it's the same asset
+    if (!isBitcoin && !isEthereum) return false;
+    if (isBitcoin && !normalizedSlug.includes('bitcoin')) return false;
+    if (isEthereum && !normalizedSlug.includes('ethereum')) return false;
+
+    // Check if key numbers match
+    // Convert 86000 to 86k format for slug matching
+    for (const num of nameNumbers) {
+      const shortNum = num.replace(/000$/, 'k');
+      if (normalizedSlug.includes(shortNum) || normalizedSlug.includes(num)) {
+        return true;
+      }
+    }
+
+    // Also check reverse - numbers from slug in name
+    for (const num of slugNumbers) {
+      const longNum = num.replace(/k$/i, '000');
+      if (nameNumbers.indexOf(longNum) !== -1 || nameNumbers.indexOf(num) !== -1) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**
