@@ -282,8 +282,8 @@ export class TradeAnalysisService {
         const actualPrice =
           tx.tokenAmount > 0 ? tx.usdcAmount / tx.tokenAmount : 0;
 
-        // Get expected price from signal
-        const expectedPrice = this.getExpectedPrice(signal, tx.action);
+        // Get expected price from signal snapshot
+        const expectedPrice = this.getExpectedPrice(signal, tx.action, tx.marketName);
 
         // Calculate slippage
         const slippagePercent =
@@ -360,23 +360,145 @@ export class TradeAnalysisService {
   }
 
   /**
-   * Get expected price from signal based on action
+   * Snapshot structure from signal
+   */
+  private parseSnapshot(snapshot: any): {
+    parent?: { marketSlug: string; bestAsk: number; bestBid: number };
+    parentUpper?: { marketSlug: string; bestAsk: number; bestBid: number };
+    children?: Array<{ marketSlug: string; bestAsk: number; bestBid: number }>;
+  } | null {
+    if (!snapshot) return null;
+    
+    try {
+      const parsed = typeof snapshot === 'string' ? JSON.parse(snapshot) : snapshot;
+      return {
+        parent: parsed.parent ? {
+          marketSlug: parsed.parent.marketSlug,
+          bestAsk: parsed.parent.bestAsk,
+          bestBid: parsed.parent.bestBid,
+        } : undefined,
+        parentUpper: parsed.parentUpper ? {
+          marketSlug: parsed.parentUpper.marketSlug,
+          bestAsk: parsed.parentUpper.bestAsk,
+          bestBid: parsed.parentUpper.bestBid,
+        } : undefined,
+        children: parsed.children?.map((child: any) => ({
+          marketSlug: child.marketSlug,
+          bestAsk: child.bestAsk,
+          bestBid: child.bestBid,
+        })),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Convert market name to slug format for matching
+   * Example: "Will the price of Bitcoin be above $86,000 on January 23?" -> "bitcoin-above-86k-on-january-23"
+   */
+  private marketNameToSlugPattern(marketName: string): string {
+    return marketName
+      .toLowerCase()
+      .replace(/will the price of /g, '')
+      .replace(/be above \$/g, 'above-')
+      .replace(/be between \$/g, 'between-')
+      .replace(/,000/g, 'k')
+      .replace(/ and \$/g, '-')
+      .replace(/ on /g, '-on-')
+      .replace(/\?/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/--+/g, '-')
+      .trim();
+  }
+
+  /**
+   * Get expected price from signal snapshot based on transaction market and action
+   * Maps CSV marketName to snapshot marketSlug
    */
   private getExpectedPrice(
     signal: ArbSignal | undefined,
     action: string,
+    marketName: string,
   ): number | undefined {
     if (!signal) return undefined;
 
+    const snapshot = this.parseSnapshot(signal.snapshot);
+    if (!snapshot) {
+      // Fallback to signal fields if no snapshot
+      if (action === 'Buy') {
+        return signal.parentBestAsk
+          ? Number(signal.parentBestAsk)
+          : signal.childrenSumAsk
+            ? Number(signal.childrenSumAsk)
+            : undefined;
+      } else if (action === 'Sell') {
+        return signal.parentBestBid
+          ? Number(signal.parentBestBid)
+          : signal.childrenSumBid
+            ? Number(signal.childrenSumBid)
+            : undefined;
+      }
+      return undefined;
+    }
+
+    // Try to find matching market in snapshot
+    const marketSlugPattern = this.marketNameToSlugPattern(marketName);
+
+    // Check parent
+    if (snapshot.parent && snapshot.parent.marketSlug.includes(marketSlugPattern.slice(0, 20))) {
+      return action === 'Buy' ? snapshot.parent.bestAsk : snapshot.parent.bestBid;
+    }
+
+    // Check parentUpper
+    if (snapshot.parentUpper && snapshot.parentUpper.marketSlug.includes(marketSlugPattern.slice(0, 20))) {
+      return action === 'Buy' ? snapshot.parentUpper.bestAsk : snapshot.parentUpper.bestBid;
+    }
+
+    // Check children
+    if (snapshot.children) {
+      for (const child of snapshot.children) {
+        if (child.marketSlug.includes(marketSlugPattern.slice(0, 20))) {
+          return action === 'Buy' ? child.bestAsk : child.bestBid;
+        }
+      }
+    }
+
+    // Try more aggressive matching - extract key numbers
+    const numbersInMarket = marketName.match(/\$?([\d,]+)/g)?.map(n => n.replace(/[$,]/g, ''));
+    
+    if (numbersInMarket && numbersInMarket.length > 0) {
+      const firstNum = numbersInMarket[0];
+      const shortNum = firstNum.replace(/000$/, 'k');
+      
+      // Check against parent
+      if (snapshot.parent?.marketSlug.includes(shortNum)) {
+        return action === 'Buy' ? snapshot.parent.bestAsk : snapshot.parent.bestBid;
+      }
+      
+      // Check against parentUpper
+      if (snapshot.parentUpper?.marketSlug.includes(shortNum)) {
+        return action === 'Buy' ? snapshot.parentUpper.bestAsk : snapshot.parentUpper.bestBid;
+      }
+      
+      // Check against children
+      if (snapshot.children) {
+        for (const child of snapshot.children) {
+          if (child.marketSlug.includes(shortNum)) {
+            return action === 'Buy' ? child.bestAsk : child.bestBid;
+          }
+        }
+      }
+    }
+
+    // Final fallback to signal fields
     if (action === 'Buy') {
-      // For buy, we expect to pay the ask price
       return signal.parentBestAsk
         ? Number(signal.parentBestAsk)
         : signal.childrenSumAsk
           ? Number(signal.childrenSumAsk)
           : undefined;
     } else if (action === 'Sell') {
-      // For sell, we expect to receive the bid price
       return signal.parentBestBid
         ? Number(signal.parentBestBid)
         : signal.childrenSumBid
