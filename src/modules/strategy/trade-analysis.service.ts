@@ -955,7 +955,7 @@ export class TradeAnalysisService {
   ): void {
     const sheet = workbook.addWorksheet('Failed-Unmatched');
 
-    // Header with new Suspected Match columns
+    // Header with Suspected Match columns (strict + relaxed V2)
     const headers = [
       'Timestamp',
       'Market',
@@ -966,11 +966,18 @@ export class TradeAnalysisService {
       'Actual Price',
       'Hash',
       'Possible Reason',
-      'Suspected Signal ID',
-      'Suspected Strategy',
-      'Expected Price',
-      'Price Diff %',
-      'Time Diff (sec)',
+      // V1: Strict (time ≤1min, price ±5%)
+      'V1 Signal ID',
+      'V1 Strategy',
+      'V1 Expected Price',
+      'V1 Price Diff %',
+      'V1 Time Diff (sec)',
+      // V2: Relaxed (time ≤20min, price ±25%)
+      'V2 Signal ID',
+      'V2 Strategy',
+      'V2 Expected Price',
+      'V2 Price Diff %',
+      'V2 Time Diff (sec)',
     ];
 
     sheet.addRow(headers);
@@ -994,8 +1001,9 @@ export class TradeAnalysisService {
     for (const m of unmatchedTransactions) {
       const tx = m.transaction;
       
-      // Try to find a suspected match
-      const suspected = this.findSuspectedMatch(tx, matchedTransactions, matchedByMarket);
+      // Try to find suspected matches with different tolerance levels
+      const suspectedV1 = this.findSuspectedMatch(tx, matchedTransactions, matchedByMarket, 60, 5);
+      const suspectedV2 = this.findSuspectedMatch(tx, matchedTransactions, matchedByMarket, 1200, 25); // 20min, 25%
 
       const row = sheet.addRow([
         new Date(tx.timestamp * 1000).toISOString(),
@@ -1006,20 +1014,33 @@ export class TradeAnalysisService {
         tx.usdcAmount,
         m.actualPrice?.toFixed(4) || '',
         tx.hash,
-        suspected ? suspected.reason : 'No matching signal found',
-        suspected?.signalId || '',
-        suspected?.strategy || '',
-        suspected?.expectedPrice?.toFixed(4) || '',
-        suspected?.priceDiffPercent?.toFixed(2) || '',
-        suspected?.timeDiffSec?.toFixed(0) || '',
+        suspectedV1 ? suspectedV1.reason : (suspectedV2 ? 'Only V2 match found' : 'No matching signal found'),
+        // V1 columns
+        suspectedV1?.signalId || '',
+        suspectedV1?.strategy || '',
+        suspectedV1?.expectedPrice?.toFixed(4) || '',
+        suspectedV1?.priceDiffPercent?.toFixed(2) || '',
+        suspectedV1?.timeDiffSec?.toFixed(0) || '',
+        // V2 columns
+        suspectedV2?.signalId || '',
+        suspectedV2?.strategy || '',
+        suspectedV2?.expectedPrice?.toFixed(4) || '',
+        suspectedV2?.priceDiffPercent?.toFixed(2) || '',
+        suspectedV2?.timeDiffSec?.toFixed(0) || '',
       ]);
 
-      // Highlight rows with suspected matches in yellow
-      if (suspected) {
+      // Highlight based on match level
+      if (suspectedV1) {
         row.fill = {
           type: 'pattern',
           pattern: 'solid',
-          fgColor: { argb: 'FFFFFF99' }, // Light yellow
+          fgColor: { argb: 'FF99FF99' }, // Light green for V1 match
+        };
+      } else if (suspectedV2) {
+        row.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFFF99' }, // Light yellow for V2 only
         };
       }
     }
@@ -1030,18 +1051,21 @@ export class TradeAnalysisService {
     sheet.getColumn(2).width = 50;  // Market
     sheet.getColumn(8).width = 70;  // Hash
     sheet.getColumn(9).width = 50;  // Possible Reason
-    sheet.getColumn(10).width = 40; // Suspected Signal ID
-    sheet.getColumn(11).width = 25; // Strategy
+    sheet.getColumn(10).width = 40; // V1 Signal ID
+    sheet.getColumn(15).width = 40; // V2 Signal ID
   }
 
   /**
    * Find suspected match for an unmatched transaction
-   * Criteria: same market, time within 1 minute of a matched tx, price within ±5%
+   * @param timeToleranceSec - Time tolerance in seconds (default: 60 = 1 minute)
+   * @param priceTolerancePercent - Price tolerance as percentage (default: 5%)
    */
   private findSuspectedMatch(
     tx: CsvTransaction,
     matchedTransactions: MatchedTransaction[],
     matchedByMarket: Map<string, MatchedTransaction[]>,
+    timeToleranceSec: number = 60,
+    priceTolerancePercent: number = 5,
   ): {
     signalId: string;
     strategy: string;
@@ -1050,8 +1074,8 @@ export class TradeAnalysisService {
     timeDiffSec: number;
     reason: string;
   } | undefined {
-    const TIME_TOLERANCE_SEC = 60; // 1 minute
-    const PRICE_TOLERANCE_PERCENT = 5; // 5%
+    const TIME_TOLERANCE_SEC = timeToleranceSec;
+    const PRICE_TOLERANCE_PERCENT = priceTolerancePercent;
 
     const actualPrice = tx.tokenAmount > 0 ? tx.usdcAmount / tx.tokenAmount : 0;
     if (actualPrice === 0) return undefined;
