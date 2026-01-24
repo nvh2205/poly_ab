@@ -11,6 +11,7 @@ import { IngestionModule } from '../ingestion/ingestion.module';
 import { ArbitrageEngineService } from './arbitrage-engine.service';
 import { PaperExecutionService } from './paper-execution.service';
 import { RealExecutionService } from './real-execution.service';
+import { TradeAnalysisService } from './trade-analysis.service';
 import { StrategyController } from './strategy.controller';
 import { RetentionCleanupService } from './retention-cleanup.service';
 import { PolymarketOnchainModule } from '../../common/services/polymarket-onchain.module';
@@ -36,6 +37,7 @@ import { TelegramModule } from '../../common/services/telegram.module';
     ArbitrageEngineService,
     PaperExecutionService,
     RealExecutionService,
+    TradeAnalysisService,
     RetentionCleanupService,
   ],
   exports: [
@@ -43,6 +45,7 @@ import { TelegramModule } from '../../common/services/telegram.module';
     ArbitrageEngineService,
     PaperExecutionService,
     RealExecutionService,
+    TradeAnalysisService,
   ],
 })
 export class StrategyModule {}

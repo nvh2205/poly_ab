@@ -7,7 +7,9 @@ import {
   ParseIntPipe,
   DefaultValuePipe,
   BadRequestException,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiQuery } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -17,6 +19,7 @@ import { PaperExecutionService } from './paper-execution.service';
 import { RealExecutionService } from './real-execution.service';
 import { MarketStructureService } from './market-structure.service';
 import { RetentionCleanupService } from './retention-cleanup.service';
+import { TradeAnalysisService } from './trade-analysis.service';
 
 @Controller('strategy')
 export class StrategyController {
@@ -31,6 +34,7 @@ export class StrategyController {
     private readonly realExecutionService: RealExecutionService,
     private readonly marketStructureService: MarketStructureService,
     private readonly retentionCleanupService: RetentionCleanupService,
+    private readonly tradeAnalysisService: TradeAnalysisService,
   ) {}
 
   /**
@@ -415,6 +419,82 @@ export class StrategyController {
         error.stack,
       );
       throw error;
+    }
+  }
+
+  /**
+   * GET /strategy/analyze-transactions
+   * Analyze transactions and compare with signals, export to Excel
+   * @param start_date - Start date in YYYY-MM-DD format
+   * @param end_date - End date (defaults to start_date + 1 day)
+   * @param csv_path - Optional custom CSV file path
+   * @param format - 'excel' for file download, 'json' for summary only
+   */
+  @Get('analyze-transactions')
+  @ApiQuery({
+    name: 'start_date',
+    required: false,
+    description: 'YYYY-MM-DD start date (defaults to today)',
+  })
+  @ApiQuery({
+    name: 'end_date',
+    required: false,
+    description: 'YYYY-MM-DD end date (defaults to start_date + 1 day)',
+  })
+  @ApiQuery({
+    name: 'csv_path',
+    required: false,
+    description: 'Custom CSV file path (optional)',
+  })
+  @ApiQuery({
+    name: 'format',
+    required: false,
+    description: 'Response format: excel (default) or json',
+  })
+  async analyzeTransactions(
+    @Query('start_date') startDate?: string,
+    @Query('end_date') endDate?: string,
+    @Query('csv_path') csvPath?: string,
+    @Query('format') format?: string,
+    @Res() res?: Response,
+  ) {
+    try {
+      const { startDate: rangeStart, endDate: rangeEnd } =
+        this.resolveDateRange(startDate, endDate);
+
+      this.logger.log(
+        `Analyzing transactions from ${rangeStart.toISOString()} to ${rangeEnd.toISOString()}`,
+      );
+
+      const result = await this.tradeAnalysisService.analyzeTransactions(
+        rangeStart,
+        rangeEnd,
+        csvPath,
+      );
+
+      if (format === 'json') {
+        return res.json({
+          success: true,
+          excelPath: result.excelPath,
+          summary: result.summary,
+        });
+      }
+
+      // Default: download Excel file
+      res.download(result.excelPath, (err) => {
+        if (err) {
+          this.logger.error(`Failed to download Excel file: ${err.message}`);
+        }
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed to analyze transactions: ${error.message}`,
+        error.stack,
+      );
+      return res.status(500).json({
+        success: false,
+        error: error.message,
+      });
     }
   }
 

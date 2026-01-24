@@ -206,9 +206,9 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     const rangeChildren = group.children.filter(
       (child) => child.kind === 'range',
     );
-    const binaryChildren = group.children.filter(
-      (child) => child.kind !== 'range',
-    );
+    // const binaryChildren = group.children.filter(
+    //   (child) => child.kind !== 'range',
+    // );
 
     const childStates = rangeChildren.map<MarketSnapshot>((descriptor) => ({
       descriptor,
@@ -231,18 +231,18 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     });
 
     // Initialize binary chill pairs in separate manager
-    if (binaryChildren.length > 0) {
-      this.binaryChillManager.initializePairs(
-        group.groupKey,
-        group.eventSlug,
-        group.crypto,
-        parentStates.map((p, idx) => ({
-          descriptor: p.descriptor,
-          index: idx,
-        })),
-        binaryChildren.map((child, idx) => ({ descriptor: child, index: idx })),
-      );
-    }
+    // if (binaryChildren.length > 0) {
+    //   this.binaryChillManager.initializePairs(
+    //     group.groupKey,
+    //     group.eventSlug,
+    //     group.crypto,
+    //     parentStates.map((p, idx) => ({
+    //       descriptor: p.descriptor,
+    //       index: idx,
+    //     })),
+    //     binaryChildren.map((child, idx) => ({ descriptor: child, index: idx })),
+    //   );
+    // }
 
     const length = childStates.length;
     // Pre-allocate prefix arrays (reused, not recreated)
