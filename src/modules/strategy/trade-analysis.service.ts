@@ -67,6 +67,7 @@ interface AnalysisSummary {
 
 /**
  * Missing transaction info per signal
+ * One entry per market in signal snapshot that didn't have a matching transaction
  */
 interface MissingTransaction {
   signalId: string;
@@ -74,6 +75,10 @@ interface MissingTransaction {
   marketSlug: string;
   expectedPrice: number;
   timestamp: number;
+  profitAbs: number; // From signal profitAbs
+  side: 'Buy' | 'Sell'; // Expected action
+  defaultSize: number; // Default 5
+  expectedPnl: number; // defaultSize * profitAbs
 }
 
 /**
@@ -351,13 +356,26 @@ export class TradeAnalysisService {
             pnlContribution: this.calculatePnlContribution(matchingTx, expectedPrice),
           });
         } else {
-          // Track missing transaction
+          // Track missing transaction - determine side based on strategy
+          const DEFAULT_SIZE = 5;
+          const profitAbs = Number(signal.profitAbs) || 0;
+          
+          // Determine expected side based on strategy and market type
+          let side: 'Buy' | 'Sell' = 'Buy';
+          if (signal.strategy.includes('SELL_PARENT') || signal.strategy.includes('SELL_CHILD')) {
+            side = 'Sell';
+          }
+          
           missing.push({
             signalId: signal.id,
             strategy: signal.strategy,
             marketSlug: snapshotMarket.marketSlug,
-            expectedPrice: snapshotMarket.bestAsk, // Assuming buy side
+            expectedPrice: side === 'Buy' ? snapshotMarket.bestAsk : snapshotMarket.bestBid,
             timestamp: Number(trade.timestampMs),
+            profitAbs,
+            side,
+            defaultSize: DEFAULT_SIZE,
+            expectedPnl: DEFAULT_SIZE * profitAbs,
           });
         }
       }
@@ -817,6 +835,9 @@ export class TradeAnalysisService {
     // Sheet 5: Strategy Performance
     this.addStrategySheet(workbook, analysis.summary);
 
+    // Sheet 6: Missing Transactions (signals with missing tx)
+    this.addMissingTransactionsSheet(workbook, analysis.missingTransactions);
+
     // Save to file
     const filename = `trade-analysis-${startDate.toISOString().split('T')[0]}-to-${endDate.toISOString().split('T')[0]}.xlsx`;
     const outputPath = path.join(process.cwd(), 'data', filename);
@@ -1034,6 +1055,82 @@ export class TradeAnalysisService {
       col.width = 15;
     });
     sheet.getColumn(2).width = 50;
+  }
+
+  /**
+   * Add Missing Transactions sheet
+   * Shows signals where expected transactions were not found in CSV
+   * One row per market per signal
+   */
+  private addMissingTransactionsSheet(
+    workbook: ExcelJS.Workbook,
+    missingTransactions: MissingTransaction[],
+  ): void {
+    const sheet = workbook.addWorksheet('Missing Transactions');
+
+    // Header
+    const headers = [
+      'Timestamp',
+      'Signal ID',
+      'Strategy',
+      'Market Slug',
+      'Side',
+      'Expected Price',
+      'Default Size',
+      'Profit Abs',
+      'Expected PnL',
+    ];
+
+    sheet.addRow(headers);
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFFF9933' }, // Orange
+    };
+
+    // Data rows
+    let totalExpectedPnl = 0;
+    for (const m of missingTransactions) {
+      totalExpectedPnl += m.expectedPnl;
+      
+      sheet.addRow([
+        new Date(m.timestamp).toISOString(),
+        m.signalId,
+        m.strategy,
+        m.marketSlug,
+        m.side,
+        m.expectedPrice.toFixed(4),
+        m.defaultSize,
+        m.profitAbs.toFixed(6),
+        m.expectedPnl.toFixed(4),
+      ]);
+    }
+
+    // Add summary row
+    const summaryRow = sheet.addRow([
+      '',
+      '',
+      '',
+      `TOTAL: ${missingTransactions.length} missing`,
+      '',
+      '',
+      '',
+      '',
+      totalExpectedPnl.toFixed(4),
+    ]);
+    summaryRow.font = { bold: true };
+    summaryRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFFFCCCC' }, // Light red
+    };
+
+    sheet.columns.forEach((col) => {
+      col.width = 15;
+    });
+    sheet.getColumn(2).width = 40; // Signal ID
+    sheet.getColumn(4).width = 60; // Market Slug
   }
 
   /**
