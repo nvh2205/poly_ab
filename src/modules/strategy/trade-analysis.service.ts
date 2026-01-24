@@ -58,6 +58,22 @@ interface AnalysisSummary {
   totalPnl: number;
   byStrategy: Record<string, { count: number; pnl: number }>;
   byAction: Record<string, { count: number; volume: number }>;
+  // Signal coverage tracking
+  totalSignals: number;
+  totalExpectedTxFromSignals: number;
+  totalMatchedFromSignals: number;
+  missingTxCount: number;
+}
+
+/**
+ * Missing transaction info per signal
+ */
+interface MissingTransaction {
+  signalId: string;
+  strategy: string;
+  marketSlug: string;
+  expectedPrice: number;
+  timestamp: number;
 }
 
 /**
@@ -68,6 +84,7 @@ interface AnalysisResult {
   matchedTransactions: MatchedTransaction[];
   slippageAnalysis: MatchedTransaction[];
   failedUnmatched: MatchedTransaction[];
+  missingTransactions: MissingTransaction[];
 }
 
 /**
@@ -131,7 +148,7 @@ export class TradeAnalysisService {
     this.logger.log(`Loaded ${markets.length} markets`);
 
     // 6. Match transactions with signals
-    const matchedTransactions = this.matchTransactions(
+    const matchResult = this.matchTransactions(
       filteredTransactions,
       realTrades,
       signals,
@@ -139,7 +156,11 @@ export class TradeAnalysisService {
     );
 
     // 7. Analyze and calculate summary
-    const analysis = this.analyzeDiscrepancies(matchedTransactions);
+    const analysis = this.analyzeDiscrepancies(
+      matchResult.matched,
+      matchResult.missing,
+      matchResult.signalStats,
+    );
 
     // 8. Generate Excel report
     const excelPath = await this.generateExcelReport(
@@ -256,29 +277,38 @@ export class TradeAnalysisService {
   /**
    * Match transactions with signals - NEW LOGIC
    * Flow: RealTrade → Signal → Snapshot → Find matching CSV transaction by market + price
+   * Also tracks missing transactions (expected from signal but not found in CSV)
    */
   matchTransactions(
     transactions: CsvTransaction[],
     realTrades: ArbRealTrade[],
     signals: ArbSignal[],
     markets: Market[],
-  ): MatchedTransaction[] {
+  ): { matched: MatchedTransaction[]; missing: MissingTransaction[]; signalStats: { total: number; expected: number; found: number } } {
     const signalMap = new Map(signals.map((s) => [s.id, s]));
     const marketMap = new Map(markets.map((m) => [m.question, m]));
 
     const matched: MatchedTransaction[] = [];
+    const missing: MissingTransaction[] = [];
     const usedTransactionHashes = new Set<string>();
+
+    let totalExpected = 0;
+    let totalFound = 0;
+    const processedSignals = new Set<string>();
 
     // First, process all real trades and find matching transactions
     for (const trade of realTrades) {
       const signal = signalMap.get(trade.signalId);
       if (!signal || !signal.snapshot) continue;
 
+      processedSignals.add(signal.id);
+
       const snapshot = this.parseSnapshot(signal.snapshot);
       if (!snapshot) continue;
 
       // Get all market entries from snapshot
       const snapshotMarkets = this.extractSnapshotMarkets(snapshot);
+      totalExpected += snapshotMarkets.length;
 
       // For each market in snapshot, try to find matching transaction
       for (const snapshotMarket of snapshotMarkets) {
@@ -290,6 +320,7 @@ export class TradeAnalysisService {
 
         if (matchingTx) {
           usedTransactionHashes.add(matchingTx.hash);
+          totalFound++;
           
           const market = marketMap.get(matchingTx.marketName);
           const actualPrice = matchingTx.tokenAmount > 0 
@@ -319,6 +350,15 @@ export class TradeAnalysisService {
             slippageUsdc,
             pnlContribution: this.calculatePnlContribution(matchingTx, expectedPrice),
           });
+        } else {
+          // Track missing transaction
+          missing.push({
+            signalId: signal.id,
+            strategy: signal.strategy,
+            marketSlug: snapshotMarket.marketSlug,
+            expectedPrice: snapshotMarket.bestAsk, // Assuming buy side
+            timestamp: Number(trade.timestampMs),
+          });
         }
       }
     }
@@ -343,8 +383,12 @@ export class TradeAnalysisService {
       }
     }
 
-    this.logger.log(`Matched ${matched.filter(m => m.matchStatus === 'matched').length} transactions with signals`);
-    return matched;
+    this.logger.log(`Matched ${totalFound}/${totalExpected} expected transactions from ${processedSignals.size} signals`);
+    return {
+      matched,
+      missing,
+      signalStats: { total: processedSignals.size, expected: totalExpected, found: totalFound },
+    };
   }
 
   /**
@@ -659,7 +703,11 @@ export class TradeAnalysisService {
   /**
    * Analyze discrepancies and calculate summary
    */
-  analyzeDiscrepancies(matchedTransactions: MatchedTransaction[]): AnalysisResult {
+  analyzeDiscrepancies(
+    matchedTransactions: MatchedTransaction[],
+    missingTransactions: MissingTransaction[],
+    signalStats: { total: number; expected: number; found: number },
+  ): AnalysisResult {
     const matched = matchedTransactions.filter(
       (m) => m.matchStatus === 'matched',
     );
@@ -729,10 +777,16 @@ export class TradeAnalysisService {
         totalPnl,
         byStrategy,
         byAction,
+        // Signal coverage stats
+        totalSignals: signalStats.total,
+        totalExpectedTxFromSignals: signalStats.expected,
+        totalMatchedFromSignals: signalStats.found,
+        missingTxCount: missingTransactions.length,
       },
       matchedTransactions: matched,
       slippageAnalysis,
       failedUnmatched: unmatched,
+      missingTransactions,
     };
   }
 
@@ -787,7 +841,7 @@ export class TradeAnalysisService {
     sheet.getCell('A1').value = 'Transaction Analysis Summary';
     sheet.getCell('A1').font = { bold: true, size: 16 };
 
-    // Metrics
+    // Transaction Metrics
     const metrics = [
       ['Total Transactions', summary.totalTransactions],
       ['Matched with Signals', summary.matchedWithSignals],
@@ -806,6 +860,43 @@ export class TradeAnalysisService {
       row++;
     }
 
+    // Signal Coverage Section
+    row += 2;
+    sheet.getCell(`A${row}`).value = 'Signal Coverage';
+    sheet.getCell(`A${row}`).font = { bold: true, size: 14 };
+    sheet.getCell(`A${row}`).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF99CCFF' },
+    };
+    row++;
+
+    const signalMetrics = [
+      ['Total Signals Processed', summary.totalSignals],
+      ['Expected Transactions (from Signals)', summary.totalExpectedTxFromSignals],
+      ['Matched Transactions', summary.totalMatchedFromSignals],
+      ['Missing Transactions', summary.missingTxCount],
+      ['Coverage Rate', summary.totalExpectedTxFromSignals > 0 
+        ? ((summary.totalMatchedFromSignals / summary.totalExpectedTxFromSignals) * 100).toFixed(1) + '%' 
+        : 'N/A'],
+    ];
+
+    for (const [label, value] of signalMetrics) {
+      sheet.getCell(`A${row}`).value = label;
+      sheet.getCell(`B${row}`).value = value;
+      sheet.getCell(`A${row}`).font = { bold: true };
+      
+      // Highlight missing count in red if > 0
+      if (label === 'Missing Transactions' && typeof value === 'number' && value > 0) {
+        sheet.getCell(`B${row}`).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFF9999' },
+        };
+      }
+      row++;
+    }
+
     // Action breakdown
     row += 2;
     sheet.getCell(`A${row}`).value = 'By Action';
@@ -819,7 +910,7 @@ export class TradeAnalysisService {
       row++;
     }
 
-    sheet.columns = [{ width: 25 }, { width: 20 }, { width: 15 }];
+    sheet.columns = [{ width: 35 }, { width: 25 }, { width: 15 }];
   }
 
   /**
