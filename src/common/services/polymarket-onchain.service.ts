@@ -490,7 +490,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
     results?: BatchOrderResult[];
     error?: string;
   }> {
-    const startTime = performance.now();
+
     try {
       // Validate batch size
       if (orders.length === 0) {
@@ -505,12 +505,10 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       }
 
       // Get client and cached types (types are pre-loaded at startup)
-      const loadStartTime = performance.now();
       const [client, { OrderType, Side }] = await Promise.all([
         this.getOrCreateAuthenticatedClient(config),
         this.getClobTypes(),
       ]);
-      const loadTime = performance.now() - loadStartTime;
 
       // Pre-create orderTypeMap (moved outside loop for better performance)
       const orderTypeMap: Record<string, any> = {
@@ -548,12 +546,10 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       const createEndTime = performance.now();
       this.logger.log(`⏱️ createOrder took ${(createEndTime - createStartTime).toFixed(2)}ms for ${orders.length} orders`);
 
-      console.log('batchOrdersArgs not native', batchOrdersArgs);
-
       // return;
       // Post batch orders - this is the actual network request
       const responses = await client.postOrders(batchOrdersArgs);
-      console.log('postOrders responses not native', responses);
+
       // const responses = await client.postOrders([
       //   {
       //     order: {
@@ -686,6 +682,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       // USDC has 6 decimals, shares also have 6 decimals
       const DECIMALS = 1_000_000;
 
+      const createStartTime = performance.now();
 
       const batchOrderParams = orders.map((orderParams) => {
         const priceDecimal = orderParams.price;
@@ -720,7 +717,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
           feeRateBps: (orderParams.feeRateBps || 0).toString(),
           side,
           signatureType: 2, // POLY_GNOSIS_SAFE
-          negRisk: orderParams.negRisk || true, // Default to true if not specified? 
+          negRisk: orderParams.negRisk, // Default to true if not specified? 
         };
       });
 
@@ -732,6 +729,8 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
 
       // Pass private key separately
       const signedOrders = nativeModule.signClobOrdersBatch(config.privateKey, batchOrderParams);
+      const signEndTime = performance.now();
+      this.logger.log(`⏱️ [NATIVE] signClobOrdersBatch took ${(signEndTime - createStartTime).toFixed(2)}ms for ${orders.length} orders`);
 
       // Transform to CLOB order format
       const batchOrdersArgs = signedOrders.map((signed: any, idx: number) => {
@@ -789,6 +788,9 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
           }
         }
       }
+
+      const timeEndFunction = performance.now();
+      this.logger.log(`⏱️ [NATIVE] postOrders took ${(timeEndFunction - createStartTime).toFixed(2)}ms for ${orders.length} orders`);
 
       return {
         success: true,
