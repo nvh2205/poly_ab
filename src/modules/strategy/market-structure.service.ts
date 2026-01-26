@@ -29,7 +29,7 @@ export class MarketStructureService {
   constructor(
     @InjectRepository(Market)
     private readonly marketRepository: Repository<Market>,
-  ) {}
+  ) { }
 
   /**
    * Build and cache market groups from DB.
@@ -78,7 +78,7 @@ export class MarketStructureService {
     if (groupKeys.length === 0) return 0;
 
     const removedCount = this.cache.size;
-    
+
     // Clear entire cache
     this.cache.clear();
 
@@ -226,6 +226,7 @@ export class MarketStructureService {
       label: parsed?.label,
       parsedFrom: parsed?.source,
       role: this.kindToRole(parsed?.kind || 'unknown'),
+      negRisk: market.negRisk ?? undefined,
     };
 
     const applied: string[] = [];
@@ -242,14 +243,14 @@ export class MarketStructureService {
           descriptor.parsedFrom = 'override';
           applied.push(
             rule.label ||
-              rule.matchSlug ||
-              (Array.isArray(rule.slugContains)
-                ? rule.slugContains.join(',')
-                : rule.slugContains) ||
-              (Array.isArray(rule.questionContains)
-                ? rule.questionContains.join(',')
-                : rule.questionContains) ||
-              descriptor.slug,
+            rule.matchSlug ||
+            (Array.isArray(rule.slugContains)
+              ? rule.slugContains.join(',')
+              : rule.slugContains) ||
+            (Array.isArray(rule.questionContains)
+              ? rule.questionContains.join(',')
+              : rule.questionContains) ||
+            descriptor.slug,
           );
         }
       }

@@ -479,7 +479,7 @@ export class PolymarketOnchainController {
         );
       }
 
-      const result = await this.polymarketOnchainService.placeBatchOrders(
+      const result = await this.polymarketOnchainService.placeBatchOrdersNative(
         config,
         dto.orders,
       );
@@ -506,6 +506,59 @@ export class PolymarketOnchainController {
       };
     } catch (error: any) {
       this.logger.error(`Error in placeBatchOrders: ${error.message}`);
+      throw new HttpException(
+        error.message || 'Internal server error',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * POST /polymarket-onchain/create-order-only
+   * Create orders without posting them to the exchange
+   * Saves each order to a JSON file organized by tokenID
+   */
+  @Post('create-order-only')
+  @ApiOperation({
+    summary: 'Create orders without posting (for debugging/testing)',
+    description:
+      'Creates signed orders without posting them to the exchange. Each order is saved to a JSON file at data/orders/{tokenID}.json',
+  })
+  async createOrderOnly(@Body() dto: PlaceBatchOrdersDto) {
+    try {
+      this.logger.log(
+        `Received create-order-only request for ${dto.orders.length} orders`,
+      );
+
+      const config =
+        dto.config || this.polymarketOnchainService.getDefaultConfig();
+      if (!config) {
+        throw new HttpException(
+          'Polymarket config not found',
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+
+      const result = await this.polymarketOnchainService.createOrderOnly(
+        config,
+        dto.orders,
+      );
+
+      if (!result.success) {
+        throw new HttpException(
+          result.error || 'Create order failed',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      return {
+        success: true,
+        totalOrders: dto.orders.length,
+        orders: result.orders,
+        message: `Created ${dto.orders.length} orders without posting. Each order saved to JSON file by tokenID.`,
+      };
+    } catch (error: any) {
+      this.logger.error(`Error in createOrderOnly: ${error.message}`);
       throw new HttpException(
         error.message || 'Internal server error',
         error.status || HttpStatus.INTERNAL_SERVER_ERROR,

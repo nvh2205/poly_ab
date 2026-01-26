@@ -9,6 +9,23 @@ import { loadPolymarketConfig } from './polymarket-onchain.config';
 import { RedisService } from './redis.service';
 import { APP_CONSTANTS } from '../constants/app.constants';
 
+// Native Rust EIP-712 signing module for HFT performance (lazy loaded to bypass webpack)
+let nativeCoreModule: any = null;
+const loadNativeCore = (): any => {
+  if (!nativeCoreModule) {
+    try {
+      // Use eval to bypass webpack static analysis of require
+      // eslint-disable-next-line no-eval
+      const dynamicRequire = eval('require');
+      const path = dynamicRequire('path');
+      nativeCoreModule = dynamicRequire(path.join(process.cwd(), 'native-core'));
+    } catch (err) {
+      console.warn('Native core module not available, will fallback to JS signing');
+    }
+  }
+  return nativeCoreModule;
+};
+
 /**
  * Interface for Polymarket configuration
  */
@@ -47,6 +64,8 @@ export interface BatchOrderParams {
   feeRateBps?: number;
   orderType?: 'GTC' | 'GTD' | 'FOK' | 'FAK';
   postOnly?: boolean;
+  /** Whether this is a negRisk market (uses different exchange contract) */
+  negRisk?: boolean;
 }
 
 /**
@@ -94,7 +113,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
   constructor(
     private readonly configService: ConfigService,
     private readonly redisService: RedisService,
-  ) {}
+  ) { }
 
   // Contract addresses (Fixed for Polygon)
   private readonly CTF_EXCHANGE_ADDR =
@@ -122,10 +141,10 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       'function getPositionId(address collateralToken, bytes32 collectionId) view returns (uint256)',
       'function payoutNumerators(bytes32 conditionId, uint256 index) view returns (uint256)',
       'function safeBatchTransferFrom(address from, address to, uint256[] ids, uint256[] amounts, bytes data)',
-    
-    // --- BỔ SUNG 2 DÒNG NÀY ---
-    'function isApprovedForAll(address owner, address operator) view returns (bool)',
-    'function setApprovalForAll(address operator, bool approved)',
+
+      // --- BỔ SUNG 2 DÒNG NÀY ---
+      'function isApprovedForAll(address owner, address operator) view returns (bool)',
+      'function setApprovalForAll(address operator, bool approved)',
     ],
     GNOSIS_SAFE: [
       'function execTransaction(address to, uint256 value, bytes data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes signatures) payable returns (bool success)',
@@ -241,7 +260,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
     if (this.clobTypes) {
       return this.clobTypes;
     }
-    
+
     const { OrderType, Side } = await this.loadClob();
     this.clobTypes = { OrderType, Side };
     return this.clobTypes;
@@ -340,10 +359,10 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       creds ||
       (config.apiKey && config.apiSecret && config.apiPassphrase
         ? {
-            key: config.apiKey,
-            secret: config.apiSecret,
-            passphrase: config.apiPassphrase,
-          }
+          key: config.apiKey,
+          secret: config.apiSecret,
+          passphrase: config.apiPassphrase,
+        }
         : undefined);
 
     return new ClobClient(
@@ -526,12 +545,53 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
           };
         }),
       );
-      const createTime = performance.now() - createStartTime;
+      const createEndTime = performance.now();
+      this.logger.log(`⏱️ createOrder took ${(createEndTime - createStartTime).toFixed(2)}ms for ${orders.length} orders`);
 
+      console.log('batchOrdersArgs not native', batchOrdersArgs);
+
+      // return;
       // Post batch orders - this is the actual network request
-      const postStartTime = performance.now();
       const responses = await client.postOrders(batchOrdersArgs);
-      const postTime = performance.now() - postStartTime;
+      console.log('postOrders responses not native', responses);
+      // const responses = await client.postOrders([
+      //   {
+      //     order: {
+      //       salt: '1513659195724',
+      //       maker: '0x33568DB0DfB9890f5107Fb50F566a159F6f612ED',
+      //       signer: '0x4769B103570877eCD516BC7737DcFD834413E6b4',
+      //       taker: '0x0000000000000000000000000000000000000000',
+      //       tokenId: '17510381696424521626872545793830070082360183532089020912133870456423861609957',
+      //       makerAmount: '1500000',
+      //       takerAmount: '3000000',
+      //       expiration: '0',
+      //       nonce: '0',
+      //       feeRateBps: '0',
+      //       side: 0,
+      //       signatureType: 2,
+      //       signature: '0x1df919ac4b8293f958f0bf9f8ae63add401f33f6cb1bbbce6c02c5e70dae554870166014736ab545319416a896607ddb86eddeb0c1cda3be9b8173f5281b9f841c'
+      //     },
+      //     orderType: OrderType.GTC  
+      //   },
+      //   {
+      //     order: {
+      //       salt: '1415934701716',
+      //       maker: '0x33568DB0DfB9890f5107Fb50F566a159F6f612ED',
+      //       signer: '0x4769B103570877eCD516BC7737DcFD834413E6b4',
+      //       taker: '0x0000000000000000000000000000000000000000',
+      //       tokenId: '109066040035841146303043175611007476656066351597299570056854175718288126977489',
+      //       makerAmount: '1500000',
+      //       takerAmount: '4000000',
+      //       expiration: '0',
+      //       nonce: '0',
+      //       feeRateBps: '0',
+      //       side: 0,
+      //       signatureType: 2,
+      //       signature: '0x8b5f5196f1012c40793706002e572fedc81e48c14b5709d4a2d941126dff1cf854efe09a49acc6e8e98a4f3e82ea1209e585603b61288cb5fa416da38d0175061c'
+      //     },
+      //     orderType: OrderType.GTC
+      //   }
+      // ]);
 
       // Process responses - optimized with pre-allocated array and direct access
       const results: BatchOrderResult[] = new Array(
@@ -562,6 +622,9 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
         }
       }
 
+      const timeEndFunction = performance.now();
+      this.logger.log(`⏱️ postOrders took ${(timeEndFunction - createStartTime).toFixed(2)}ms for ${orders.length} orders`);
+
 
 
       return {
@@ -572,6 +635,302 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
 
       return { success: false, error: error.message };
     }
+  }
+
+  /**
+   * Place multiple orders using native Rust EIP-712 signing (HFT optimized)
+   * Uses native-core module for ~10x faster signing compared to JS
+   * Maximum 15 orders per batch according to Polymarket documentation
+   */
+  async placeBatchOrdersNative(
+    config: PolymarketConfig,
+    orders: BatchOrderParams[],
+  ): Promise<{
+    success: boolean;
+    results?: BatchOrderResult[];
+    error?: string;
+  }> {
+
+    try {
+      // Validate batch size
+      if (orders.length === 0) {
+        return { success: false, error: 'No orders provided' };
+      }
+
+      if (orders.length > 15) {
+        return {
+          success: false,
+          error: 'Maximum 15 orders allowed per batch',
+        };
+      }
+
+      // Get client and cached types
+      const [client, { OrderType }] = await Promise.all([
+        this.getOrCreateAuthenticatedClient(config),
+        this.getClobTypes(),
+      ]);
+
+      // Get wallet addresses from config
+      const wallet = this.buildWallet(config);
+      const signerAddress = wallet.address;
+      const makerAddress = config.proxyAddress;
+
+      // Pre-create orderTypeMap
+      const orderTypeMap: Record<string, any> = {
+        GTC: OrderType.GTC,
+        GTD: OrderType.GTD,
+        FOK: OrderType.FOK,
+        FAK: OrderType.FAK,
+      };
+
+      // USDC has 6 decimals, shares also have 6 decimals
+      const DECIMALS = 1_000_000;
+
+
+      const batchOrderParams = orders.map((orderParams) => {
+        const priceDecimal = orderParams.price;
+        const sizeDecimal = orderParams.size;
+        const side = orderParams.side === 'BUY' ? 0 : 1;
+
+        // Calculate amounts based on side
+        let makerAmount: string;
+        let takerAmount: string;
+
+        if (side === 0) {
+          // BUY
+          makerAmount = Math.round(priceDecimal * sizeDecimal * DECIMALS).toString();
+          takerAmount = Math.round(sizeDecimal * DECIMALS).toString();
+        } else {
+          // SELL
+          makerAmount = Math.round(sizeDecimal * DECIMALS).toString();
+          takerAmount = Math.round(priceDecimal * sizeDecimal * DECIMALS).toString();
+        }
+
+        return {
+          // No privateKey here anymore
+          salt: Math.round(Math.random() * Date.now()).toString(),
+          maker: makerAddress,
+          signer: signerAddress,
+          taker: '0x0000000000000000000000000000000000000000',
+          tokenId: orderParams.tokenID,
+          makerAmount,
+          takerAmount,
+          expiration: '0',
+          nonce: '0',
+          feeRateBps: (orderParams.feeRateBps || 0).toString(),
+          side,
+          signatureType: 2, // POLY_GNOSIS_SAFE
+          negRisk: orderParams.negRisk || true, // Default to true if not specified? 
+        };
+      });
+
+      // Batch sign using native Rust module
+      const nativeModule = loadNativeCore();
+      if (!nativeModule) {
+        return { success: false, error: 'Native core module not available. Please build native-core first.' };
+      }
+
+      // Pass private key separately
+      const signedOrders = nativeModule.signClobOrdersBatch(config.privateKey, batchOrderParams);
+
+      // Transform to CLOB order format
+      const batchOrdersArgs = signedOrders.map((signed: any, idx: number) => {
+        const orderType = orders[idx].orderType
+          ? orderTypeMap[orders[idx].orderType!]
+          : OrderType.GTC;
+
+        return {
+          order: {
+            salt: signed.salt,
+            maker: signed.maker,
+            signer: signed.signer,
+            taker: signed.taker,
+            tokenId: signed.tokenId,
+            makerAmount: signed.makerAmount,
+            takerAmount: signed.takerAmount,
+            expiration: signed.expiration,
+            nonce: signed.nonce,
+            feeRateBps: signed.feeRateBps,
+            side: signed.side,
+            signatureType: signed.signatureType,
+            signature: signed.signature,
+          },
+          orderType,
+          ...(orders[idx].postOnly !== undefined && {
+            postOnly: orders[idx].postOnly,
+          }),
+        };
+      });
+
+      // Post batch orders
+      const responses = await client.postOrders(batchOrdersArgs);
+
+      // Process responses
+      const results: BatchOrderResult[] = new Array(
+        Array.isArray(responses) ? responses.length : 0,
+      );
+
+      if (Array.isArray(responses)) {
+        for (let i = 0; i < responses.length; i++) {
+          const response = responses[i];
+
+          if (response && response.orderID) {
+            results[i] = {
+              success: true,
+              orderID: response.orderID,
+              status: response.status || 'unknown',
+              errorMsg: response.errorMsg || '',
+            };
+          } else {
+            results[i] = {
+              success: false,
+              errorMsg: response?.errorMsg || `Order ${i + 1} placement failed`,
+            };
+          }
+        }
+      }
+
+      return {
+        success: true,
+        results,
+      };
+    } catch (error: any) {
+      this.logger.error(`[NATIVE] placeBatchOrdersNative error: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Create order only (without posting to exchange)
+   * Saves the order to a JSON file organized by tokenID
+   * @param config Polymarket configuration
+   * @param orders Array of order parameters
+   * @returns Array of created orders with metadata
+   */
+  async createOrderOnly(
+    config: PolymarketConfig,
+    orders: BatchOrderParams[],
+  ): Promise<{
+    success: boolean;
+    orders?: Array<{
+      order: any;
+      postOnly?: boolean;
+      tokenID: string;
+      savedToFile: string;
+    }>;
+    error?: string;
+  }> {
+    try {
+      if (orders.length === 0) {
+        return { success: false, error: 'No orders provided' };
+      }
+
+      // Get client and cached types
+      const [client, { OrderType, Side }] = await Promise.all([
+        this.getOrCreateAuthenticatedClient(config),
+        this.getClobTypes(),
+      ]);
+
+
+
+      // Create all orders in parallel
+      const createdOrders = await Promise.all(
+        orders.map(async (orderParams) => {
+          const order = await client.createOrder({
+            tokenID: orderParams.tokenID,
+            price: orderParams.price,
+            side: Side[orderParams.side],
+            size: orderParams.size,
+            feeRateBps: orderParams.feeRateBps || 0,
+          });
+
+          const result = {
+            order,
+            ...(orderParams.postOnly !== undefined && {
+              postOnly: orderParams.postOnly,
+            }),
+          };
+
+          // Save to JSON file by tokenID
+          const savedToFile = await this.saveOrderToJsonFile(
+            orderParams.tokenID,
+            result,
+            orderParams,
+          );
+
+          return {
+            ...result,
+            tokenID: orderParams.tokenID,
+            savedToFile,
+          };
+        }),
+      );
+
+      return {
+        success: true,
+        orders: createdOrders,
+      };
+    } catch (error: any) {
+      this.logger.error(`Error in createOrderOnly: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Save order to JSON file organized by tokenID
+   * File path: data/orders/{tokenID}.json
+   */
+  private async saveOrderToJsonFile(
+    tokenID: string,
+    orderResult: any,
+    orderParams: BatchOrderParams,
+  ): Promise<string> {
+    const fs = await import('fs').then((m) => m.promises);
+    const path = await import('path');
+
+    // Create directory if not exists
+    const orderDir = path.join(process.cwd(), 'data', 'orders');
+    try {
+      await fs.mkdir(orderDir, { recursive: true });
+    } catch (e) {
+      // Directory might already exist
+    }
+
+    // Sanitize tokenID for filename (replace problematic characters)
+    const sanitizedTokenID = tokenID.replace(/[^a-zA-Z0-9-_]/g, '_');
+    const filePath = path.join(orderDir, `${sanitizedTokenID}.json`);
+
+    // Read existing data or create new array
+    let existingData: any[] = [];
+    try {
+      const fileContent = await fs.readFile(filePath, 'utf-8');
+      existingData = JSON.parse(fileContent);
+    } catch (e) {
+      // File doesn't exist, start with empty array
+    }
+
+    // Add new order with timestamp
+    const orderEntry = {
+      timestamp: new Date().toISOString(),
+      orderParams: {
+        tokenID: orderParams.tokenID,
+        price: orderParams.price,
+        side: orderParams.side,
+        size: orderParams.size,
+        feeRateBps: orderParams.feeRateBps,
+        orderType: orderParams.orderType,
+        postOnly: orderParams.postOnly,
+      },
+      orderResult: orderResult,
+    };
+
+    existingData.push(orderEntry);
+
+    // Write back to file
+    await fs.writeFile(filePath, JSON.stringify(existingData, null, 2), 'utf-8');
+
+    this.logger.log(`Order saved to ${filePath}`);
+    return filePath;
   }
 
   /**

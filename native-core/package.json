@@ -1,0 +1,24 @@
+{
+  "name": "native-core",
+  "version": "0.1.0",
+  "description": "High-performance EIP-712 signing for Polymarket",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "name": "native-core",
+    "triples": {
+      "defaults": true,
+      "additional": []
+    }
+  },
+  "scripts": {
+    "artifacts": "napi artifacts",
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "prepublishOnly": "napi prepublish -t npm",
+    "test": "node test.js"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.0"
+  }
+}

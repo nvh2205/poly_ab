@@ -19,6 +19,7 @@ import {
 } from '../../common/services/polymarket-onchain.service';
 import { loadPolymarketConfig } from '../../common/services/polymarket-onchain.config';
 import { TelegramService } from '../../common/services/telegram.service';
+import { MintQueueService } from './services/mint-queue.service';
 
 interface RealTradeResult {
   signalId: string;
@@ -42,6 +43,8 @@ interface OrderCandidate {
   price: number;
   side: 'BUY' | 'SELL';
   orderbookSize?: number;
+  /** Whether this is a negRisk market (for native signing) */
+  negRisk?: boolean;
 }
 
 // ============================================
@@ -114,6 +117,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     private readonly arbitrageEngineService: ArbitrageEngineService,
     private readonly polymarketOnchainService: PolymarketOnchainService,
     private readonly telegramService: TelegramService,
+    private readonly mintQueueService: MintQueueService,
   ) { }
 
   async onModuleInit(): Promise<void> {
@@ -247,7 +251,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   private generateGroupKeys(): string[] {
     const now = new Date();
     const currentHourUTC = now.getUTCHours();
-    
+
     // If current time is >= 17:00 UTC, use next day
     let expirationDate: Date;
     if (currentHourUTC >= 17) {
@@ -298,7 +302,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
 
       // === UPDATE: Mark opportunity execution timestamp ===
       this.lastOpportunityExecutedAt = Date.now();
-      
+
       // === LOCK: Mark as submitting order ===
       this.isSubmittingOrder = true;
 
@@ -309,7 +313,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
 
       // === FIRE & FORGET: Place orders WITHOUT awaiting ===
       this.polymarketOnchainService
-        .placeBatchOrders(this.config, batchOrders)
+        .placeBatchOrdersNative(this.config, batchOrders)
         .then((result) => {
           const latencyMs = Date.now() - tradeStartTime;
 
@@ -357,10 +361,10 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
 
             // Calculate actual total cost based on size (already multiplied by price in candidates)
             const actualTotalCost = this.calculateActualCost(batchOrders, size);
-            
+
             // Calculate actual PnL in USDC (size * profit per unit)
             const actualPnlUsdc = size * opportunity.profitAbs;
-            
+
             // Recalculate PnL percentage based on actual cost
             const actualPnlPercent = actualTotalCost > 0 ? (actualPnlUsdc / actualTotalCost) * 100 : 0;
 
@@ -406,6 +410,12 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
               result.results,
               this.config,
               opportunity.groupKey,
+            );
+
+            // Queue SELL orders for minting replenishment (fire & forget)
+            this.queueMintForSellSignals(
+              batchOrders,
+              result.results,
             );
           } else {
             // === ROLLBACK: Add back reserved amount on failure ===
@@ -543,8 +553,8 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
 
     // Check PnL threshold (synchronous)
     if (pnlPercent < this.minPnlThresholdPercent) {
-      console.log('pnlPercent: ', pnlPercent, ' < ', this.minPnlThresholdPercent, '%');
-      console.log("---SKIP OPPORTUNITY---");
+      this.logger.debug('pnlPercent: ', pnlPercent, ' < ', this.minPnlThresholdPercent, '%');
+      this.logger.debug("---SKIP OPPORTUNITY---");
       return { shouldSkip: true };
     }
 
@@ -555,7 +565,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     }
 
     const size = this.calculateFillSizeSync(candidates, opportunity.groupKey);
-    
+
     // Validate size: must be finite, positive, and >= 5 (Polymarket minimum)
     if (!Number.isFinite(size) || size < 5) {
       if (size > 0 && size < 5) {
@@ -646,7 +656,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     const orders = candidates.map((candidate) => {
       // Apply slippage to price if enabled
       const slippageAdjustedPrice = this.applySlippage(candidate.price, candidate.side);
-      
+
       return {
         tokenID: candidate.tokenID,
         price: slippageAdjustedPrice,
@@ -654,27 +664,28 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
         side: candidate.side,
         feeRateBps: 0,
         orderType: 'GTC' as const,
+        negRisk: candidate.negRisk,
       };
     });
 
     // Adjust prices to meet minimum order value ($1) for test mode
-    const adjustedOrders = this.enforceMinOrderValue 
+    const adjustedOrders = this.enforceMinOrderValue
       ? orders.map((order) => {
-          const orderValue = order.size * order.price;
-          
-          if (orderValue < MIN_ORDER_VALUE && order.side === 'BUY') {
-            const adjustedPrice = MIN_ORDER_VALUE / order.size;
-            // Cap at MAX_PRICE for probability markets (can't be >= 1.0)
-            const finalPrice = Math.min(adjustedPrice, MAX_PRICE);
-            
-            return {
-              ...order,
-              price: finalPrice,
-            };
-          }
-          
-          return order;
-        })
+        const orderValue = order.size * order.price;
+
+        if (orderValue < MIN_ORDER_VALUE && order.side === 'BUY') {
+          const adjustedPrice = MIN_ORDER_VALUE / order.size;
+          // Cap at MAX_PRICE for probability markets (can't be >= 1.0)
+          const finalPrice = Math.min(adjustedPrice, MAX_PRICE);
+
+          return {
+            ...order,
+            price: finalPrice,
+          };
+        }
+
+        return order;
+      })
       : orders;
 
     return adjustedOrders;
@@ -704,12 +715,12 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
           ? leg.orderbookSize
           : Number.POSITIVE_INFINITY;
         const legSize = Math.min(sizeFromCash, bookCap);
-        
+
         // Early return if any leg has 0 size
         if (legSize <= 0) {
           return 0;
         }
-        
+
         sizeCandidates.push(legSize);
       }
     }
@@ -723,12 +734,12 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
           ? leg.orderbookSize
           : Number.POSITIVE_INFINITY;
         const legSize = Math.min(mintedAvailable, bookCap);
-        
+
         // Early return if any leg has 0 size
         if (legSize <= 0) {
           return 0;
         }
-        
+
         sizeCandidates.push(legSize);
       }
     }
@@ -815,6 +826,40 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     }
 
     return map;
+  }
+
+  /**
+   * Queue SELL signals for minting replenishment
+   * Simply sends assetId (tokenID) to queue for each successful SELL order
+   * Processor will query database by assetId to get market details
+   */
+  private queueMintForSellSignals(
+    orders: BatchOrderParams[],
+    results: BatchOrderResult[] | undefined,
+  ): void {
+    if (!results || orders.length === 0) {
+      return;
+    }
+
+    const queuedAssets = new Set<string>();
+
+    results.forEach((res, idx) => {
+      const order = orders[idx];
+
+      // Only process successful SELL orders
+      if (!res?.success || order?.side !== 'SELL') {
+        return;
+      }
+
+      // Skip duplicates
+      if (queuedAssets.has(order.tokenID)) {
+        return;
+      }
+      queuedAssets.add(order.tokenID);
+
+      // Queue for minting (fire & forget) - send assetId directly
+      this.mintQueueService.addToQueue(order.tokenID, this.defaultSize).catch(() => { });
+    });
   }
 
   /**
@@ -1083,6 +1128,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
           price: opportunity.parent.bestBid,
           side: 'SELL',
           orderbookSize: opportunity.parent.bestBidSize,
+          negRisk: opportunity.parent.descriptor.negRisk,
         });
       }
 
@@ -1093,6 +1139,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
             price: child.bestAsk,
             side: 'BUY',
             orderbookSize: child.bestAskSize,
+            negRisk: child.descriptor.negRisk,
           });
         }
       }
@@ -1103,6 +1150,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
           price: opportunity.parentUpper.bestAsk,
           side: 'BUY',
           orderbookSize: opportunity.parentUpper.bestAskSize,
+          negRisk: opportunity.parentUpper.descriptor.negRisk,
         });
       }
     } else if (strategy === 'BUY_PARENT_SELL_CHILDREN') {
@@ -1112,6 +1160,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
           price: opportunity.parent.bestAsk,
           side: 'BUY',
           orderbookSize: opportunity.parent.bestAskSize,
+          negRisk: opportunity.parent.descriptor.negRisk,
         });
       }
 
@@ -1122,6 +1171,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
             price: child.bestBid,
             side: 'SELL',
             orderbookSize: child.bestBidSize,
+            negRisk: child.descriptor.negRisk,
           });
         }
       }
@@ -1132,6 +1182,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
           price: opportunity.parentUpper.bestBid,
           side: 'SELL',
           orderbookSize: opportunity.parentUpper.bestBidSize,
+          negRisk: opportunity.parentUpper.descriptor.negRisk,
         });
       }
     } else if (
@@ -1144,6 +1195,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
           price: opportunity.parent.bestAsk,
           side: 'BUY',
           orderbookSize: opportunity.parent.bestAskSize,
+          negRisk: opportunity.parent.descriptor.negRisk,
         });
       }
 
@@ -1153,6 +1205,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
           price: opportunity.parentUpper.bestAsk,
           side: 'BUY',
           orderbookSize: opportunity.parentUpper.bestAskSize,
+          negRisk: opportunity.parentUpper.descriptor.negRisk,
         });
       }
 
@@ -1163,10 +1216,11 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
             price: child.bestAsk,
             side: 'BUY',
             orderbookSize: child.bestAskSize,
+            negRisk: child.descriptor.negRisk,
           });
         }
       }
-    } 
+    }
     // TEMPORARILY DISABLED: POLYMARKET_TRIANGLE_SELL strategy
     // else if (strategy === 'POLYMARKET_TRIANGLE_SELL') {
     //   if (opportunity.parent.assetId && opportunity.parent.bestBid) {
@@ -1484,7 +1538,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     try {
       // Get or create signal
       const signal = await this.saveSignal(opportunity);
-      
+
       // Update trade result with real signal ID
       tradeResult.signalId = signal.id;
 
@@ -1626,8 +1680,8 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
         localUsdcBalance: this.localUsdcBalance,
         cachedUsdcBalance: this.cachedUsdcBalance,
         lastOpportunityExecutedAt: this.lastOpportunityExecutedAt,
-        timeSinceLastOpportunity: this.lastOpportunityExecutedAt > 0 
-          ? now - this.lastOpportunityExecutedAt 
+        timeSinceLastOpportunity: this.lastOpportunityExecutedAt > 0
+          ? now - this.lastOpportunityExecutedAt
           : 0,
       },
     };
