@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { BullModule } from '@nestjs/bull';
 import { Market } from '../../database/entities/market.entity';
 import { Event } from '../../database/entities/event.entity';
 import { ArbSignal } from '../../database/entities/arb-signal.entity';
@@ -16,6 +17,8 @@ import { StrategyController } from './strategy.controller';
 import { RetentionCleanupService } from './retention-cleanup.service';
 import { PolymarketOnchainModule } from '../../common/services/polymarket-onchain.module';
 import { TelegramModule } from '../../common/services/telegram.module';
+import { MintQueueService, MINT_QUEUE_NAME } from './services/mint-queue.service';
+import { MintQueueProcessor } from './services/mint-queue.processor';
 
 @Module({
   imports: [
@@ -27,6 +30,19 @@ import { TelegramModule } from '../../common/services/telegram.module';
       ArbRealTrade,
       // SellStatistics, // DEPRECATED: No longer used
     ]),
+    // Register Bull Queue for minting
+    BullModule.registerQueue({
+      name: MINT_QUEUE_NAME,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 5000,
+        },
+        removeOnComplete: 100,
+        removeOnFail: 50,
+      },
+    }),
     IngestionModule,
     PolymarketOnchainModule,
     TelegramModule,
@@ -39,6 +55,8 @@ import { TelegramModule } from '../../common/services/telegram.module';
     RealExecutionService,
     TradeAnalysisService,
     RetentionCleanupService,
+    MintQueueService,
+    MintQueueProcessor,
   ],
   exports: [
     MarketStructureService,
@@ -46,6 +64,7 @@ import { TelegramModule } from '../../common/services/telegram.module';
     PaperExecutionService,
     RealExecutionService,
     TradeAnalysisService,
+    MintQueueService,
   ],
 })
-export class StrategyModule {}
+export class StrategyModule { }

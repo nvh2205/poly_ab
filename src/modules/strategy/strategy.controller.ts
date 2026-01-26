@@ -20,6 +20,7 @@ import { RealExecutionService } from './real-execution.service';
 import { MarketStructureService } from './market-structure.service';
 import { RetentionCleanupService } from './retention-cleanup.service';
 import { TradeAnalysisService } from './trade-analysis.service';
+import { MintQueueService } from './services/mint-queue.service';
 
 @Controller('strategy')
 export class StrategyController {
@@ -35,7 +36,8 @@ export class StrategyController {
     private readonly marketStructureService: MarketStructureService,
     private readonly retentionCleanupService: RetentionCleanupService,
     private readonly tradeAnalysisService: TradeAnalysisService,
-  ) {}
+    private readonly mintQueueService: MintQueueService,
+  ) { }
 
   /**
    * GET /strategy/stats
@@ -421,6 +423,159 @@ export class StrategyController {
       throw error;
     }
   }
+
+  // ============================================
+  // Mint Queue Endpoints
+  // ============================================
+
+  /**
+   * GET /strategy/mint-queue/status
+   * Get current mint queue status and statistics
+   */
+  @Get('mint-queue/status')
+  async getMintQueueStatus() {
+    try {
+      return await this.mintQueueService.getStats();
+    } catch (error) {
+      this.logger.error(
+        `Failed to get mint queue status: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * GET /strategy/mint-queue/waiting
+   * Get all waiting jobs in the mint queue
+   */
+  @Get('mint-queue/waiting')
+  async getMintQueueWaiting() {
+    try {
+      const jobs = await this.mintQueueService.getWaitingJobs();
+      return {
+        count: jobs.length,
+        jobs,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to get waiting jobs: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * GET /strategy/mint-queue/failed
+   * Get all failed jobs in the mint queue
+   */
+  @Get('mint-queue/failed')
+  async getMintQueueFailed() {
+    try {
+      const jobs = await this.mintQueueService.getFailedJobs();
+      return {
+        count: jobs.length,
+        jobs,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to get failed jobs: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * POST /strategy/mint-queue/clear
+   * Clear all waiting jobs from the mint queue
+   */
+  @Post('mint-queue/clear')
+  async clearMintQueue() {
+    try {
+      this.logger.log('Mint queue clear requested via API');
+      await this.mintQueueService.clearQueue();
+      return {
+        success: true,
+        message: 'Mint queue cleared',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to clear mint queue: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * POST /strategy/mint-queue/pause
+   * Pause the mint queue processing
+   */
+  @Post('mint-queue/pause')
+  async pauseMintQueue() {
+    try {
+      this.logger.log('Mint queue pause requested via API');
+      await this.mintQueueService.pauseQueue();
+      return {
+        success: true,
+        message: 'Mint queue paused',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to pause mint queue: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * POST /strategy/mint-queue/resume
+   * Resume the mint queue processing
+   */
+  @Post('mint-queue/resume')
+  async resumeMintQueue() {
+    try {
+      this.logger.log('Mint queue resume requested via API');
+      await this.mintQueueService.resumeQueue();
+      return {
+        success: true,
+        message: 'Mint queue resumed',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to resume mint queue: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * POST /strategy/mint-queue/retry-failed
+   * Retry all failed jobs in the mint queue
+   */
+  @Post('mint-queue/retry-failed')
+  async retryFailedMintJobs() {
+    try {
+      this.logger.log('Mint queue retry-failed requested via API');
+      const retried = await this.mintQueueService.retryAllFailed();
+      return {
+        success: true,
+        message: `Retried ${retried} failed jobs`,
+        retriedCount: retried,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to retry failed jobs: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
 
   /**
    * GET /strategy/analyze-transactions

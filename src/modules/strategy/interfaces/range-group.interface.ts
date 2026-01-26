@@ -18,6 +18,8 @@ export interface MarketRangeDescriptor {
   label?: string;
   parsedFrom?: 'question' | 'slug' | 'override';
   role: 'parent' | 'child' | 'unknown';
+  /** Whether this is a negRisk market (uses different exchange contract) */
+  negRisk?: boolean;
 }
 
 export interface RangeGroup {

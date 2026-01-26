@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
+import { BullModule } from '@nestjs/bull';
 import { AppController } from './app.controller';
 import { DatabaseModule } from './database/database.module';
 import { MarketModule } from './modules/market/market.module';
@@ -26,6 +27,21 @@ import { StrategyModule } from './modules/strategy/strategy.module';
       envFilePath: '.env',
     }),
     ScheduleModule.forRoot(),
+    // Bull Queue configuration (uses same Redis as RedisModule)
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        redis: {
+          host: configService.get('REDIS_HOST', 'localhost'),
+          port: configService.get<number>('REDIS_PORT', 6379),
+        },
+        defaultJobOptions: {
+          removeOnComplete: 100,
+          removeOnFail: 50,
+        },
+      }),
+      inject: [ConfigService],
+    }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
@@ -62,4 +78,5 @@ import { StrategyModule } from './modules/strategy/strategy.module';
   ],
   controllers: [AppController],
 })
-export class AppModule {}
+export class AppModule { }
+

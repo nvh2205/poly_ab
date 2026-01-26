@@ -103,9 +103,18 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
   private readonly opportunity$ = new Subject<ArbOpportunity>();
   private readonly binaryChillManager: BinaryChillManager; // Tách riêng binary chill
   private topOfBookSub?: Subscription;
-  
+
   // Cache for last known prices/sizes for dirty checking
-  private readonly lastPriceCache = new Map<string, { bid: number | null; ask: number | null; bidSize?: number; askSize?: number }>();
+  private readonly lastPriceCache = new Map<
+    string,
+    {
+      bid: number | null;
+      ask: number | null;
+      bidSize?: number;
+      askSize?: number;
+      timestampMs?: number;
+    }
+  >();
 
   private readonly minProfitBps = this.numFromEnv('ARB_MIN_PROFIT_BPS', 5);
   private readonly minProfitAbs = this.numFromEnv('ARB_MIN_PROFIT_ABS', 0);
@@ -498,7 +507,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
         const lowerYesExisting = state.triangleLookupByAsset.get(lowerYesToken) || [];
         lowerYesExisting.push(triangleIndex);
         state.triangleLookupByAsset.set(lowerYesToken, lowerYesExisting);
-        
+
         const upperNoExisting = state.triangleLookupByAsset.get(upperNoToken) || [];
         upperNoExisting.push(triangleIndex);
         state.triangleLookupByAsset.set(upperNoToken, upperNoExisting);
@@ -576,20 +585,23 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     if (cacheKey) {
       const cached = this.lastPriceCache.get(cacheKey);
       if (cached) {
-        const priceUnchanged = 
-          cached.bid === update.bestBid && 
-          cached.ask === update.bestAsk;
-        
-        // Check size change threshold (< 1% is considered insignificant)
-        const sizeUnchanged = 
-          update.bestBidSize === undefined || 
-          update.bestAskSize === undefined ||
-          (cached.bidSize !== undefined && 
-           cached.askSize !== undefined &&
-           Math.abs((update.bestBidSize - cached.bidSize) / cached.bidSize) < SIZE_CHANGE_THRESHOLD &&
-           Math.abs((update.bestAskSize - cached.askSize) / cached.askSize) < SIZE_CHANGE_THRESHOLD);
-        
-        if (priceUnchanged && sizeUnchanged) {
+        // Validation: Verify timestamp strictly increases
+        if (
+          cached.timestampMs &&
+          update.timestampMs &&
+          update.timestampMs <= cached.timestampMs
+        ) {
+          return;
+        }
+
+        const priceUnchanged =
+          cached.bid === update.bestBid && cached.ask === update.bestAsk;
+
+        if (priceUnchanged) {
+          // Update timestamp to filter out older messages even if price didn't change
+          if (update.timestampMs) {
+            cached.timestampMs = update.timestampMs;
+          }
           // Skip update - no meaningful change
           return;
         }
@@ -598,8 +610,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       this.lastPriceCache.set(cacheKey, {
         bid: update.bestBid,
         ask: update.bestAsk,
-        bidSize: update.bestBidSize,
-        askSize: update.bestAskSize,
+        timestampMs: update.timestampMs,
       });
     }
 
@@ -642,7 +653,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
   private scanAffectedParents(state: GroupState, childIndex: number): void {
     const affectedParents = state.childIndexToParentIndices.get(childIndex);
     if (!affectedParents || affectedParents.length === 0) return;
-    
+
     for (const parentIdx of affectedParents) {
       this.evaluateParentAllRanges(state, parentIdx);
     }
@@ -1229,7 +1240,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     opportunity: ArbOpportunity;
   } | null {
     const parentUpperBestAsk = this.toFinite(parentUpper.bestAsk);
-    
+
     // Phase 1: Quick profit calculation (no allocation)
     const profitResult = this.calcUnbundlingProfitOnly(
       state,
@@ -1238,7 +1249,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       startIndex,
       endIndex,
     );
-    
+
     if (!profitResult) return null;
 
     // Phase 2: Build full opportunity (only after passing profit check)
@@ -1309,7 +1320,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     opportunity: ArbOpportunity;
   } | null {
     const parentUpperBestBid = this.toFinite(parentUpper.bestBid);
-    
+
     // Phase 1: Quick profit calculation (no allocation)
     const profitResult = this.calcBundlingProfitOnly(
       state,
@@ -1318,7 +1329,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       startIndex,
       endIndex,
     );
-    
+
     if (!profitResult) return null;
 
     // Phase 2: Build full opportunity (only after passing profit check)
@@ -1410,15 +1421,15 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       parent: { ...parent, coverage: parent.coverage },
       parentUpper: parentUpper
         ? {
-            descriptor: parentUpper.descriptor,
-            bestBid: parentUpper.bestBid,
-            bestAsk: parentUpper.bestAsk,
-            bestBidSize: parentUpper.bestBidSize,
-            bestAskSize: parentUpper.bestAskSize,
-            assetId: parentUpper.assetId,
-            marketSlug: parentUpper.marketSlug,
-            timestampMs: parentUpper.timestampMs,
-          }
+          descriptor: parentUpper.descriptor,
+          bestBid: parentUpper.bestBid,
+          bestAsk: parentUpper.bestAsk,
+          bestBidSize: parentUpper.bestBidSize,
+          bestAskSize: parentUpper.bestAskSize,
+          assetId: parentUpper.assetId,
+          marketSlug: parentUpper.marketSlug,
+          timestampMs: parentUpper.timestampMs,
+        }
         : undefined,
       children: children.map((child, idx) => ({
         ...child,
@@ -1520,13 +1531,13 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
 
     const updatedParent = parentTokenSnapshot
       ? {
-          ...opportunity.parent,
-          bestBid: parentTokenSnapshot.bestBid ?? opportunity.parent.bestBid,
-          bestAsk: parentTokenSnapshot.bestAsk ?? opportunity.parent.bestAsk,
-          bestBidSize: parentTokenSnapshot.bestBidSize ?? opportunity.parent.bestBidSize,
-          bestAskSize: parentTokenSnapshot.bestAskSize ?? opportunity.parent.bestAskSize,
-          timestampMs: parentTokenSnapshot.timestampMs ?? opportunity.parent.timestampMs,
-        }
+        ...opportunity.parent,
+        bestBid: parentTokenSnapshot.bestBid ?? opportunity.parent.bestBid,
+        bestAsk: parentTokenSnapshot.bestAsk ?? opportunity.parent.bestAsk,
+        bestBidSize: parentTokenSnapshot.bestBidSize ?? opportunity.parent.bestBidSize,
+        bestAskSize: parentTokenSnapshot.bestAskSize ?? opportunity.parent.bestAskSize,
+        timestampMs: parentTokenSnapshot.timestampMs ?? opportunity.parent.timestampMs,
+      }
       : opportunity.parent;
 
     // Update parentUpper prices and sizes from allTokenIndex
@@ -1537,16 +1548,16 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
     const updatedParentUpper = opportunity.parentUpper
       ? parentUpperTokenSnapshot
         ? {
-            ...opportunity.parentUpper,
-            bestBid: parentUpperTokenSnapshot.bestBid ?? opportunity.parentUpper.bestBid,
-            bestAsk: parentUpperTokenSnapshot.bestAsk ?? opportunity.parentUpper.bestAsk,
-            bestBidSize:
-              parentUpperTokenSnapshot.bestBidSize ?? opportunity.parentUpper.bestBidSize,
-            bestAskSize:
-              parentUpperTokenSnapshot.bestAskSize ?? opportunity.parentUpper.bestAskSize,
-            timestampMs:
-              parentUpperTokenSnapshot.timestampMs ?? opportunity.parentUpper.timestampMs,
-          }
+          ...opportunity.parentUpper,
+          bestBid: parentUpperTokenSnapshot.bestBid ?? opportunity.parentUpper.bestBid,
+          bestAsk: parentUpperTokenSnapshot.bestAsk ?? opportunity.parentUpper.bestAsk,
+          bestBidSize:
+            parentUpperTokenSnapshot.bestBidSize ?? opportunity.parentUpper.bestBidSize,
+          bestAskSize:
+            parentUpperTokenSnapshot.bestAskSize ?? opportunity.parentUpper.bestAskSize,
+          timestampMs:
+            parentUpperTokenSnapshot.timestampMs ?? opportunity.parentUpper.timestampMs,
+        }
         : opportunity.parentUpper
       : undefined;
 
@@ -1558,13 +1569,13 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
 
       return childTokenSnapshot
         ? {
-            ...child,
-            bestBid: childTokenSnapshot.bestBid ?? child.bestBid,
-            bestAsk: childTokenSnapshot.bestAsk ?? child.bestAsk,
-            bestBidSize: childTokenSnapshot.bestBidSize ?? child.bestBidSize,
-            bestAskSize: childTokenSnapshot.bestAskSize ?? child.bestAskSize,
-            timestampMs: childTokenSnapshot.timestampMs ?? child.timestampMs,
-          }
+          ...child,
+          bestBid: childTokenSnapshot.bestBid ?? child.bestBid,
+          bestAsk: childTokenSnapshot.bestAsk ?? child.bestAsk,
+          bestBidSize: childTokenSnapshot.bestBidSize ?? child.bestBidSize,
+          bestAskSize: childTokenSnapshot.bestAskSize ?? child.bestAskSize,
+          timestampMs: childTokenSnapshot.timestampMs ?? child.timestampMs,
+        }
         : child;
     });
 

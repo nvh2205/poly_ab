@@ -236,25 +236,25 @@ export class SocketManagerService
         } else if (msg.event_type === 'price_change') {
           // Handle price_change event - only update best_bid and best_ask
           // Do NOT include size/side as they represent user orders on the orderbook
-          // if (msg.price_changes && Array.isArray(msg.price_changes)) {
-          //   let timestamp: number;
-          //   if (typeof msg.timestamp === 'string') {
-          //     timestamp = parseInt(msg.timestamp, 10);
-          //   } else {
-          //     timestamp = msg.timestamp || Date.now();
-          //   }
-          //   for (const change of msg.price_changes) {
-          //     const priceChangeData = {
-          //       market: msg.market || '',
-          //       asset_id: change.asset_id,
-          //       timestamp: timestamp,
-          //       best_bid: parseFloat(change.best_bid),
-          //       best_ask: parseFloat(change.best_ask),
-          //     };
-          //     // Push to price change buffer
-          //     this.bufferService.pushPriceChange(priceChangeData);
-          //   }
-          // }
+          if (msg.price_changes && Array.isArray(msg.price_changes)) {
+            let timestamp: number;
+            if (typeof msg.timestamp === 'string') {
+              timestamp = parseInt(msg.timestamp, 10);
+            } else {
+              timestamp = msg.timestamp || Date.now();
+            }
+            for (const change of msg.price_changes) {
+              const priceChangeData = {
+                market: msg.market || '',
+                asset_id: change.asset_id,
+                timestamp: timestamp,
+                best_bid: parseFloat(change.best_bid),
+                best_ask: parseFloat(change.best_ask),
+              };
+              // Push to price change buffer
+              this.bufferService.pushPriceChange(priceChangeData);
+            }
+          }
         }
       }
     } catch (error) {

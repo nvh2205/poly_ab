@@ -650,7 +650,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
     results?: BatchOrderResult[];
     error?: string;
   }> {
-    const startTime = performance.now();
+
     try {
       // Validate batch size
       if (orders.length === 0) {
@@ -686,9 +686,6 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       // USDC has 6 decimals, shares also have 6 decimals
       const DECIMALS = 1_000_000;
 
-      // Prepare sign options for native batch signing
-      // Prepare sign options for native batch signing
-      const createStartTime = performance.now();
 
       const batchOrderParams = orders.map((orderParams) => {
         const priceDecimal = orderParams.price;
@@ -735,9 +732,6 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
 
       // Pass private key separately
       const signedOrders = nativeModule.signClobOrdersBatch(config.privateKey, batchOrderParams);
-      console.log('signedOrders:----', signedOrders);
-      const signEndTime = performance.now();
-      this.logger.log(`⏱️ [NATIVE] signClobOrdersBatch took ${(signEndTime - createStartTime).toFixed(2)}ms for ${orders.length} orders`);
 
       // Transform to CLOB order format
       const batchOrdersArgs = signedOrders.map((signed: any, idx: number) => {
@@ -769,9 +763,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       });
 
       // Post batch orders
-      console.log('batchOrdersArgs:----', JSON.stringify(batchOrdersArgs, null, 2));
       const responses = await client.postOrders(batchOrdersArgs);
-      console.log('postOrders responses:----', JSON.stringify(responses, null, 2));
 
       // Process responses
       const results: BatchOrderResult[] = new Array(
@@ -797,9 +789,6 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
           }
         }
       }
-
-      const timeEndFunction = performance.now();
-      this.logger.log(`⏱️ [NATIVE] Total placeBatchOrdersNative took ${(timeEndFunction - startTime).toFixed(2)}ms for ${orders.length} orders`);
 
       return {
         success: true,
