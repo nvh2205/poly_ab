@@ -176,72 +176,27 @@ else
     echo "$CURRENT_HASH" > "$PACKAGE_HASH_FILE"
 fi
 
-# Step 5: Build native-core module (if Rust sources changed)
-log "Step 5: Building native-core module..."
-NATIVE_CORE_DIR="$PROJECT_DIR/native-core"
-NATIVE_CARGO_HASH_FILE="$NATIVE_CORE_DIR/.cargo.hash"
+# Step 5: Install dependencies
+log "Step 5: Installing dependencies..."
+npm install
 
-if [ -d "$NATIVE_CORE_DIR" ] && [ -f "$NATIVE_CORE_DIR/Cargo.toml" ]; then
-    cd "$NATIVE_CORE_DIR"
-    
-    # Check if Cargo.toml or src changed
-    CARGO_HASH=$(cat Cargo.toml src/*.rs 2>/dev/null | md5sum 2>/dev/null | cut -d' ' -f1 || cat Cargo.toml src/*.rs 2>/dev/null | md5 -q 2>/dev/null)
-    
-    NEEDS_BUILD=false
-    if [ -f "$NATIVE_CARGO_HASH_FILE" ]; then
-        PREVIOUS_CARGO_HASH=$(cat "$NATIVE_CARGO_HASH_FILE")
-        if [ "$CARGO_HASH" != "$PREVIOUS_CARGO_HASH" ]; then
-            NEEDS_BUILD=true
-            log "Native-core source changed. Rebuilding..."
-        else
-            # Also check if .node binary exists for current platform
-            PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
-            ARCH=$(uname -m)
-            if [ "$ARCH" = "x86_64" ]; then ARCH="x64"; fi
-            if [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi
-            
-            NODE_FILE=$(ls native-core.${PLATFORM}-${ARCH}.node 2>/dev/null || ls native-core.*.node 2>/dev/null | head -1)
-            if [ -z "$NODE_FILE" ]; then
-                NEEDS_BUILD=true
-                log "Native binary not found for $PLATFORM-$ARCH. Building..."
-            else
-                info "Native-core is up to date. Skipping build..."
-            fi
-        fi
-    else
-        NEEDS_BUILD=true
-        log "First time building native-core..."
-    fi
-    
-    if [ "$NEEDS_BUILD" = true ]; then
-        # Install napi-rs CLI if needed
-        if ! command -v napi &> /dev/null; then
-            log "Installing @napi-rs/cli..."
-            npm install -g @napi-rs/cli
-        fi
-        
-        # Install dependencies and build
-        npm install
-        npm run build
-        
-        if [ $? -eq 0 ]; then
-            echo "$CARGO_HASH" > "$NATIVE_CARGO_HASH_FILE"
-            log "Native-core built successfully"
-        else
-            error "Failed to build native-core module"
-        fi
-    fi
-    
-    cd "$PROJECT_DIR"
-else
-    warning "native-core directory not found. Skipping native build."
-fi
-
-echo ""
+# ==========================================
+# [THÊM MỚI] Bước build tối ưu cho Rust Module
+# ==========================================
+log "Step 5.1: Building Native Rust Core (Release Mode)..."
+cd native-core
+# Đảm bảo cài dependency cho module con
+npm install 
+# QUAN TRỌNG NHẤT: Thêm cờ --release
+npm run build -- --release 
+# Quay lại thư mục gốc
+cd ..
+# ==========================================
 
 # Step 6: Build application
-log "Step 6: Building NestJS application..."
+log "Step 6: Building application..."
 npm run build
+
 
 # Step 7: Wait for services to be healthy
 if [ -n "$DOCKER_COMPOSE" ] && [ -f "docker-compose.yml" ]; then
