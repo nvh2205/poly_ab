@@ -479,6 +479,64 @@ export class PolymarketOnchainController {
         );
       }
 
+      const result = await this.polymarketOnchainService.placeBatchOrders(
+        config,
+        dto.orders,
+      );
+
+      if (!result.success) {
+        throw new HttpException(
+          result.error || 'Batch order placement failed',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // Count successes and failures
+      const successCount = result.results?.filter((r) => r.success).length || 0;
+      const failureCount =
+        result.results?.filter((r) => !r.success).length || 0;
+
+      return {
+        success: true,
+        totalOrders: dto.orders.length,
+        successCount,
+        failureCount,
+        results: result.results,
+        message: `Batch order complete: ${successCount} successful, ${failureCount} failed`,
+      };
+    } catch (error: any) {
+      this.logger.error(`Error in placeBatchOrders: ${error.message}`);
+      throw new HttpException(
+        error.message || 'Internal server error',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+    @Post('place-batch-orders-native')
+  async placeBatchOrdersNative(@Body() dto: PlaceBatchOrdersDto) {
+    try {
+      this.logger.log(
+        `Received batch order request for ${dto.orders.length} orders`,
+      );
+
+      const config =
+        dto.config || this.polymarketOnchainService.getDefaultConfig();
+      if (!config) {
+        throw new HttpException(
+          'Polymarket config not found',
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+
+      // Validate batch size
+      if (dto.orders.length > 15) {
+        throw new HttpException(
+          'Maximum 15 orders allowed per batch',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
       const result = await this.polymarketOnchainService.placeBatchOrdersNative(
         config,
         dto.orders,
