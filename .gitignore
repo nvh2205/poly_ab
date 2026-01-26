@@ -31,6 +31,10 @@ tsconfig.tsbuildinfo
 .package-lock.hash
 .package.hash
 
+# Native-core (Rust module)
+native-core/.cargo.hash
+native-core/target/
+
 # Lock files (ignore due to different Node versions on different machines)
 package-lock.json
 yarn.lock
