@@ -92,6 +92,10 @@ if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
     error "node and npm are required. Please install them first."
 fi
 
+if ! command -v cargo &> /dev/null || ! command -v rustc &> /dev/null; then
+    error "Rust toolchain (cargo, rustc) is required for native-core module. Install via: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+fi
+
 if ! command -v docker &> /dev/null; then
     warning "docker is not installed. Docker Compose services won't be managed."
 fi
@@ -172,13 +176,76 @@ else
     echo "$CURRENT_HASH" > "$PACKAGE_HASH_FILE"
 fi
 
-# Step 5: Build application
-log "Step 5: Building application..."
+# Step 5: Build native-core module (if Rust sources changed)
+log "Step 5: Building native-core module..."
+NATIVE_CORE_DIR="$PROJECT_DIR/native-core"
+NATIVE_CARGO_HASH_FILE="$NATIVE_CORE_DIR/.cargo.hash"
+
+if [ -d "$NATIVE_CORE_DIR" ] && [ -f "$NATIVE_CORE_DIR/Cargo.toml" ]; then
+    cd "$NATIVE_CORE_DIR"
+    
+    # Check if Cargo.toml or src changed
+    CARGO_HASH=$(cat Cargo.toml src/*.rs 2>/dev/null | md5sum 2>/dev/null | cut -d' ' -f1 || cat Cargo.toml src/*.rs 2>/dev/null | md5 -q 2>/dev/null)
+    
+    NEEDS_BUILD=false
+    if [ -f "$NATIVE_CARGO_HASH_FILE" ]; then
+        PREVIOUS_CARGO_HASH=$(cat "$NATIVE_CARGO_HASH_FILE")
+        if [ "$CARGO_HASH" != "$PREVIOUS_CARGO_HASH" ]; then
+            NEEDS_BUILD=true
+            log "Native-core source changed. Rebuilding..."
+        else
+            # Also check if .node binary exists for current platform
+            PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
+            ARCH=$(uname -m)
+            if [ "$ARCH" = "x86_64" ]; then ARCH="x64"; fi
+            if [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi
+            
+            NODE_FILE=$(ls native-core.${PLATFORM}-${ARCH}.node 2>/dev/null || ls native-core.*.node 2>/dev/null | head -1)
+            if [ -z "$NODE_FILE" ]; then
+                NEEDS_BUILD=true
+                log "Native binary not found for $PLATFORM-$ARCH. Building..."
+            else
+                info "Native-core is up to date. Skipping build..."
+            fi
+        fi
+    else
+        NEEDS_BUILD=true
+        log "First time building native-core..."
+    fi
+    
+    if [ "$NEEDS_BUILD" = true ]; then
+        # Install napi-rs CLI if needed
+        if ! command -v napi &> /dev/null; then
+            log "Installing @napi-rs/cli..."
+            npm install -g @napi-rs/cli
+        fi
+        
+        # Install dependencies and build
+        npm install
+        npm run build
+        
+        if [ $? -eq 0 ]; then
+            echo "$CARGO_HASH" > "$NATIVE_CARGO_HASH_FILE"
+            log "Native-core built successfully"
+        else
+            error "Failed to build native-core module"
+        fi
+    fi
+    
+    cd "$PROJECT_DIR"
+else
+    warning "native-core directory not found. Skipping native build."
+fi
+
+echo ""
+
+# Step 6: Build application
+log "Step 6: Building NestJS application..."
 npm run build
 
-# Step 6: Wait for services to be healthy
+# Step 7: Wait for services to be healthy
 if [ -n "$DOCKER_COMPOSE" ] && [ -f "docker-compose.yml" ]; then
-    log "Step 6: Waiting for Docker services to be healthy..."
+    log "Step 7: Waiting for Docker services to be healthy..."
     sleep 3
     
     # Check if services are up
@@ -192,8 +259,8 @@ fi
 
 echo ""
 
-# Step 7: Restart PM2 application (start if missing)
-log "Step 7: Restarting PM2 application..."
+# Step 8: Restart PM2 application (start if missing)
+log "Step 8: Restarting PM2 application..."
 if pm2 describe "$PM2_APP_NAME" > /dev/null 2>&1; then
     log "PM2 app exists. Restarting..."
     pm2 restart "$PM2_APP_NAME"
@@ -214,8 +281,8 @@ fi
 log "Saving PM2 process list..."
 pm2 save --force
 
-# Step 8: Show status and recent logs
-log "Step 8: Deployment completed successfully!"
+# Step 9: Show status and recent logs
+log "Step 9: Deployment completed successfully!"
 echo ""
 log "PM2 status:"
 pm2 status "$PM2_APP_NAME"

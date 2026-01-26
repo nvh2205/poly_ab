@@ -23,6 +23,7 @@
     "test:bootstrap": "ts-node test/arbitrage-engine.bootstrap.test.ts"
   },
   "dependencies": {
+    "native-core": "file:./native-core",
     "@clickhouse/client": "^1.15.0",
     "@jest/globals": "^30.2.0",
     "@nestjs/bull": "^10.0.1",
