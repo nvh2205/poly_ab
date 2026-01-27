@@ -107,6 +107,9 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
     Side: any;
   } | null = null;
 
+  // Native core module cache
+  private nativeModule: any = null;
+
   // Default config loaded from environment variables
   private defaultConfig?: PolymarketConfig;
 
@@ -172,6 +175,15 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       const { OrderType, Side } = await this.loadClob();
       this.clobTypes = { OrderType, Side };
       this.logger.log('CLOB client module and types cached successfully');
+
+      // Load Native Core module
+      this.logger.log('Loading Native Core module...');
+      this.nativeModule = loadNativeCore();
+      if (this.nativeModule) {
+        this.logger.log('✅ Native Core module loaded successfully');
+      } else {
+        this.logger.warn('⚠️ Native Core module not available');
+      }
 
       // Load default config from environment variables
       try {
@@ -684,9 +696,6 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       const DECIMALS = 1_000_000;
 
 
-
-      const startTime = performance.now();
-
       const batchOrderParams = orders.map((orderParams) => {
         const priceDecimal = orderParams.price;
         const sizeDecimal = orderParams.size;
@@ -726,19 +735,13 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
 
 
       // Batch sign using native Rust module
-      const nativeModule = loadNativeCore();
-      if (!nativeModule) {
+      if (!this.nativeModule) {
         return { success: false, error: 'Native core module not available. Please build native-core first.' };
       }
 
-      const endTime1 = performance.now();
-      this.logger.log(`⏱️ signClobOrdersBatch took ${(endTime1 - startTime).toFixed(2)}ms for ${orders.length} orders`);
-
       // Pass private key separately
-      const signedOrders = nativeModule.signClobOrdersBatch(config.privateKey, batchOrderParams);
+      const signedOrders = this.nativeModule.signClobOrdersBatch(config.privateKey, batchOrderParams);
 
-      const endTime2 = performance.now();
-      this.logger.log(`⏱️ signClobOrdersBatch took ${(endTime2 - startTime).toFixed(2)}ms for ${orders.length} orders`);
 
       // Transform to CLOB order format
       const batchOrdersArgs = signedOrders.map((signed: any, idx: number) => {
@@ -796,9 +799,6 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
           }
         }
       }
-
-      const endTime3 = performance.now();
-      this.logger.log(`⏱️ postOrders took ${(endTime3 - startTime).toFixed(2)}ms for ${orders.length} orders`);
 
       return {
         success: true,
