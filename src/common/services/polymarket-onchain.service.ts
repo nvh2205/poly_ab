@@ -724,17 +724,21 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
         };
       });
 
+
       // Batch sign using native Rust module
       const nativeModule = loadNativeCore();
       if (!nativeModule) {
         return { success: false, error: 'Native core module not available. Please build native-core first.' };
       }
 
+      const endTime1 = performance.now();
+      this.logger.log(`⏱️ signClobOrdersBatch took ${(endTime1 - startTime).toFixed(2)}ms for ${orders.length} orders`);
+
       // Pass private key separately
       const signedOrders = nativeModule.signClobOrdersBatch(config.privateKey, batchOrderParams);
 
-      const endTime = performance.now();
-      this.logger.log(`⏱️ signClobOrdersBatch took ${(endTime - startTime).toFixed(2)}ms for ${orders.length} orders`);
+      const endTime2 = performance.now();
+      this.logger.log(`⏱️ signClobOrdersBatch took ${(endTime2 - startTime).toFixed(2)}ms for ${orders.length} orders`);
 
       // Transform to CLOB order format
       const batchOrdersArgs = signedOrders.map((signed: any, idx: number) => {
@@ -749,7 +753,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
             signer: signed.signer,
             taker: signed.taker,
             tokenId: signed.tokenId,
-            makerAmount: signed.makerAmount,
+            makerAmount: signed.makerAmount,  // makerAmount: signed.makerAmount,
             takerAmount: signed.takerAmount,
             expiration: signed.expiration,
             nonce: signed.nonce,
@@ -793,8 +797,8 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
         }
       }
 
-      const endTime2 = performance.now();
-      this.logger.log(`⏱️ postOrders took ${(endTime2 - startTime).toFixed(2)}ms for ${orders.length} orders`);
+      const endTime3 = performance.now();
+      this.logger.log(`⏱️ postOrders took ${(endTime3 - startTime).toFixed(2)}ms for ${orders.length} orders`);
 
       return {
         success: true,
