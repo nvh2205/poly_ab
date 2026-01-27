@@ -106,7 +106,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   private runtimeEnabled: boolean = this.boolFromEnv('REAL_TRADING_ENABLED', false);
   private slippageEnabled: boolean = this.boolFromEnv('SLIPPAGE_ENABLED', false); // Slippage enabled by default
   private readonly minPnlThresholdPercent = this.numFromEnv('REAL_TRADING_MIN_PNL_PERCENT', 1);
-  private readonly defaultSize = this.numFromEnv('REAL_TRADE_SIZE', 5);
+  private readonly defaultSize = this.numFromEnv('REAL_TRADE_SIZE', 10);
   private readonly enforceMinOrderValue = this.boolFromEnv('ENFORCE_MIN_ORDER_VALUE', true);
 
   constructor(
@@ -553,8 +553,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
 
     // Check PnL threshold (synchronous)
     if (pnlPercent < this.minPnlThresholdPercent) {
-      this.logger.debug('pnlPercent: ', pnlPercent, ' < ', this.minPnlThresholdPercent, '%');
-      this.logger.debug("---SKIP OPPORTUNITY---");
+      this.logger.debug(`pnlPercent: ${pnlPercent} < ${this.minPnlThresholdPercent}%`);
       return { shouldSkip: true };
     }
 
