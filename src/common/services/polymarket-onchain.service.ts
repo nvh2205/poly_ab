@@ -166,6 +166,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
     try {
       this.logger.log('Initializing Polymarket Onchain Service...');
 
+
       // Pre-load CLOB client module and cache types
       this.logger.log('Loading CLOB client module and caching types...');
       const { OrderType, Side } = await this.loadClob();
@@ -682,7 +683,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       // USDC has 6 decimals, shares also have 6 decimals
       const DECIMALS = 1_000_000;
 
-      const createStartTime = performance.now();
+
 
       const batchOrderParams = orders.map((orderParams) => {
         const priceDecimal = orderParams.price;
@@ -729,8 +730,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
 
       // Pass private key separately
       const signedOrders = nativeModule.signClobOrdersBatch(config.privateKey, batchOrderParams);
-      const signEndTime = performance.now();
-      this.logger.log(`⏱️ [NATIVE] signClobOrdersBatch took ${(signEndTime - createStartTime).toFixed(2)}ms for ${orders.length} orders`);
+
 
       // Transform to CLOB order format
       const batchOrdersArgs = signedOrders.map((signed: any, idx: number) => {
@@ -789,8 +789,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
         }
       }
 
-      const timeEndFunction = performance.now();
-      this.logger.log(`⏱️ [NATIVE] postOrders took ${(timeEndFunction - createStartTime).toFixed(2)}ms for ${orders.length} orders`);
+
 
       return {
         success: true,
