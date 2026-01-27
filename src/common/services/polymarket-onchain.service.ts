@@ -685,6 +685,8 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
 
 
 
+      const startTime = performance.now();
+
       const batchOrderParams = orders.map((orderParams) => {
         const priceDecimal = orderParams.price;
         const sizeDecimal = orderParams.size;
@@ -731,6 +733,8 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       // Pass private key separately
       const signedOrders = nativeModule.signClobOrdersBatch(config.privateKey, batchOrderParams);
 
+      const endTime = performance.now();
+      this.logger.log(`⏱️ signClobOrdersBatch took ${(endTime - startTime).toFixed(2)}ms for ${orders.length} orders`);
 
       // Transform to CLOB order format
       const batchOrdersArgs = signedOrders.map((signed: any, idx: number) => {
@@ -789,7 +793,8 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
         }
       }
 
-
+      const endTime2 = performance.now();
+      this.logger.log(`⏱️ postOrders took ${(endTime2 - startTime).toFixed(2)}ms for ${orders.length} orders`);
 
       return {
         success: true,
