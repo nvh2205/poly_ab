@@ -101,6 +101,9 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
   private credentialsCache = new Map<string, ApiKeyCreds>();
   private clientCache = new Map<string, ClobClientType>();
 
+  // Cache for wallet instances (keyed by private key hash for security)
+  private walletCache = new Map<string, Wallet>();
+
   // Cache for CLOB types (loaded once at startup)
   private clobTypes: {
     OrderType: any;
@@ -192,13 +195,15 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
           `Default config loaded for wallet: ${this.defaultConfig ? new Wallet(this.defaultConfig.privateKey).address : 'N/A'}`,
         );
 
-        // Pre-create API credentials for default wallet
+        // Pre-create wallet and API credentials for default wallet
         if (this.defaultConfig && this.defaultConfig.privateKey) {
-          this.logger.log('Creating API credentials for default wallet...');
+          this.logger.log('Pre-caching wallet and API credentials for default wallet...');
           const wallet = this.buildWallet(this.defaultConfig);
           await this.getOrCreateCredentials(wallet, this.defaultConfig);
+          // Also pre-warm the authenticated client
+          await this.getOrCreateAuthenticatedClient(this.defaultConfig);
           this.logger.log(
-            '✅ API credentials created and cached for default wallet',
+            `✅ Wallet, credentials, and client cached for ${wallet.address}`,
           );
         }
       } catch (error: any) {
@@ -280,11 +285,22 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
   }
 
   /**
-   * Build wallet from private key
+   * Build wallet from private key (cached for performance)
+   * Wallet instances are cached by a hash of the private key to avoid repeated instantiation
    */
   private buildWallet(config: PolymarketConfig): Wallet {
+    // Use a simple hash of private key as cache key (first 10 + last 10 chars)
+    const keyHash = `${config.privateKey.slice(0, 12)}...${config.privateKey.slice(-10)}`;
+
+    const cached = this.walletCache.get(keyHash);
+    if (cached) {
+      return cached;
+    }
+
     const provider = new providers.JsonRpcProvider(config.polygonRpc);
-    return new Wallet(config.privateKey, provider);
+    const wallet = new Wallet(config.privateKey, provider);
+    this.walletCache.set(keyHash, wallet);
+    return wallet;
   }
 
   /**
@@ -673,16 +689,16 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
         };
       }
 
-      // Get client and cached types
+      // Get wallet addresses from config (synchronous - do first)
+      const wallet = this.buildWallet(config);
+      const signerAddress = wallet.address;
+      const makerAddress = config.proxyAddress;
+
+      // Get client and cached types (parallel async operations)
       const [client, { OrderType }] = await Promise.all([
         this.getOrCreateAuthenticatedClient(config),
         this.getClobTypes(),
       ]);
-
-      // Get wallet addresses from config
-      const wallet = this.buildWallet(config);
-      const signerAddress = wallet.address;
-      const makerAddress = config.proxyAddress;
 
       // Pre-create orderTypeMap
       const orderTypeMap: Record<string, any> = {
@@ -702,17 +718,27 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
         const side = orderParams.side === 'BUY' ? 0 : 1;
 
         // Calculate amounts based on side
+        // Constraint: Maker Amount (USDC) max 4 decimals, Taker Amount (Shares) max 2 decimals for BUY
+        // This implies: Asset (Shares) always max 2 decimals, USDC (Collateral) always max 4 decimals
+
+        // 1. Round size (Asset) to 2 decimals
+        const sizeRounded = Number(sizeDecimal.toFixed(2));
+
+        // 2. Calculate USDC amount based on rounded size and price, then round to 4 decimals
+        const usdcRaw = priceDecimal * sizeRounded;
+        const usdcRounded = Number(usdcRaw.toFixed(4));
+
         let makerAmount: string;
         let takerAmount: string;
 
         if (side === 0) {
-          // BUY
-          makerAmount = Math.round(priceDecimal * sizeDecimal * DECIMALS).toString();
-          takerAmount = Math.round(sizeDecimal * DECIMALS).toString();
+          // BUY: Maker = USDC, Taker = Asset
+          makerAmount = Math.round(usdcRounded * DECIMALS).toString();
+          takerAmount = Math.round(sizeRounded * DECIMALS).toString();
         } else {
-          // SELL
-          makerAmount = Math.round(sizeDecimal * DECIMALS).toString();
-          takerAmount = Math.round(priceDecimal * sizeDecimal * DECIMALS).toString();
+          // SELL: Maker = Asset, Taker = USDC
+          makerAmount = Math.round(sizeRounded * DECIMALS).toString();
+          takerAmount = Math.round(usdcRounded * DECIMALS).toString();
         }
 
         return {
