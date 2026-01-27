@@ -985,9 +985,10 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       const mintedAmount = Number(amountUSDC) || 0;
       const ttlSeconds = APP_CONSTANTS.MINTED_ASSETS_CACHE_TTL;
       const timestamp = new Date().toISOString();
+      const normalizedWalletAddress = walletAddress.toLowerCase();
 
       const pipeline = this.redisService.getClient().pipeline();
-      const inventoryKey = `mint:inventory:${groupKey}:${walletAddress}`;
+      const inventoryKey = `mint:inventory:${groupKey}:${normalizedWalletAddress}`;
 
       positionIds.forEach((tokenId) => {
         pipeline.hincrbyfloat(inventoryKey, tokenId, mintedAmount);
@@ -995,10 +996,10 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       pipeline.expire(inventoryKey, ttlSeconds);
 
       // Audit history per groupKey
-      const positionHistoryKey = `mint:history:${groupKey}:${walletAddress}`;
+      const positionHistoryKey = `mint:history:${groupKey}:${normalizedWalletAddress}`;
       const positionEvent = {
         type: 'MINT',
-        walletAddress,
+        walletAddress: normalizedWalletAddress,
         groupKey,
         positionIds,
         amountUSDC,
@@ -1538,8 +1539,9 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       }
 
       // Fallback to legacy structure (per condition key) for backward compatibility
+      const normalizedWalletAddress = walletAddress.toLowerCase();
       const conditionIds = await this.redisService.smembers(
-        `mint:positions:${walletAddress}`,
+        `mint:positions:${normalizedWalletAddress}`,
       );
 
       if (!conditionIds || conditionIds.length === 0) {
@@ -1548,7 +1550,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
 
       for (const conditionId of conditionIds) {
         const raw = await this.redisService.get(
-          `mint:position:${conditionId}:${walletAddress}`,
+          `mint:position:${conditionId}:${normalizedWalletAddress}`,
         );
         if (!raw) continue;
 
