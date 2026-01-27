@@ -11,14 +11,14 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Market } from '../../database/entities/market.entity';
-import { 
-  ApiProperty, 
-  ApiPropertyOptional, 
-  ApiQuery, 
-  ApiTags, 
-  ApiOperation, 
-  ApiResponse, 
-  ApiBody 
+import {
+  ApiProperty,
+  ApiPropertyOptional,
+  ApiQuery,
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody
 } from '@nestjs/swagger';
 import {
   IsArray,
@@ -282,6 +282,24 @@ export class MintTokensProxySimpleDto {
 }
 
 /**
+ * DTO for minting list of markets
+ */
+export class MintTokensListDto {
+  @ApiProperty({
+    type: [String],
+    description: 'List of market slugs',
+    example: ['market-slug-1', 'market-slug-2'],
+  })
+  @IsArray()
+  @IsString({ each: true })
+  slugs: string[];
+
+  @ApiProperty({ example: 100, description: 'Amount in USDC to mint for each market' })
+  @IsNumber()
+  amountUSDC: number;
+}
+
+/**
  * DTO for merge operations
  */
 export class MergePositionsDto {
@@ -407,7 +425,7 @@ export class PolymarketOnchainController {
     private readonly polymarketOnchainService: PolymarketOnchainService,
     @InjectRepository(Market)
     private readonly marketRepository: Repository<Market>,
-  ) {}
+  ) { }
 
   /**
    * POST /polymarket-onchain/place-order
@@ -513,7 +531,7 @@ export class PolymarketOnchainController {
     }
   }
 
-    @Post('place-batch-orders-native')
+  @Post('place-batch-orders-native')
   async placeBatchOrdersNative(@Body() dto: PlaceBatchOrdersDto) {
     try {
       this.logger.log(
@@ -769,6 +787,111 @@ export class PolymarketOnchainController {
   }
 
   /**
+   * POST /polymarket-onchain/mint-proxy-list
+   * Mint tokens for list of market slugs via proxy (Gnosis Safe)
+   * Fire and Forget: Returns immediately, processes in background
+   */
+  @Post('mint-proxy-list')
+  async mintTokensProxyList(@Body() dto: MintTokensListDto) {
+    this.logger.log(
+      `Received mint-proxy-list request for ${dto.slugs.length} markets, amount=${dto.amountUSDC}`,
+    );
+
+    // Fire and forget - process in background
+    this.processMintList(dto.slugs, dto.amountUSDC).catch((err) => {
+      this.logger.error(`Error in background mint process: ${err.message}`);
+    });
+
+    return {
+      success: true,
+      message: `Started minting for ${dto.slugs.length} markets in background`,
+    };
+  }
+
+  private async processMintList(slugs: string[], amountUSDC: number) {
+    for (const slug of slugs) {
+      try {
+        // Sleep 200ms to avoid rate limit
+        await new Promise((resolve) => setTimeout(resolve, 200));
+
+        // Query market from database by slug
+        const market = await this.marketRepository.findOne({
+          where: { slug: slug },
+        });
+
+        if (!market) {
+          this.logger.warn(`processMintList: Market not found for slug: ${slug}`);
+          continue;
+        }
+
+        // Validate required fields
+        if (!market.conditionId) {
+          this.logger.warn(
+            `processMintList: Market ${slug} does not have a conditionId`,
+          );
+          continue;
+        }
+
+        if (!market.endDate) {
+          this.logger.warn(
+            `processMintList: Market ${slug} does not have an endDate`,
+          );
+          continue;
+        }
+
+        if (!market.type) {
+          this.logger.warn(
+            `processMintList: Market ${slug} does not have a type`,
+          );
+          continue;
+        }
+
+        // Build groupKey
+        const endDateUtc = new Date(market.endDate).toISOString();
+        const groupKey = `${market.type}-${endDateUtc}`;
+
+        // Build marketCondition
+        const marketCondition: MarketCondition = {
+          conditionId: market.conditionId,
+          negRisk: market.negRisk ?? false,
+          negRiskMarketID: market.negRiskMarketID ?? undefined,
+        };
+
+        const config = this.polymarketOnchainService.getDefaultConfig();
+        if (!config) {
+          this.logger.error('processMintList: Polymarket config not found');
+          return; // Stop processing if config is missing
+        }
+
+        this.logger.log(
+          `Minting for ${slug} (conditionId=${market.conditionId}, groupKey=${groupKey})...`,
+        );
+
+        const result = await this.polymarketOnchainService.mintTokensViaProxy(
+          config,
+          marketCondition,
+          amountUSDC,
+          groupKey,
+        );
+
+        if (result.success) {
+          this.logger.log(
+            `✅ Successfully minted for ${slug}, tx: ${result.txHash}`,
+          );
+        } else {
+          this.logger.error(
+            `❌ Failed to mint for ${slug}: ${result.error || 'Unknown error'}`,
+          );
+        }
+      } catch (error: any) {
+        this.logger.error(
+          `Error processing mint for ${slug}: ${error.message}`,
+        );
+      }
+    }
+  }
+
+  /**
    * POST /polymarket-onchain/merge
    * Merge YES + NO positions back to USDC
    */
@@ -993,7 +1116,7 @@ export class PolymarketOnchainController {
     try {
       this.logger.log('Received get Redis data request');
       const data = await this.polymarketOnchainService.exportRedisData(pattern);
-      
+
       return {
         success: true,
         totalKeys: data.length,
@@ -1070,7 +1193,7 @@ export class PolymarketOnchainController {
   ) {
     try {
       this.logger.log(`Received set Redis data request with ${dto.data?.length || 0} keys`);
-      
+
       if (!dto.data || !Array.isArray(dto.data)) {
         throw new HttpException(
           'Invalid request body. Expected { data: Array<{ key, type, value, ttl? }> }',
@@ -1079,7 +1202,7 @@ export class PolymarketOnchainController {
       }
 
       const result = await this.polymarketOnchainService.importRedisData(dto.data);
-      
+
       return {
         success: true,
         imported: result.imported,
