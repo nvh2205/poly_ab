@@ -1218,4 +1218,28 @@ export class PolymarketOnchainController {
       );
     }
   }
+
+  /**
+   * POST /polymarket-onchain/mint/clear-cache
+   * Clear all mint:* keys from Redis
+   */
+  @Post('mint/clear-cache')
+  @ApiOperation({
+    summary: 'Clear all mint:* keys from Redis',
+    description: 'Deletes all Redis keys matching the pattern mint:*'
+  })
+  async clearMintCache() {
+    try {
+      this.logger.log('Received request to clear mint cache');
+      const result = await this.polymarketOnchainService.clearMintKeys();
+
+      return result;
+    } catch (error: any) {
+      this.logger.error(`Error in clearMintCache: ${error.message}`);
+      throw new HttpException(
+        error.message || 'Internal server error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }

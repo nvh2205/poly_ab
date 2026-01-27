@@ -2047,4 +2047,28 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
 
     return { imported, failed, errors };
   }
+
+  /**
+   * Clear all mint:* keys from Redis
+   */
+  async clearMintKeys(): Promise<{ success: boolean; count: number; message: string }> {
+    try {
+      this.logger.log('Clearing all mint:* keys from Redis...');
+      const count = await this.redisService.deleteByPattern('mint:*');
+      this.logger.log(`Cleared ${count} keys matching mint:*`);
+
+      return {
+        success: true,
+        count,
+        message: `Successfully cleared ${count} keys matching mint:*`
+      };
+    } catch (error: any) {
+      this.logger.error(`Failed to clear mint keys: ${error.message}`);
+      return {
+        success: false,
+        count: 0,
+        message: `Failed to clear mint keys: ${error.message}`
+      };
+    }
+  }
 }
