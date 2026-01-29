@@ -73,4 +73,27 @@ export class ArbRealTrade {
 
   @Column({ name: 'timestamp_ms', type: 'bigint' })
   timestampMs: number;
+
+  // === Failure Tracking (for manage-position service) ===
+
+  @Column({ name: 'failure_type', type: 'varchar', length: 50, nullable: true })
+  failureType?: 'PARTIAL_FILL_CANCELLED' | 'TRANSACTION_FAILED' | null;
+
+  @Column({ name: 'retry_order_ids', type: 'jsonb', nullable: true })
+  retryOrderIds?: string[];
+
+  @Column({ name: 'retry_count', type: 'int', default: 0 })
+  retryCount: number;
+
+  @Column({ name: 'original_order_details', type: 'jsonb', nullable: true })
+  originalOrderDetails?: Array<{
+    orderId: string;
+    tokenID: string;
+    side: 'BUY' | 'SELL';
+    price: number;
+    size: number;
+    status?: string;
+    sizeMatched?: number;
+    associateTrades?: string[];
+  }>;
 }

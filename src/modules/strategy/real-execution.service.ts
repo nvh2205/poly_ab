@@ -20,6 +20,7 @@ import {
 import { loadPolymarketConfig } from '../../common/services/polymarket-onchain.config';
 import { TelegramService } from '../../common/services/telegram.service';
 import { MintQueueService } from './services/mint-queue.service';
+import { ManagePositionQueueService } from './services/manage-position-queue.service';
 
 interface RealTradeResult {
   signalId: string;
@@ -118,6 +119,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     private readonly polymarketOnchainService: PolymarketOnchainService,
     private readonly telegramService: TelegramService,
     private readonly mintQueueService: MintQueueService,
+    private readonly managePositionQueueService: ManagePositionQueueService,
   ) { }
 
   async onModuleInit(): Promise<void> {
@@ -387,7 +389,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
               // Silent fail for telegram notifications
             });
 
-            // Save trade result to database (async)
+            // Save trade result to database and queue for order status checking
             const tradeResult: RealTradeResult = {
               signalId: 'pending',
               success: orderIds.length > 0,
@@ -398,11 +400,36 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
               timestampMs: Date.now(),
             };
 
-            this.saveTradeResultAsync(opportunity, tradeResult).catch((error) => {
-              this.logger.error(
-                `Failed to save trade result to DB: ${error.message}`,
-              );
-            });
+            this.saveTradeResultAsync(opportunity, tradeResult)
+              .then((savedTrade) => {
+                // Queue order status check for manage-position (fire & forget)
+                if (orderIds.length > 0) {
+                  const originalOrders = result.results!
+                    .map((r, idx) => ({ result: r, order: batchOrders[idx] }))
+                    .filter(({ result: r }) => r.success && r.orderID)
+                    .map(({ result: r, order }) => ({
+                      orderId: r.orderID!,
+                      tokenID: order.tokenID,
+                      side: order.side,
+                      price: order.price,
+                      size: order.size,
+                      negRisk: order.negRisk,
+                    }));
+
+                  this.managePositionQueueService.addToQueue(
+                    savedTrade.id,
+                    orderIds,
+                    originalOrders,
+                  ).catch((err) => {
+                    this.logger.warn(`Failed to queue order status check: ${err.message}`);
+                  });
+                }
+              })
+              .catch((error) => {
+                this.logger.error(
+                  `Failed to save trade result to DB: ${error.message}`,
+                );
+              });
 
             // Adjust minted cache for sell orders (async)
             this.adjustMintedCacheAfterSell(
@@ -1529,11 +1556,12 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Save trade result to database asynchronously (non-blocking)
+   * Returns the saved trade entity with ID
    */
   private async saveTradeResultAsync(
     opportunity: ArbOpportunity,
     tradeResult: RealTradeResult,
-  ): Promise<void> {
+  ): Promise<ArbRealTrade> {
     try {
       // Get or create signal
       const signal = await this.saveSignal(opportunity);
@@ -1542,7 +1570,8 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       tradeResult.signalId = signal.id;
 
       // Save trade result
-      await this.saveRealTrade(tradeResult);
+      const savedTrade = await this.saveRealTrade(tradeResult);
+      return savedTrade;
     } catch (error) {
       this.logger.error(
         `Error in saveTradeResultAsync: ${error.message}`,
