@@ -8,6 +8,9 @@ import type {
 import { loadPolymarketConfig } from './polymarket-onchain.config';
 import { RedisService } from './redis.service';
 import { APP_CONSTANTS } from '../constants/app.constants';
+import axios, { AxiosInstance } from 'axios';
+import * as https from 'https';
+import * as crypto from 'crypto';
 
 // Native Rust EIP-712 signing module for HFT performance (lazy loaded to bypass webpack)
 let nativeCoreModule: any = null;
@@ -116,10 +119,31 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
   // Default config loaded from environment variables
   private defaultConfig?: PolymarketConfig;
 
+  // HFT-optimized axios client with persistent connections
+  private hftHttpClient: AxiosInstance;
+
   constructor(
     private readonly configService: ConfigService,
     private readonly redisService: RedisService,
-  ) { }
+  ) {
+    const hftAgent = new https.Agent({
+      keepAlive: true,
+      noDelay: true,           // Tắt Nagle's algorithm (gửi gói tin ngay lập tức)
+      keepAliveMsecs: 30000,   // Giữ socket sống 30s (SỬA LỖI CHẬM)
+      maxSockets: Infinity,    // Không giới hạn socket
+      scheduling: 'lifo',      // Ưu tiên dùng socket mới nhất
+    });
+
+    this.hftHttpClient = axios.create({
+      baseURL: 'https://clob.polymarket.com',
+      httpsAgent: hftAgent,
+      timeout: 5000,
+      headers: {
+        'Content-Type': 'application/json',
+        'Connection': 'keep-alive', // Explicit header
+      },
+    });
+  }
 
   // Contract addresses (Fixed for Polygon)
   private readonly CTF_EXCHANGE_ADDR =
@@ -578,6 +602,8 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       // return;
       // Post batch orders - this is the actual network request
       const responses = await client.postOrders(batchOrdersArgs);
+      const timePostOrders = performance.now();
+      this.logger.log(`⏱️ postOrders took ${(timePostOrders - createEndTime).toFixed(2)}ms for ${orders.length} orders`);
 
       // const responses = await client.postOrders([
       //   {
@@ -832,6 +858,296 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       };
     } catch (error: any) {
       this.logger.error(`[NATIVE] placeBatchOrdersNative error: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Build HMAC-SHA256 signature for Polymarket L2 API authentication
+   * Matches the buildPolyHmacSignature from @polymarket/clob-client
+   * @param secret API secret key (base64 encoded)
+   * @param timestamp Current timestamp in seconds (number)
+   * @param method HTTP method (GET, POST, etc.)
+   * @param requestPath API endpoint path
+   * @param body Request body (optional)
+   * @returns URL-safe base64-encoded HMAC signature
+   */
+  private buildHmacSignature(
+    secret: string,
+    timestamp: number,
+    method: string,
+    requestPath: string,
+    body?: string,
+  ): string {
+    // Build message exactly like Polymarket: timestamp + method + requestPath + body
+    let message = timestamp + method + requestPath;
+    if (body !== undefined) {
+      message += body;
+    }
+
+    // Decode base64 secret (handle both base64 and base64url formats)
+    const sanitizedSecret = secret
+      .replace(/-/g, '+')
+      .replace(/_/g, '/')
+      .replace(/[^A-Za-z0-9+/=]/g, '');
+    const key = Buffer.from(sanitizedSecret, 'base64');
+
+    // Create HMAC-SHA256 signature
+    const hmac = crypto.createHmac('sha256', key);
+    hmac.update(message);
+    const sig = hmac.digest('base64');
+
+    // Convert to URL-safe base64: '+' -> '-', '/' -> '_'
+    const sigUrlSafe = sig.replace(/\+/g, '-').replace(/\//g, '_');
+    return sigUrlSafe;
+  }
+
+  /**
+   * Build L2 authentication headers for Polymarket CLOB API
+   * @param creds API credentials (key, secret, passphrase)
+   * @param method HTTP method
+   * @param requestPath API endpoint path
+   * @param body Request body (optional)
+   * @returns Headers object with L2 auth headers
+   */
+  private buildL2AuthHeaders(
+    creds: ApiKeyCreds,
+    method: string,
+    requestPath: string,
+    body?: string,
+  ): Record<string, string> {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const signature = this.buildHmacSignature(
+      creds.secret,
+      timestamp,
+      method,
+      requestPath,
+      body,
+    );
+
+    return {
+      'POLY_ADDRESS': '',  // Will be set by caller
+      'POLY_SIGNATURE': signature,
+      'POLY_TIMESTAMP': timestamp.toString(),
+      'POLY_API_KEY': creds.key,
+      'POLY_PASSPHRASE': creds.passphrase,
+    };
+  }
+
+  /**
+   * Place multiple orders using native Rust signing + HFT-optimized axios client
+   * Uses native-core module for ~10x faster signing compared to JS
+   * Uses persistent HTTP connections with Nagle's Algorithm disabled for minimal latency
+   * Maximum 15 orders per batch according to Polymarket documentation
+   * 
+   * @param config Polymarket configuration
+   * @param orders Array of batch order parameters
+   * @returns Batch order result with success status and order IDs
+   */
+  async placeBatchOrdersAxios(
+    config: PolymarketConfig,
+    orders: BatchOrderParams[],
+  ): Promise<{
+    success: boolean;
+    results?: BatchOrderResult[];
+    error?: string;
+  }> {
+    const startTime = performance.now();
+
+    try {
+      // Validate batch size
+      if (orders.length === 0) {
+        return { success: false, error: 'No orders provided' };
+      }
+
+      if (orders.length > 15) {
+        return {
+          success: false,
+          error: 'Maximum 15 orders allowed per batch',
+        };
+      }
+
+      // Phase 1: Get wallet addresses from config (synchronous - do first)
+      const phase1Start = performance.now();
+      const wallet = this.buildWallet(config);
+      const signerAddress = wallet.address;
+      const makerAddress = config.proxyAddress;
+
+      // Get cached types and credentials (parallel async operations)
+      const [{ OrderType }, creds] = await Promise.all([
+        this.getClobTypes(),
+        this.getOrCreateCredentials(wallet, config),
+      ]);
+      const phase1End = performance.now();
+      this.logger.log(`⏱️ [AXIOS] Phase 1 (init + creds): ${(phase1End - phase1Start).toFixed(2)}ms`);
+
+      // Pre-create orderTypeMap
+      const orderTypeMap: Record<string, any> = {
+        GTC: 'GTC',
+        GTD: 'GTD',
+        FOK: 'FOK',
+        FAK: 'FAK',
+      };
+
+      // USDC has 6 decimals, shares also have 6 decimals
+      const DECIMALS = 1_000_000;
+
+      // Phase 2: Prepare order parameters
+      const phase2Start = performance.now();
+      const batchOrderParams = orders.map((orderParams) => {
+        const priceDecimal = orderParams.price;
+        const sizeDecimal = orderParams.size;
+        const side = orderParams.side === 'BUY' ? 0 : 1;
+
+        // Calculate amounts based on side
+        // Constraint: Maker Amount (USDC) max 4 decimals, Taker Amount (Shares) max 2 decimals for BUY
+        // 1. Round size (Asset) to 2 decimals
+        const sizeRounded = Number(sizeDecimal.toFixed(2));
+
+        // 2. Calculate USDC amount based on rounded size and price, then round to 4 decimals
+        const usdcRaw = priceDecimal * sizeRounded;
+        const usdcRounded = Number(usdcRaw.toFixed(4));
+
+        let makerAmount: string;
+        let takerAmount: string;
+
+        if (side === 0) {
+          // BUY: Maker = USDC, Taker = Asset
+          makerAmount = Math.round(usdcRounded * DECIMALS).toString();
+          takerAmount = Math.round(sizeRounded * DECIMALS).toString();
+        } else {
+          // SELL: Maker = Asset, Taker = USDC
+          makerAmount = Math.round(sizeRounded * DECIMALS).toString();
+          takerAmount = Math.round(usdcRounded * DECIMALS).toString();
+        }
+
+        return {
+          salt: Math.round(Math.random() * Date.now()).toString(),
+          maker: makerAddress,
+          signer: signerAddress,
+          taker: '0x0000000000000000000000000000000000000000',
+          tokenId: orderParams.tokenID,
+          makerAmount,
+          takerAmount,
+          expiration: '0',
+          nonce: '0',
+          feeRateBps: (orderParams.feeRateBps || 0).toString(),
+          side,
+          signatureType: 2, // POLY_GNOSIS_SAFE
+          negRisk: orderParams.negRisk,
+        };
+      });
+      const phase2End = performance.now();
+      this.logger.log(`⏱️ [AXIOS] Phase 2 (prepare params): ${(phase2End - phase2Start).toFixed(2)}ms`);
+
+      // Phase 3: Batch sign using native Rust module
+      const phase3Start = performance.now();
+      if (!this.nativeModule) {
+        return { success: false, error: 'Native core module not available. Please build native-core first.' };
+      }
+
+      // Pass private key separately for native signing
+      const signedOrders = this.nativeModule.signClobOrdersBatch(config.privateKey, batchOrderParams);
+      const phase3End = performance.now();
+      this.logger.log(`⏱️ [AXIOS] Phase 3 (native signing): ${(phase3End - phase3Start).toFixed(2)}ms for ${orders.length} orders`);
+
+      // Phase 4: Transform to CLOB order format for API request (matching orderToJson format)
+      const phase4Start = performance.now();
+      const batchOrdersPayload = signedOrders.map((signed: any, idx: number) => {
+        const orderType = orders[idx].orderType
+          ? orderTypeMap[orders[idx].orderType!]
+          : 'GTC';
+
+        // Match the orderToJson format from @polymarket/clob-client
+        return {
+          deferExec: false,
+          order: {
+            salt: parseInt(signed.salt, 10), // Must be integer
+            maker: signed.maker,
+            signer: signed.signer,
+            taker: signed.taker,
+            tokenId: signed.tokenId,
+            makerAmount: signed.makerAmount,
+            takerAmount: signed.takerAmount,
+            side: signed.side === 0 ? 'BUY' : 'SELL', // String enum, not number
+            expiration: signed.expiration,
+            nonce: signed.nonce,
+            feeRateBps: signed.feeRateBps,
+            signatureType: signed.signatureType,
+            signature: signed.signature,
+          },
+          owner: creds.key, // API key as owner
+          orderType,
+        };
+      });
+      const phase4End = performance.now();
+      this.logger.log(`⏱️ [AXIOS] Phase 4 (transform payload): ${(phase4End - phase4Start).toFixed(2)}ms`);
+
+      // Phase 5: Build L2 auth headers for the request
+      const phase5Start = performance.now();
+      const requestPath = '/orders'; // Batch endpoint uses /orders (plural)
+      const bodyStr = JSON.stringify(batchOrdersPayload);
+      const timestamp = Math.floor(Date.now() / 1000);
+      const signature = this.buildHmacSignature(creds.secret, timestamp, 'POST', requestPath, bodyStr);
+
+      const authHeaders = {
+        'POLY_ADDRESS': signerAddress, // Must be signer address (wallet), not proxy
+        'POLY_SIGNATURE': signature,
+        'POLY_TIMESTAMP': timestamp.toString(),
+        'POLY_API_KEY': creds.key,
+        'POLY_PASSPHRASE': creds.passphrase,
+      };
+      const phase5End = performance.now();
+      this.logger.log(`⏱️ [AXIOS] Phase 5 (HMAC auth): ${(phase5End - phase5Start).toFixed(2)}ms`);
+
+      // Phase 6: Post batch orders using HFT-optimized axios client
+      const phase6Start = performance.now();
+      const response = await this.hftHttpClient.post(requestPath, batchOrdersPayload, {
+        headers: authHeaders,
+      });
+      const phase6End = performance.now();
+      this.logger.log(`⏱️ [AXIOS] Phase 6 (HTTP POST): ${(phase6End - phase6Start).toFixed(2)}ms`);
+
+      const responses = response.data;
+
+      // Process responses
+      const results: BatchOrderResult[] = new Array(
+        Array.isArray(responses) ? responses.length : 0,
+      );
+
+      if (Array.isArray(responses)) {
+        for (let i = 0; i < responses.length; i++) {
+          const resp = responses[i];
+
+          if (resp && resp.orderID) {
+            results[i] = {
+              success: true,
+              orderID: resp.orderID,
+              status: resp.status || 'unknown',
+              errorMsg: resp.errorMsg || '',
+            };
+          } else {
+            results[i] = {
+              success: false,
+              errorMsg: resp?.errorMsg || `Order ${i + 1} placement failed`,
+            };
+          }
+        }
+      }
+
+      const totalTime = performance.now() - startTime;
+      this.logger.log(`⏱️ [AXIOS] Total placeBatchOrdersAxios: ${totalTime.toFixed(2)}ms for ${orders.length} orders`);
+
+      return {
+        success: true,
+        results,
+      };
+    } catch (error: any) {
+      const totalTime = performance.now() - startTime;
+      this.logger.error(`[AXIOS] placeBatchOrdersAxios error after ${totalTime.toFixed(2)}ms: ${error.message}`);
+      if (error.response?.data) {
+        this.logger.error(`[AXIOS] Server response: ${JSON.stringify(error.response.data)}`);
+      }
       return { success: false, error: error.message };
     }
   }
@@ -2106,6 +2422,121 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
         count: 0,
         message: `Failed to clear mint keys: ${error.message}`
       };
+    }
+  }
+
+  /**
+   * Get order details by order hash
+   * Uses the CLOB client's getOrder method with L2 authentication
+   * @param orderHash The order hash/ID to query
+   * @returns Order details or error
+   */
+  async getOrder(orderHash: string): Promise<{
+    success: boolean;
+    order?: any;
+    error?: string;
+  }> {
+    try {
+      const config = this.getDefaultConfig();
+      if (!config) {
+        return { success: false, error: 'Default config not available' };
+      }
+
+      const client = await this.getOrCreateAuthenticatedClient(config);
+      const order = await client.getOrder(orderHash);
+
+      if (order) {
+        return { success: true, order };
+      } else {
+        return { success: false, error: 'Order not found' };
+      }
+    } catch (error: any) {
+      this.logger.error(`Error getting order ${orderHash}: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get open/active orders for a specific market
+   * Uses the CLOB client's getOpenOrders method with L2 authentication
+   * @param market The market conditionId to query (optional - if not provided, gets all open orders)
+   * @returns Array of open orders or error
+   */
+  async getOpenOrders(market?: string): Promise<{
+    success: boolean;
+    orders?: any[];
+    error?: string;
+  }> {
+    try {
+      const config = this.getDefaultConfig();
+      if (!config) {
+        return { success: false, error: 'Default config not available' };
+      }
+
+      const client = await this.getOrCreateAuthenticatedClient(config);
+
+      const params = market ? { market } : {};
+      const orders = await client.getOpenOrders(params);
+
+      return {
+        success: true,
+        orders: Array.isArray(orders) ? orders : []
+      };
+    } catch (error: any) {
+      this.logger.error(`Error getting open orders: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get trades for a specific market and/or maker address
+   * Uses the CLOB client's getTrades method with L2 authentication
+   * @param id Optional trade ID to fetch a specific trade
+   * @param market Optional market conditionId to filter trades
+   * @param makerAddress Optional maker address to filter trades (defaults to current wallet)
+   * @returns Array of trades or error
+   */
+  async getTrades(params?: {
+    id?: string;
+    market?: string;
+    makerAddress?: string;
+  }): Promise<{
+    success: boolean;
+    trades?: any[];
+    error?: string;
+  }> {
+    try {
+      const config = this.getDefaultConfig();
+      if (!config) {
+        return { success: false, error: 'Default config not available' };
+      }
+
+      const client = await this.getOrCreateAuthenticatedClient(config);
+      const wallet = this.buildWallet(config);
+
+      // Build query params
+      const queryParams: { id?: string; market?: string; maker_address?: string } = {};
+
+      if (params?.id) {
+        queryParams.id = params.id;
+      }
+
+      if (params?.market) {
+        queryParams.market = params.market;
+      }
+
+      // Use provided makerAddress or default to current wallet address
+      queryParams.maker_address = params?.makerAddress || wallet.address;
+
+      const trades = await client.getTrades(queryParams);
+
+      return {
+        success: true,
+        trades: Array.isArray(trades) ? trades : []
+      };
+    } catch (error: any) {
+      this.logger.error(`Error getting trades: ${error.message}`);
+      return { success: false, error: error.message };
     }
   }
 }

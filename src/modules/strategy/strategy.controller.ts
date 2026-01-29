@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Body,
   Query,
   Logger,
   ParseIntPipe,
@@ -10,7 +11,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { Response } from 'express';
-import { ApiQuery } from '@nestjs/swagger';
+import { ApiQuery, ApiBody } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ArbSignal } from '../../database/entities/arb-signal.entity';
@@ -21,6 +22,7 @@ import { MarketStructureService } from './market-structure.service';
 import { RetentionCleanupService } from './retention-cleanup.service';
 import { TradeAnalysisService } from './trade-analysis.service';
 import { MintQueueService } from './services/mint-queue.service';
+import { ManagePositionQueueService } from './services/manage-position-queue.service';
 
 @Controller('strategy')
 export class StrategyController {
@@ -37,6 +39,7 @@ export class StrategyController {
     private readonly retentionCleanupService: RetentionCleanupService,
     private readonly tradeAnalysisService: TradeAnalysisService,
     private readonly mintQueueService: MintQueueService,
+    private readonly managePositionQueueService: ManagePositionQueueService,
   ) { }
 
   /**
@@ -650,6 +653,179 @@ export class StrategyController {
         success: false,
         error: error.message,
       });
+    }
+  }
+
+  // ============================================
+  // Manage Position Queue Endpoints
+  // ============================================
+
+  /**
+   * GET /strategy/manage-position/status
+   * Get current manage-position queue status
+   */
+  @Get('manage-position/status')
+  async getManagePositionStatus() {
+    try {
+      return await this.managePositionQueueService.getStats();
+    } catch (error) {
+      this.logger.error(
+        `Failed to get manage-position queue status: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * GET /strategy/manage-position/waiting
+   * Get all waiting jobs in the manage-position queue
+   */
+  @Get('manage-position/waiting')
+  async getManagePositionWaiting() {
+    try {
+      const jobs = await this.managePositionQueueService.getWaitingJobs();
+      return {
+        count: jobs.length,
+        jobs,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to get waiting jobs: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * GET /strategy/manage-position/failed
+   * Get all failed jobs in the manage-position queue
+   */
+  @Get('manage-position/failed')
+  async getManagePositionFailed() {
+    try {
+      const jobs = await this.managePositionQueueService.getFailedJobs();
+      return {
+        count: jobs.length,
+        jobs,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to get failed jobs: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * POST /strategy/manage-position/test
+   * Manually trigger manage-position check with custom params
+   * 
+   * Example body:
+   * {
+   *   "tradeId": "test-trade-123",
+   *   "orderIds": ["0xabc...", "0xdef..."],
+   *   "originalOrders": [
+   *     {
+   *       "orderId": "0xabc...",
+   *       "tokenID": "12345...",
+   *       "side": "BUY",
+   *       "price": 0.55,
+   *       "size": 10,
+   *       "negRisk": false
+   *     }
+   *   ]
+   * }
+   */
+  @ApiBody({
+    description: 'Trigger manage-position check with custom params',
+    schema: {
+      type: 'object',
+      properties: {
+        tradeId: { type: 'string', description: 'Optional trade ID (auto-generated if not provided)', example: 'test-trade-123' },
+        orderIds: { type: 'array', items: { type: 'string' }, description: 'Order hashes to check status', example: ['0xabc123...', '0xdef456...'] },
+        originalOrders: {
+          type: 'array',
+          description: 'Original order details for potential retry',
+          items: {
+            type: 'object',
+            properties: {
+              orderId: { type: 'string', description: 'Order hash', example: '0xabc123...' },
+              tokenID: { type: 'string', description: 'Token ID (condition ID)', example: '12345678901234567890...' },
+              side: { type: 'string', enum: ['BUY', 'SELL'], description: 'Order side', example: 'BUY' },
+              price: { type: 'number', description: 'Order price (0-1)', example: 0.55 },
+              size: { type: 'number', description: 'Order size', example: 10 },
+              negRisk: { type: 'boolean', description: 'Whether this is a negRisk market', example: false },
+            },
+            required: ['orderId', 'tokenID', 'side', 'price', 'size'],
+          },
+        },
+      },
+      required: ['orderIds', 'originalOrders'],
+    },
+  })
+  @Post('manage-position/test')
+  async testManagePosition(
+    @Body() body: {
+      tradeId?: string;
+      orderIds: string[];
+      originalOrders: Array<{
+        orderId: string;
+        tokenID: string;
+        side: 'BUY' | 'SELL';
+        price: number;
+        size: number;
+        negRisk?: boolean;
+      }>;
+    },
+  ) {
+    try {
+      const tradeId = body.tradeId || `test-${Date.now()}`;
+
+      this.logger.log(`Manual manage-position test triggered via API: tradeId=${tradeId}`);
+
+      const result = await this.managePositionQueueService.addToQueue(
+        tradeId,
+        body.orderIds,
+        body.originalOrders,
+      );
+
+      return {
+        success: true,
+        message: result.queued ? 'Job queued successfully' : `Job not queued: ${result.reason}`,
+        ...result,
+        tradeId,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to queue manage-position test: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * POST /strategy/manage-position/clear
+   * Clear all waiting jobs from the manage-position queue
+   */
+  @Post('manage-position/clear')
+  async clearManagePositionQueue() {
+    try {
+      this.logger.log('Manage-position queue clear requested via API');
+      await this.managePositionQueueService.clearQueue();
+      return {
+        success: true,
+        message: 'Manage-position queue cleared',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to clear manage-position queue: ${error.message}`,
+        error.stack,
+      );
+      throw error;
     }
   }
 

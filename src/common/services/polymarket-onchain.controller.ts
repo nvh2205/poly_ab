@@ -555,7 +555,7 @@ export class PolymarketOnchainController {
         );
       }
 
-      const result = await this.polymarketOnchainService.placeBatchOrdersNative(
+      const result = await this.polymarketOnchainService.placeBatchOrdersAxios(
         config,
         dto.orders,
       );
@@ -1223,10 +1223,10 @@ export class PolymarketOnchainController {
    * POST /polymarket-onchain/mint/clear-cache
    * Clear all mint:* keys from Redis
    */
-  @Post('mint/clear-cache')
+  @Post('clear-mint-cache')
   @ApiOperation({
-    summary: 'Clear all mint:* keys from Redis',
-    description: 'Deletes all Redis keys matching the pattern mint:*'
+    summary: 'Clear all mint cache keys from Redis',
+    description: 'Deletes all Redis keys matching mint:* pattern',
   })
   async clearMintCache() {
     try {
@@ -1239,6 +1239,249 @@ export class PolymarketOnchainController {
       throw new HttpException(
         error.message || 'Internal server error',
         HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * GET /polymarket-onchain/order
+   * Get order details by order hash
+   */
+  @Get('order')
+  @ApiOperation({
+    summary: 'Get order details by order hash',
+    description: 'Retrieves order information from Polymarket CLOB using the order hash/ID',
+  })
+  @ApiQuery({
+    name: 'orderHash',
+    description: 'The order hash/ID to query (e.g., 0xb816482a5187a3d3db49cbaf6fe3ddf24f53e6c712b5a4bf5e01d0ec7b11dabc)',
+    required: true,
+    type: String,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Order details retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        order: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: 'Order ID' },
+            status: { type: 'string', description: 'Order status (e.g., LIVE, MATCHED, CANCELLED)' },
+            market: { type: 'string', description: 'Market condition ID' },
+            original_size: { type: 'string', description: 'Original order size' },
+            outcome: { type: 'string', description: 'Outcome (Yes/No)' },
+            maker_address: { type: 'string', description: 'Maker wallet address' },
+            price: { type: 'string', description: 'Order price' },
+            side: { type: 'string', description: 'BUY or SELL' },
+            size_matched: { type: 'string', description: 'Size that has been matched' },
+            asset_id: { type: 'string', description: 'Token ID' },
+            expiration: { type: 'string', description: 'Order expiration timestamp' },
+            type: { type: 'string', description: 'Order type (GTC, FOK, etc.)' },
+            created_at: { type: 'string', description: 'Order creation timestamp' },
+          },
+        },
+      },
+    },
+  })
+  async getOrder(@Query('orderHash') orderHash: string) {
+    try {
+      if (!orderHash) {
+        throw new HttpException(
+          'orderHash query parameter is required',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      this.logger.log(`Received request to get order: ${orderHash}`);
+      const result = await this.polymarketOnchainService.getOrder(orderHash);
+
+      if (!result.success) {
+        throw new HttpException(
+          result.error || 'Failed to get order',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      return {
+        success: true,
+        order: result.order,
+      };
+    } catch (error: any) {
+      this.logger.error(`Error in getOrder: ${error.message}`);
+      throw new HttpException(
+        error.message || 'Internal server error',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * GET /polymarket-onchain/open-orders
+   * Get all open/active orders for a specific market or all markets
+   */
+  @Get('open-orders')
+  @ApiOperation({
+    summary: 'Get open/active orders',
+    description: 'Retrieves all open orders from Polymarket CLOB. Optionally filter by market conditionId.',
+  })
+  @ApiQuery({
+    name: 'market',
+    description: 'Optional market conditionId to filter orders (e.g., 0xbd31dc8a20211944f6b70f31557f1001557b59905b7738480ca09bd4532f84af)',
+    required: false,
+    type: String,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Open orders retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        count: { type: 'number', description: 'Number of open orders' },
+        orders: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Order ID' },
+              status: { type: 'string', description: 'Order status' },
+              market: { type: 'string', description: 'Market condition ID' },
+              original_size: { type: 'string', description: 'Original order size' },
+              outcome: { type: 'string', description: 'Outcome (Yes/No)' },
+              maker_address: { type: 'string', description: 'Maker wallet address' },
+              price: { type: 'string', description: 'Order price' },
+              side: { type: 'string', description: 'BUY or SELL' },
+              size_matched: { type: 'string', description: 'Size matched so far' },
+              asset_id: { type: 'string', description: 'Token ID' },
+              type: { type: 'string', description: 'Order type (GTC, FOK, etc.)' },
+              created_at: { type: 'string', description: 'Creation timestamp' },
+            },
+          },
+        },
+      },
+    },
+  })
+  async getOpenOrders(@Query('market') market?: string) {
+    try {
+      this.logger.log(`Received request to get open orders${market ? ` for market: ${market}` : ''}`);
+      const result = await this.polymarketOnchainService.getOpenOrders(market);
+
+      if (!result.success) {
+        throw new HttpException(
+          result.error || 'Failed to get open orders',
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+
+      return {
+        success: true,
+        count: result.orders?.length || 0,
+        orders: result.orders,
+      };
+    } catch (error: any) {
+      this.logger.error(`Error in getOpenOrders: ${error.message}`);
+      throw new HttpException(
+        error.message || 'Internal server error',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * GET /polymarket-onchain/trades
+   * Get trade history for a specific market and/or maker address
+   */
+  @Get('trades')
+  @ApiOperation({
+    summary: 'Get trade history',
+    description: 'Retrieves trade history from Polymarket CLOB. Can filter by id, market and/or maker address.',
+  })
+  @ApiQuery({
+    name: 'id',
+    description: 'Optional trade ID to fetch a specific trade',
+    required: false,
+    type: String,
+  })
+  @ApiQuery({
+    name: 'market',
+    description: 'Optional market conditionId to filter trades',
+    required: false,
+    type: String,
+  })
+  @ApiQuery({
+    name: 'makerAddress',
+    description: 'Optional maker address to filter trades (defaults to current wallet)',
+    required: false,
+    type: String,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Trades retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        count: { type: 'number', description: 'Number of trades' },
+        trades: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Trade ID' },
+              taker_order_id: { type: 'string', description: 'Taker order ID' },
+              market: { type: 'string', description: 'Market condition ID' },
+              asset_id: { type: 'string', description: 'Token ID' },
+              side: { type: 'string', description: 'BUY or SELL' },
+              size: { type: 'string', description: 'Trade size' },
+              fee_rate_bps: { type: 'string', description: 'Fee rate in basis points' },
+              price: { type: 'string', description: 'Trade price' },
+              status: { type: 'string', description: 'Trade status' },
+              match_time: { type: 'string', description: 'Match timestamp' },
+              outcome: { type: 'string', description: 'Outcome (Yes/No)' },
+              maker_address: { type: 'string', description: 'Maker wallet address' },
+              trader_side: { type: 'string', description: 'MAKER or TAKER' },
+            },
+          },
+        },
+      },
+    },
+  })
+  async getTrades(
+    @Query('id') id?: string,
+    @Query('market') market?: string,
+    @Query('makerAddress') makerAddress?: string,
+  ) {
+    try {
+      this.logger.log(
+        `Received request to get trades${id ? ` id: ${id}` : ''}${market ? ` for market: ${market}` : ''}${makerAddress ? `, maker: ${makerAddress}` : ''}`,
+      );
+
+      const result = await this.polymarketOnchainService.getTrades({
+        id,
+        market,
+        makerAddress,
+      });
+
+      if (!result.success) {
+        throw new HttpException(
+          result.error || 'Failed to get trades',
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+
+      return {
+        success: true,
+        count: result.trades?.length || 0,
+        trades: result.trades,
+      };
+    } catch (error: any) {
+      this.logger.error(`Error in getTrades: ${error.message}`);
+      throw new HttpException(
+        error.message || 'Internal server error',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }

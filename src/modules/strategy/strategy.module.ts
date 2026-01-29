@@ -19,6 +19,8 @@ import { PolymarketOnchainModule } from '../../common/services/polymarket-onchai
 import { TelegramModule } from '../../common/services/telegram.module';
 import { MintQueueService, MINT_QUEUE_NAME } from './services/mint-queue.service';
 import { MintQueueProcessor } from './services/mint-queue.processor';
+import { ManagePositionQueueService, MANAGE_POSITION_QUEUE_NAME } from './services/manage-position-queue.service';
+import { ManagePositionProcessor } from './services/manage-position.processor';
 
 @Module({
   imports: [
@@ -43,6 +45,19 @@ import { MintQueueProcessor } from './services/mint-queue.processor';
         removeOnFail: 50,
       },
     }),
+    // Register Bull Queue for manage-position (order status checking)
+    BullModule.registerQueue({
+      name: MANAGE_POSITION_QUEUE_NAME,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 5000,
+        },
+        removeOnComplete: 100,
+        removeOnFail: 50,
+      },
+    }),
     IngestionModule,
     PolymarketOnchainModule,
     TelegramModule,
@@ -57,6 +72,8 @@ import { MintQueueProcessor } from './services/mint-queue.processor';
     RetentionCleanupService,
     MintQueueService,
     MintQueueProcessor,
+    ManagePositionQueueService,
+    ManagePositionProcessor,
   ],
   exports: [
     MarketStructureService,
@@ -65,6 +82,7 @@ import { MintQueueProcessor } from './services/mint-queue.processor';
     RealExecutionService,
     TradeAnalysisService,
     MintQueueService,
+    ManagePositionQueueService,
   ],
 })
 export class StrategyModule { }
