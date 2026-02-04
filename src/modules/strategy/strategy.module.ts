@@ -18,9 +18,9 @@ import { RetentionCleanupService } from './retention-cleanup.service';
 import { PolymarketOnchainModule } from '../../common/services/polymarket-onchain.module';
 import { TelegramModule } from '../../common/services/telegram.module';
 import { MintQueueService, MINT_QUEUE_NAME } from './services/mint-queue.service';
-import { MintQueueProcessor } from './services/mint-queue.processor';
+// NOTE: MintQueueProcessor removed - processed by Worker only
 import { ManagePositionQueueService, MANAGE_POSITION_QUEUE_NAME } from './services/manage-position-queue.service';
-import { ManagePositionProcessor } from './services/manage-position.processor';
+// NOTE: ManagePositionProcessor removed - processed by Worker only
 
 @Module({
   imports: [
@@ -70,10 +70,11 @@ import { ManagePositionProcessor } from './services/manage-position.processor';
     RealExecutionService,
     TradeAnalysisService,
     RetentionCleanupService,
+    // Queue Services only - add jobs to queue (processed by Worker)
     MintQueueService,
-    MintQueueProcessor,
     ManagePositionQueueService,
-    ManagePositionProcessor,
+    // NOTE: Processors removed - queue jobs are processed by Worker process only
+    // This improves trading latency by not consuming CPU for queue processing
   ],
   exports: [
     MarketStructureService,
