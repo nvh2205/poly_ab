@@ -21,6 +21,7 @@ import { loadPolymarketConfig } from '../../common/services/polymarket-onchain.c
 import { TelegramService } from '../../common/services/telegram.service';
 import { MintQueueService } from './services/mint-queue.service';
 import { ManagePositionQueueService } from './services/manage-position-queue.service';
+// import { ArbitrageEngineService } from './arbitrage-engine.service';
 
 interface RealTradeResult {
   signalId: string;
@@ -120,6 +121,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     private readonly telegramService: TelegramService,
     private readonly mintQueueService: MintQueueService,
     private readonly managePositionQueueService: ManagePositionQueueService,
+    // private readonly arbitrageEngineService: ArbitrageEngineService
   ) { }
 
   async onModuleInit(): Promise<void> {
@@ -584,7 +586,6 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       return { shouldSkip: true };
     }
 
-    
     // === Calculate order size using cached balance (NO awaits) ===
     const candidates = this.buildOrderCandidates(opportunity);
     if (candidates.length === 0) {

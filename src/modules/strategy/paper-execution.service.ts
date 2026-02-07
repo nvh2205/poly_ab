@@ -11,6 +11,7 @@ import { ArbSignal } from '../../database/entities/arb-signal.entity';
 import { ArbPaperTrade } from '../../database/entities/arb-paper-trade.entity';
 // import { SellStatistics } from '../../database/entities/sell-statistics.entity'; // DEPRECATED: No longer used
 import { ArbitrageEngineTrioService } from './arbitrage-engine-trio.service';
+// import { ArbitrageEngineService } from './arbitrage-engine.service';
 import { ArbOpportunity } from './interfaces/arbitrage.interface';
 import { MarketStructureService } from './market-structure.service';
 
@@ -77,6 +78,7 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
     // @InjectRepository(SellStatistics) // DEPRECATED: No longer used
     // private readonly sellStatisticsRepository: Repository<SellStatistics>,
     private readonly arbitrageEngineTrioService: ArbitrageEngineTrioService,
+    // private readonly arbitrageEngineService: ArbitrageEngineService,
     private readonly marketStructureService: MarketStructureService,
   ) { }
 
