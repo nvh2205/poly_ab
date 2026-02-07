@@ -9,7 +9,7 @@ import { Repository } from 'typeorm';
 import { Subscription } from 'rxjs';
 import { ArbSignal } from '../../database/entities/arb-signal.entity';
 import { ArbRealTrade } from '../../database/entities/arb-real-trade.entity';
-import { ArbitrageEngineService } from './arbitrage-engine.service';
+import { ArbitrageEngineTrioService } from './arbitrage-engine-trio.service';
 import { ArbOpportunity } from './interfaces/arbitrage.interface';
 import {
   PolymarketOnchainService,
@@ -115,7 +115,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     private readonly arbSignalRepository: Repository<ArbSignal>,
     @InjectRepository(ArbRealTrade)
     private readonly arbRealTradeRepository: Repository<ArbRealTrade>,
-    private readonly arbitrageEngineService: ArbitrageEngineService,
+    private readonly arbitrageEngineTrioService: ArbitrageEngineTrioService,
     private readonly polymarketOnchainService: PolymarketOnchainService,
     private readonly telegramService: TelegramService,
     private readonly mintQueueService: MintQueueService,
@@ -171,7 +171,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     );
 
     // Subscribe to opportunities
-    this.opportunitySub = this.arbitrageEngineService
+    this.opportunitySub = this.arbitrageEngineTrioService
       .onOpportunity()
       .subscribe((opportunity) => this.handleOpportunity(opportunity));
 
@@ -584,6 +584,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       return { shouldSkip: true };
     }
 
+    
     // === Calculate order size using cached balance (NO awaits) ===
     const candidates = this.buildOrderCandidates(opportunity);
     if (candidates.length === 0) {

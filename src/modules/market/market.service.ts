@@ -13,7 +13,7 @@ import {
 } from '../../common/constants/app.constants';
 import { Market } from '../../database/entities/market.entity';
 import { MarketStructureService } from '../strategy/market-structure.service';
-import { ArbitrageEngineService } from '../strategy/arbitrage-engine.service';
+import { ArbitrageEngineTrioService } from '../strategy/arbitrage-engine-trio.service';
 
 @Injectable()
 export class MarketService implements OnApplicationBootstrap {
@@ -27,10 +27,10 @@ export class MarketService implements OnApplicationBootstrap {
     private readonly polymarketApi: PolymarketApiService,
     private readonly ingestionService: IngestionService,
     private readonly marketStructureService: MarketStructureService,
-    private readonly arbitrageEngineService: ArbitrageEngineService,
+    private readonly arbitrageEngineService: ArbitrageEngineTrioService,
     @InjectRepository(Market)
     private readonly marketRepository: Repository<Market>,
-  ) {}
+  ) { }
 
   /**
    * Run market discovery immediately when application starts

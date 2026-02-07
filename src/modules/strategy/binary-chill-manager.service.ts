@@ -66,7 +66,7 @@ export class BinaryChillManager {
     eventSlug: string | undefined,
     crypto: string | undefined,
     parents: Array<{ descriptor: MarketRangeDescriptor; index: number }>,
-    binaryChildren: Array<{ descriptor: MarketRangeDescriptor; index: number }>,
+    // binaryChildren: Array<{ descriptor: MarketRangeDescriptor; index: number }>,
   ): void {
     // Build map of parent anchor -> parent info
     const parentByAnchor = new Map<
@@ -82,53 +82,53 @@ export class BinaryChillManager {
     });
 
     // Match each binary child with its parent
-    binaryChildren.forEach((child) => {
-      const anchor = this.extractAnchor(child.descriptor);
-      if (anchor === null) return;
-
-      const parent = parentByAnchor.get(anchor);
-      if (!parent) return;
-
-      // Determine strategy based on child kind
-      let strategy: BinaryChillStrategy;
-      if (child.descriptor.kind === 'below') {
-        // Case 1: Complement markets
-        strategy = 'BUY_CHILD_YES_SELL_PARENT_NO'; // Default, will evaluate both directions
-      } else if (child.descriptor.kind === 'above') {
-        // Case 2: Same direction markets
-        strategy = 'BUY_CHILD_YES_SELL_PARENT_YES'; // Default, will evaluate both directions
-      } else {
-        return; // Skip non-binary markets
-      }
-
-      // Create pair
-      const pairId = `${groupKey}:${child.descriptor.marketId}:${parent.descriptor.marketId}`;
-
-      const childSnapshot = this.createSnapshot(
-        child.descriptor,
-        parent.index,
-        strategy,
-      );
-      const parentSnapshot = this.createSnapshot(
-        parent.descriptor,
-        parent.index,
-        strategy,
-      );
-
-      this.pairs.set(pairId, {
-        child: childSnapshot,
-        parent: parentSnapshot,
-        childIndex: child.index,
-        parentIndex: parent.index,
-        groupKey,
-        eventSlug,
-        crypto,
-      });
-
-      // Index tokens for routing
-      this.indexTokens(pairId, child.descriptor, 'child');
-      this.indexTokens(pairId, parent.descriptor, 'parent');
-    });
+    // binaryChildren.forEach((child) => {
+    //   const anchor = this.extractAnchor(child.descriptor);
+    //   if (anchor === null) return;
+    //
+    //   const parent = parentByAnchor.get(anchor);
+    //   if (!parent) return;
+    //
+    //   // Determine strategy based on child kind
+    //   let strategy: BinaryChillStrategy;
+    //   if (child.descriptor.kind === 'below') {
+    //     // Case 1: Complement markets
+    //     strategy = 'BUY_CHILD_YES_SELL_PARENT_NO'; // Default, will evaluate both directions
+    //   } else if (child.descriptor.kind === 'above') {
+    //     // Case 2: Same direction markets
+    //     strategy = 'BUY_CHILD_YES_SELL_PARENT_YES'; // Default, will evaluate both directions
+    //   } else {
+    //     return; // Skip non-binary markets
+    //   }
+    //
+    //   // Create pair
+    //   const pairId = `${groupKey}:${child.descriptor.marketId}:${parent.descriptor.marketId}`;
+    //
+    //   const childSnapshot = this.createSnapshot(
+    //     child.descriptor,
+    //     parent.index,
+    //     strategy,
+    //   );
+    //   const parentSnapshot = this.createSnapshot(
+    //     parent.descriptor,
+    //     parent.index,
+    //     strategy,
+    //   );
+    //
+    //   this.pairs.set(pairId, {
+    //     child: childSnapshot,
+    //     parent: parentSnapshot,
+    //     childIndex: child.index,
+    //     parentIndex: parent.index,
+    //     groupKey,
+    //     eventSlug,
+    //     crypto,
+    //   });
+    //
+    //   // Index tokens for routing
+    //   this.indexTokens(pairId, child.descriptor, 'child');
+    //   this.indexTokens(pairId, parent.descriptor, 'parent');
+    // });
 
     this.logger.log(
       `Initialized ${this.pairs.size} binary chill pairs for group ${groupKey}`,
@@ -516,9 +516,9 @@ export class BinaryChillManager {
 
     this.logger.debug(
       `Binary chill opportunity: ${strategy} (${tokenType.toUpperCase()}) | ` +
-        `Profit: ${profitAbs.toFixed(4)} (${profitBps.toFixed(2)} bps) | ` +
-        `Child: ${pair.child.descriptor.slug} | ` +
-        `Parent: ${pair.parent.descriptor.slug}`,
+      `Profit: ${profitAbs.toFixed(4)} (${profitBps.toFixed(2)} bps) | ` +
+      `Child: ${pair.child.descriptor.slug} | ` +
+      `Parent: ${pair.parent.descriptor.slug}`,
     );
   }
 

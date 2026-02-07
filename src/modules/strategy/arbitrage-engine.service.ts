@@ -133,10 +133,10 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit(): Promise<void> {
-    await this.bootstrapGroups();
-    this.topOfBookSub = this.marketDataStreamService
-      .onTopOfBook()
-      .subscribe((update) => this.handleTopOfBook(update));
+    // await this.bootstrapGroups();
+    // this.topOfBookSub = this.marketDataStreamService
+    //   .onTopOfBook()
+    //   .subscribe((update) => this.handleTopOfBook(update));
   }
 
   onModuleDestroy(): void {

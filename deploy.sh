@@ -3,12 +3,14 @@
 # ==============================================================================
 # POLYMARKET HIGH-PERFORMANCE DEPLOY SCRIPT
 # Features: Smart Caching, CPU Optimization, Dependency Relinking
+# Supports: API + Worker Architecture
 # ==============================================================================
 
 set -e  # Dừng ngay nếu có lỗi
 
 # --- CẤU HÌNH ---
-PM2_APP_NAME="polymarket-ab"
+PM2_API_NAME="polymarket-api"
+PM2_WORKER_NAME="polymarket-worker"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BRANCH="main"
 NATIVE_DIR="$PROJECT_DIR/native-core"
@@ -33,11 +35,49 @@ else DOCKER_CMD=""; fi
 
 TARGET=${1:-""}
 
+# --- HELP ---
+if [ "$TARGET" = "help" ] || [ "$TARGET" = "-h" ] || [ "$TARGET" = "--help" ]; then
+    echo ""
+    echo "Usage: ./deploy.sh [COMMAND]"
+    echo ""
+    echo "Commands:"
+    echo "  (empty)     Full deployment (git pull, build, restart all)"
+    echo "  api         Quick restart API only"
+    echo "  worker      Quick restart Worker only"
+    echo "  all         Quick restart both API and Worker"
+    echo "  services    Restart Docker services"
+    echo "  status      Show PM2 status"
+    echo "  logs        Show logs (both API and Worker)"
+    echo "  logs-api    Show API logs"
+    echo "  logs-worker Show Worker logs"
+    echo ""
+    exit 0
+fi
+
 # --- XỬ LÝ QUICK COMMANDS ---
-if [ "$TARGET" = "app" ]; then
-    log "🚀 Quick Restart PM2..."
+if [ "$TARGET" = "api" ]; then
+    log "🚀 Quick Restart API..."
     export UV_THREADPOOL_SIZE=64
-    pm2 restart "$PM2_APP_NAME" --update-env
+    pm2 restart "$PM2_API_NAME" --update-env
+    pm2 logs "$PM2_API_NAME" --lines 5 --nostream
+    exit 0
+fi
+
+if [ "$TARGET" = "worker" ]; then
+    log "🔧 Quick Restart Worker..."
+    export UV_THREADPOOL_SIZE=64
+    pm2 restart "$PM2_WORKER_NAME" --update-env
+    pm2 logs "$PM2_WORKER_NAME" --lines 5 --nostream
+    exit 0
+fi
+
+if [ "$TARGET" = "all" ]; then
+    log "🚀 Quick Restart All (API + Worker)..."
+    export UV_THREADPOOL_SIZE=64
+    pm2 restart "$PM2_API_NAME" --update-env
+    pm2 restart "$PM2_WORKER_NAME" --update-env
+    pm2 save --force > /dev/null
+    pm2 status
     exit 0
 fi
 
@@ -45,6 +85,26 @@ if [ "$TARGET" = "services" ]; then
     log "🐳 Restarting Docker Services..."
     cd "$PROJECT_DIR"
     $DOCKER_CMD restart && exit 0
+fi
+
+if [ "$TARGET" = "status" ]; then
+    pm2 status
+    exit 0
+fi
+
+if [ "$TARGET" = "logs" ]; then
+    pm2 logs --lines 50
+    exit 0
+fi
+
+if [ "$TARGET" = "logs-api" ]; then
+    pm2 logs "$PM2_API_NAME" --lines 50
+    exit 0
+fi
+
+if [ "$TARGET" = "logs-worker" ]; then
+    pm2 logs "$PM2_WORKER_NAME" --lines 50
+    exit 0
 fi
 
 # ==============================================================================
@@ -168,7 +228,7 @@ if [ "$NEEDS_APP_BUILD" = true ]; then
 fi
 
 # ==============================================================================
-# BƯỚC 5: RESTART SERVICES & PM2
+# BƯỚC 5: RESTART SERVICES & PM2 (API + WORKER)
 # ==============================================================================
 log "Step 5: Finishing Deployment..."
 
@@ -181,25 +241,50 @@ if [ -n "$DOCKER_CMD" ] && [ -f "docker-compose.yml" ]; then
     fi
 fi
 
-# PM2 Restart (Tuning)
-log "--> Restarting PM2..."
+# PM2 Restart (API + Worker)
+log "--> Restarting PM2 (API + Worker)..."
 
 # Tăng Thread Pool lên 64 (QUAN TRỌNG cho Native/Crypto)
 export UV_THREADPOOL_SIZE=64
 export NODE_ENV=production
 
-if pm2 describe "$PM2_APP_NAME" > /dev/null 2>&1; then
-    # Update env mới nhất
-    pm2 restart "$PM2_APP_NAME" --update-env
-else
-    if [ -f "ecosystem.config.js" ]; then
-        pm2 start ecosystem.config.js --env production
+# Check ecosystem.config.js exists
+if [ -f "ecosystem.config.js" ]; then
+    # Check if processes are running
+    if pm2 describe "$PM2_API_NAME" > /dev/null 2>&1; then
+        # Restart existing processes
+        log "--> Restarting API..."
+        pm2 restart "$PM2_API_NAME" --update-env
+        
+        log "--> Restarting Worker..."
+        pm2 restart "$PM2_WORKER_NAME" --update-env
     else
-        pm2 start dist/main.js --name "$PM2_APP_NAME"
+        # Start fresh with ecosystem config
+        log "--> Starting with ecosystem.config.js..."
+        pm2 start ecosystem.config.js --env production
+    fi
+else
+    # Fallback: start manually
+    if pm2 describe "$PM2_API_NAME" > /dev/null 2>&1; then
+        pm2 restart "$PM2_API_NAME" --update-env
+    else
+        pm2 start dist/src/main.js --name "$PM2_API_NAME"
+    fi
+    
+    if pm2 describe "$PM2_WORKER_NAME" > /dev/null 2>&1; then
+        pm2 restart "$PM2_WORKER_NAME" --update-env
+    else
+        pm2 start dist/src/worker.main.js --name "$PM2_WORKER_NAME"
     fi
 fi
 
 pm2 save --force > /dev/null
+
 log "✅ DEPLOYMENT COMPLETED SUCCESSFULLY!"
 echo ""
-pm2 logs "$PM2_APP_NAME" --lines 10 --nostream
+echo "========================================"
+echo "  API:    $PM2_API_NAME"
+echo "  Worker: $PM2_WORKER_NAME"
+echo "========================================"
+echo ""
+pm2 status
