@@ -10,7 +10,7 @@ import { Subscription } from 'rxjs';
 import { ArbSignal } from '../../database/entities/arb-signal.entity';
 import { ArbPaperTrade } from '../../database/entities/arb-paper-trade.entity';
 // import { SellStatistics } from '../../database/entities/sell-statistics.entity'; // DEPRECATED: No longer used
-import { ArbitrageEngineService } from './arbitrage-engine.service';
+import { ArbitrageEngineTrioService } from './arbitrage-engine-trio.service';
 import { ArbOpportunity } from './interfaces/arbitrage.interface';
 import { MarketStructureService } from './market-structure.service';
 
@@ -76,9 +76,9 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
     private readonly arbPaperTradeRepository: Repository<ArbPaperTrade>,
     // @InjectRepository(SellStatistics) // DEPRECATED: No longer used
     // private readonly sellStatisticsRepository: Repository<SellStatistics>,
-    private readonly arbitrageEngineService: ArbitrageEngineService,
+    private readonly arbitrageEngineTrioService: ArbitrageEngineTrioService,
     private readonly marketStructureService: MarketStructureService,
-  ) {}
+  ) { }
 
   async onModuleInit(): Promise<void> {
     // this.opportunitySub = this.arbitrageEngineService
@@ -109,7 +109,7 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
         await this.savePaperTrade(tradeResult);
         this.logger.log(
           `Paper trade executed: ${opportunity.strategy} on ${opportunity.groupKey}, ` +
-            `profit: ${tradeResult.pnlAbs.toFixed(4)} (${tradeResult.totalCost})`,
+          `profit: ${tradeResult.pnlAbs.toFixed(4)} (${tradeResult.totalCost})`,
         );
       } else {
         this.logger.debug(
@@ -280,7 +280,7 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
     // Get latest prices from socket updates after latency
     // This reflects real-world scenario where prices may have changed
     const latestOpportunity =
-      this.arbitrageEngineService.getLatestSnapshot(opportunityOld);
+      this.arbitrageEngineTrioService.getLatestSnapshot(opportunityOld);
     const opportunity = latestOpportunity || opportunityOld;
 
     const fills: PaperFill[] = [];
@@ -1138,13 +1138,13 @@ export class PaperExecutionService implements OnModuleInit, OnModuleDestroy {
       mostFrequentStrategy: normalizeStrategy(raw?.mostFrequentStrategy),
       strategyByFrequency: Array.isArray(raw?.strategyByFrequency)
         ? (raw.strategyByFrequency as any[])
-            .map((r) => normalizeStrategy(r))
-            .filter((r): r is StrategyAggregate => r !== null)
+          .map((r) => normalizeStrategy(r))
+          .filter((r): r is StrategyAggregate => r !== null)
         : [],
       strategyByProfit: Array.isArray(raw?.strategyByProfit)
         ? (raw.strategyByProfit as any[])
-            .map((r) => normalizeStrategy(r))
-            .filter((r): r is StrategyAggregate => r !== null)
+          .map((r) => normalizeStrategy(r))
+          .filter((r): r is StrategyAggregate => r !== null)
         : [],
       topProfitTrade: normalizeTopTrade(raw?.topProfitTrade),
     };

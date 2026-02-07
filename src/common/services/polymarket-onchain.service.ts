@@ -146,6 +146,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
   }
 
   // Contract addresses (Fixed for Polygon)
+  private readonly RPC_READ_ONLY = 'http://lynx:lynx@polygon-rpc.lynxsolution.xyz';
   private readonly CTF_EXCHANGE_ADDR =
     '0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E';
   private readonly CTF_ADDR = '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045';
@@ -321,11 +322,14 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       return cached;
     }
 
-    const provider = new providers.JsonRpcProvider(config.polygonRpc);
+    let provider = new providers.JsonRpcProvider(config.polygonRpc);
+
     const wallet = new Wallet(config.privateKey, provider);
     this.walletCache.set(keyHash, wallet);
     return wallet;
   }
+
+
 
   /**
    * Get or create API credentials (cached by wallet address)
@@ -1770,12 +1774,19 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
     address: string;
   }> {
     try {
+      const rpcUrl = new URL(this.RPC_READ_ONLY);
+      const readOnlyProvider = new providers.StaticJsonRpcProvider({
+        url: `${rpcUrl.protocol}//${rpcUrl.host}${rpcUrl.pathname}`,
+        headers: rpcUrl.username
+          ? { Authorization: 'Basic ' + Buffer.from(`${rpcUrl.username}:${rpcUrl.password}`).toString('base64') }
+          : undefined,
+      }, 137);
       const wallet = this.buildWallet(config);
       const targetAddress = overrideAddress || wallet.address;
       const usdcContract = new Contract(
         this.USDC_ADDR,
         this.ABIS.ERC20,
-        wallet,
+        readOnlyProvider,
       );
 
       const usdcBalance = await usdcContract.balanceOf(targetAddress);
@@ -1785,7 +1796,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
       };
 
       if (conditionId) {
-        const ctfContract = new Contract(this.CTF_ADDR, this.ABIS.CTF, wallet);
+        const ctfContract = new Contract(this.CTF_ADDR, this.ABIS.CTF, readOnlyProvider);
         const [yesTokenId, noTokenId] = await this.getPositionIds(
           ctfContract,
           conditionId,

@@ -9,7 +9,7 @@ import { ArbRealTrade } from '../../database/entities/arb-real-trade.entity';
 // import { SellStatistics } from '../../database/entities/sell-statistics.entity'; // DEPRECATED: No longer used
 import { MarketStructureService } from './market-structure.service';
 import { IngestionModule } from '../ingestion/ingestion.module';
-import { ArbitrageEngineService } from './arbitrage-engine.service';
+import { ArbitrageEngineTrioService } from './arbitrage-engine-trio.service';
 import { PaperExecutionService } from './paper-execution.service';
 import { RealExecutionService } from './real-execution.service';
 import { TradeAnalysisService } from './trade-analysis.service';
@@ -65,7 +65,7 @@ import { ManagePositionQueueService, MANAGE_POSITION_QUEUE_NAME } from './servic
   controllers: [StrategyController],
   providers: [
     MarketStructureService,
-    ArbitrageEngineService,
+    ArbitrageEngineTrioService,
     PaperExecutionService,
     RealExecutionService,
     TradeAnalysisService,
@@ -78,7 +78,7 @@ import { ManagePositionQueueService, MANAGE_POSITION_QUEUE_NAME } from './servic
   ],
   exports: [
     MarketStructureService,
-    ArbitrageEngineService,
+    ArbitrageEngineTrioService,
     PaperExecutionService,
     RealExecutionService,
     TradeAnalysisService,
