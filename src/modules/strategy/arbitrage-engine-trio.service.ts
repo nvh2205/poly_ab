@@ -7,7 +7,7 @@ import {
 import { Subscription, Subject, Observable, merge } from 'rxjs';
 import { MarketStructureService } from './market-structure.service';
 import { MarketDataStreamService } from '../ingestion/market-data-stream.service';
-import { BinaryChillManager } from './binary-chill-manager.service';
+// import { BinaryChillManager } from './binary-chill-manager.service';
 import { TopOfBookUpdate } from './interfaces/top-of-book.interface';
 import {
     MarketRangeDescriptor,
@@ -100,7 +100,7 @@ export class ArbitrageEngineTrioService implements OnModuleInit, OnModuleDestroy
     private readonly trioTokenIndex = new Map<string, TrioLocator>();
     private readonly allTokenIndex = new Map<string, TokenSnapshot>();
     private readonly opportunity$ = new Subject<ArbOpportunity>();
-    private readonly binaryChillManager: BinaryChillManager;
+    // private readonly binaryChillManager: BinaryChillManager;
     private topOfBookSub?: Subscription;
 
     private readonly lastPriceCache = new Map<
@@ -122,11 +122,11 @@ export class ArbitrageEngineTrioService implements OnModuleInit, OnModuleDestroy
         private readonly marketStructureService: MarketStructureService,
         private readonly marketDataStreamService: MarketDataStreamService,
     ) {
-        this.binaryChillManager = new BinaryChillManager(
-            this.minProfitBps,
-            this.minProfitAbs,
-            this.cooldownMs,
-        );
+        // this.binaryChillManager = new BinaryChillManager(
+        //     this.minProfitBps,
+        //     this.minProfitAbs,
+        //     this.cooldownMs,
+        // );
     }
 
     async onModuleInit(): Promise<void> {
@@ -140,15 +140,16 @@ export class ArbitrageEngineTrioService implements OnModuleInit, OnModuleDestroy
         if (this.topOfBookSub) {
             this.topOfBookSub.unsubscribe();
         }
-        this.binaryChillManager.clear();
+        // this.binaryChillManager.clear();
         this.opportunity$.complete();
     }
 
     onOpportunity(): Observable<ArbOpportunity> {
-        return merge(
-            this.opportunity$.asObservable(),
-            this.binaryChillManager.onOpportunity(),
-        );
+        return this.opportunity$.asObservable();
+        // return merge(
+        //     this.opportunity$.asObservable(),
+        //     this.binaryChillManager.onOpportunity(),
+        // );
     }
 
     hasGroups(): boolean {
@@ -472,7 +473,7 @@ export class ArbitrageEngineTrioService implements OnModuleInit, OnModuleDestroy
         this.handleTrioTopOfBook(update);
 
         // Handle Range Arbitrage
-        this.handleRangeArbitrage(update);
+        // this.handleRangeArbitrage(update);
     }
 
     // ============================================================================
@@ -671,13 +672,13 @@ export class ArbitrageEngineTrioService implements OnModuleInit, OnModuleDestroy
             return { profitAbs, profitBps, opportunity, emitKey };
         }
 
-        if (meetsSell) {
-            const profitAbs = totalBid - payout;
-            const profitBps = (profitAbs / payout) * 10000;
-            const opportunity = buildOpportunity('SELL', profitAbs, profitBps);
-            const emitKey = `trio_sell_${trio.lowerYes.assetId}_${trio.upperNo.assetId}_${trio.rangeNo.assetId}`;
-            return { profitAbs, profitBps, opportunity, emitKey };
-        }
+        // if (meetsSell) {
+        //     const profitAbs = totalBid - payout;
+        //     const profitBps = (profitAbs / payout) * 10000;
+        //     const opportunity = buildOpportunity('SELL', profitAbs, profitBps);
+        //     const emitKey = `trio_sell_${trio.lowerYes.assetId}_${trio.upperNo.assetId}_${trio.rangeNo.assetId}`;
+        //     return { profitAbs, profitBps, opportunity, emitKey };
+        // }
 
         return null;
     }
@@ -889,7 +890,7 @@ export class ArbitrageEngineTrioService implements OnModuleInit, OnModuleDestroy
         this.marketIdIndex.clear();
         this.trioTokenIndex.clear();
         this.allTokenIndex.clear();
-        this.binaryChillManager.clear();
+        // this.binaryChillManager.clear();
 
         if (removedCount > 0) {
             this.logger.log(`Cleaned up ${removedCount} groups from trio engine`);
