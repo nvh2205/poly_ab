@@ -70,7 +70,18 @@ build_rust_core() {
         warn "--→ Building Rust Core (NAPI)..."
         npm install --silent 2>/dev/null || true
         export RUSTFLAGS="-C target-cpu=native"
-        npm run build
+        
+        # Run build and capture exit code (napi-rs may swallow errors)
+        set +e
+        npm run build 2>&1
+        local BUILD_EXIT=$?
+        set -e
+        
+        # Verify the binary was actually produced
+        if [ $BUILD_EXIT -ne 0 ] || ! ls *.node 1>/dev/null 2>&1; then
+            error "❌ Rust Core build FAILED! Run 'cargo build --release' in rust-core/ for details."
+        fi
+        
         echo "$CURRENT_RUST_HASH" > "$RUST_HASH_FILE"
         log "--→ ✅ Rust Core built successfully!"
         cd "$PROJECT_DIR"
