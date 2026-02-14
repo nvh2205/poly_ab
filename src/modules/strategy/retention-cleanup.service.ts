@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+// @Cron removed - retention cleanup now runs in Worker process
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
 import { ArbSignal } from '../../database/entities/arb-signal.entity';
@@ -30,13 +30,13 @@ export class RetentionCleanupService {
     private readonly arbSignalRepository: Repository<ArbSignal>,
     @InjectRepository(ArbPaperTrade)
     private readonly arbPaperTradeRepository: Repository<ArbPaperTrade>,
-  ) {}
+  ) { }
 
   /**
    * Run cleanup daily at 3 AM
    * Removes old signals and paper trades based on retention policy
    */
-  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  // NOTE: @Cron removed - now runs in Worker process (WorkerCronService)
   async handleDailyCleanup(): Promise<void> {
     if (!this.cleanupEnabled) {
       this.logger.debug('Cleanup is disabled via ARB_CLEANUP_ENABLED=false');

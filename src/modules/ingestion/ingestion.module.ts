@@ -6,6 +6,7 @@ import { BufferService } from './buffer.service';
 import { UtilService } from '../../common/services/util.service';
 import { RedisModule } from '../../common/services/redis.module';
 import { MarketDataStreamService } from './market-data-stream.service';
+import { RustSocketBridgeService } from './rust-socket-bridge.service';
 
 @Module({
   imports: [RedisModule],
@@ -16,7 +17,8 @@ import { MarketDataStreamService } from './market-data-stream.service';
     BufferService,
     UtilService,
     MarketDataStreamService,
+    RustSocketBridgeService,
   ],
-  exports: [IngestionService, MarketDataStreamService],
+  exports: [IngestionService, MarketDataStreamService, RustSocketBridgeService],
 })
-export class IngestionModule {}
+export class IngestionModule { }

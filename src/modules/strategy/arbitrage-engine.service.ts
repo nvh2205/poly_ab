@@ -149,10 +149,11 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
 
   onOpportunity(): Observable<ArbOpportunity> {
     // Merge opportunities from both range arbitrage and binary chill
-    return merge(
-      this.opportunity$.asObservable(),
-      this.binaryChillManager.onOpportunity(),
-    );
+    return this.opportunity$.asObservable();
+    // return merge(
+    //   this.opportunity$.asObservable(),
+    //   // this.binaryChillManager.onOpportunity(),
+    // );
   }
 
   /**
@@ -577,6 +578,7 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
   }
 
   private handleTopOfBook(update: TopOfBookUpdate): void {
+    const t0 = performance.now();
     // Ignore updates with zero bid/ask to avoid invalid spreads
     if (update.bestBid === 0 || update.bestAsk === 0) return;
 
@@ -644,6 +646,10 @@ export class ArbitrageEngineService implements OnModuleInit, OnModuleDestroy {
       this.updateParent(state, locator.index, update);
       // Targeted scan: only evaluate this specific parent
       this.evaluateParentAllRanges(state, locator.index);
+    }
+    const t1 = performance.now();
+    if (t1 - t0 > 2) {
+      console.log(`handleTopOfBook total=${t1 - t0}ms`);
     }
   }
 

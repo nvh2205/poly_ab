@@ -142,6 +142,14 @@ export class BatchOrderParamsDto implements BatchOrderParams {
   @IsOptional()
   @IsBoolean()
   postOnly?: boolean;
+
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Whether this is a NegRisk market (uses different exchange contract)',
+  })
+  @IsOptional()
+  @IsBoolean()
+  negRisk?: boolean;
 }
 
 /**
@@ -420,12 +428,21 @@ export class ImportRedisDataDto {
 @Controller('polymarket-onchain')
 export class PolymarketOnchainController {
   private readonly logger = new Logger(PolymarketOnchainController.name);
+  private rustCore: any = null;
 
   constructor(
     private readonly polymarketOnchainService: PolymarketOnchainService,
     @InjectRepository(Market)
     private readonly marketRepository: Repository<Market>,
-  ) { }
+  ) {
+    // Try to load rust-core module
+    try {
+      const path = require('path');
+      this.rustCore = require(path.join(process.cwd(), 'rust-core'));
+    } catch {
+      // Rust core not available — placeBatchOrdersRust endpoint will return error
+    }
+  }
 
   /**
    * POST /polymarket-onchain/place-order
@@ -531,6 +548,101 @@ export class PolymarketOnchainController {
     }
   }
 
+  /**
+   * POST /polymarket-onchain/place-batch-orders-rust
+   * Place multiple orders using Rust Core (signer + HTTP client).
+   * Uses the executor's cached wallet and persistent HTTP client for HFT performance.
+   * Requires executor to be initialized via RUN_MODE=rust or initExecutor().
+   * Reference: https://docs.polymarket.com/developers/CLOB/orders/create-order-batch
+   */
+  @Post('place-batch-orders-rust')
+  async placeBatchOrdersRust(@Body() dto: PlaceBatchOrdersDto) {
+    try {
+      this.logger.log(
+        `[RUST] Received batch order request for ${dto.orders.length} orders`,
+      );
+
+      if (!this.rustCore) {
+        throw new HttpException(
+          'Rust core module not available. Build rust-core first.',
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+
+      // Validate batch size
+      if (dto.orders.length > 15) {
+        throw new HttpException(
+          'Maximum 15 orders allowed per batch',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // Auto-detect negRisk from CLOB API for each tokenID (critical for EIP-712 signing)
+      const tokenIds = dto.orders.map((o) => o.tokenID);
+      const [negRiskMap, creds] = await Promise.all([
+        this.polymarketOnchainService.resolveNegRiskBatch(tokenIds),
+        this.polymarketOnchainService.getApiCredentials(),
+      ]);
+
+      // Convert DTO orders to Rust N-API input format (using auto-detected negRisk)
+      const rustOrders = dto.orders.map((order) => {
+        const autoNegRisk = negRiskMap.get(order.tokenID) ?? order.negRisk ?? false;
+        if (order.negRisk !== undefined && order.negRisk !== autoNegRisk) {
+          this.logger.warn(
+            `[RUST] negRisk mismatch for token ${order.tokenID.slice(0, 20)}...: caller=${order.negRisk}, API=${autoNegRisk}. Using API value.`,
+          );
+        }
+        return {
+          tokenId: order.tokenID,
+          price: order.price,
+          size: order.size,
+          side: order.side,
+          feeRateBps: order.feeRateBps ?? 0,
+          negRisk: autoNegRisk,
+          orderType: order.orderType ?? 'GTC',
+        };
+      });
+
+      // Call Rust Core — sign + post in one shot
+      const result = this.rustCore.placeBatchOrdersRust(
+        {
+          apiKey: creds.apiKey,
+          apiSecret: creds.apiSecret,
+          apiPassphrase: creds.apiPassphrase,
+          signerAddress: creds.signerAddress,
+        },
+        rustOrders,
+      );
+
+      if (!result.success) {
+        throw new HttpException(
+          result.error || 'Batch order placement failed',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // Count successes and failures
+      const successCount = result.results?.filter((r: any) => r.success).length || 0;
+      const failureCount = result.results?.filter((r: any) => !r.success).length || 0;
+
+      return {
+        success: true,
+        totalOrders: dto.orders.length,
+        successCount,
+        failureCount,
+        results: result.results,
+        latencyMs: result.latencyMs,
+        message: `[RUST] Batch order complete: ${successCount} successful, ${failureCount} failed in ${result.latencyMs?.toFixed(1)}ms`,
+      };
+    } catch (error: any) {
+      this.logger.error(`Error in placeBatchOrdersRust: ${error.message}`);
+      throw new HttpException(
+        error.message || 'Internal server error',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Post('place-batch-orders-native')
   async placeBatchOrdersNative(@Body() dto: PlaceBatchOrdersDto) {
     try {
@@ -554,10 +666,24 @@ export class PolymarketOnchainController {
           HttpStatus.BAD_REQUEST,
         );
       }
+      // Auto-detect negRisk from CLOB API for each tokenID (critical for EIP-712 signing)
+      const tokenIds = dto.orders.map((o) => o.tokenID);
+      const negRiskMap = await this.polymarketOnchainService.resolveNegRiskBatch(tokenIds);
+
+      // Override negRisk with auto-detected values
+      const ordersWithNegRisk = dto.orders.map((order) => {
+        const autoNegRisk = negRiskMap.get(order.tokenID) ?? order.negRisk ?? false;
+        if (order.negRisk !== undefined && order.negRisk !== autoNegRisk) {
+          this.logger.warn(
+            `negRisk mismatch for token ${order.tokenID.slice(0, 20)}...: caller=${order.negRisk}, API=${autoNegRisk}. Using API value.`,
+          );
+        }
+        return { ...order, negRisk: autoNegRisk };
+      });
 
       const result = await this.polymarketOnchainService.placeBatchOrdersAxios(
         config,
-        dto.orders,
+        ordersWithNegRisk,
       );
 
       if (!result.success) {

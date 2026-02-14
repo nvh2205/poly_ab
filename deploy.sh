@@ -14,6 +14,7 @@ PM2_WORKER_NAME="polymarket-worker"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BRANCH="main"
 NATIVE_DIR="$PROJECT_DIR/native-core"
+RUST_CORE_DIR="$PROJECT_DIR/rust-core"
 
 # Màu sắc
 GREEN='\033[0;32m'
@@ -34,6 +35,51 @@ elif docker compose version &> /dev/null 2>&1; then DOCKER_CMD="docker compose";
 else DOCKER_CMD=""; fi
 
 TARGET=${1:-""}
+
+# --- RUST CORE BUILD FUNCTION ---
+# Reusable function to build rust-core with smart hash caching.
+# Called by both full deploy and quick restart commands.
+build_rust_core() {
+    local FORCE=${1:-false}
+    if [ ! -d "$RUST_CORE_DIR" ]; then
+        warn "Thư mục rust-core không tồn tại. Bỏ qua."
+        return 1
+    fi
+
+    cd "$RUST_CORE_DIR"
+
+    # Hash all Rust source files + config
+    local CURRENT_RUST_HASH=$(find src Cargo.toml package.json -type f -print0 2>/dev/null | sort -z | xargs -0 md5sum | md5sum | cut -d' ' -f1)
+    local RUST_HASH_FILE=".build.hash"
+    local RUST_NEEDS_BUILD=true
+
+    # Check if binary exists (platform-specific .node file)
+    local BINARY_EXISTS=false
+    if ls *.node 1>/dev/null 2>&1; then
+        BINARY_EXISTS=true
+    fi
+
+    if [ "$FORCE" = false ] && [ -f "$RUST_HASH_FILE" ] && [ "$BINARY_EXISTS" = true ]; then
+        if [ "$CURRENT_RUST_HASH" == "$(cat $RUST_HASH_FILE)" ]; then
+            RUST_NEEDS_BUILD=false
+            info "--→ Rust Core chưa thay đổi. Skipping build."
+        fi
+    fi
+
+    if [ "$RUST_NEEDS_BUILD" = true ]; then
+        warn "--→ Building Rust Core (NAPI)..."
+        npm install --silent 2>/dev/null || true
+        export RUSTFLAGS="-C target-cpu=native"
+        npm run build
+        echo "$CURRENT_RUST_HASH" > "$RUST_HASH_FILE"
+        log "--→ ✅ Rust Core built successfully!"
+        cd "$PROJECT_DIR"
+        return 0  # Built
+    fi
+
+    cd "$PROJECT_DIR"
+    return 1  # Not built (no change)
+}
 
 # --- HELP ---
 if [ "$TARGET" = "help" ] || [ "$TARGET" = "-h" ] || [ "$TARGET" = "--help" ]; then
@@ -57,6 +103,8 @@ fi
 # --- XỬ LÝ QUICK COMMANDS ---
 if [ "$TARGET" = "api" ]; then
     log "🚀 Quick Restart API..."
+    log "--→ Checking Rust Core build..."
+    build_rust_core || true
     export UV_THREADPOOL_SIZE=64
     pm2 restart "$PM2_API_NAME" --update-env
     pm2 logs "$PM2_API_NAME" --lines 5 --nostream
@@ -65,6 +113,8 @@ fi
 
 if [ "$TARGET" = "worker" ]; then
     log "🔧 Quick Restart Worker..."
+    log "--→ Checking Rust Core build..."
+    build_rust_core || true
     export UV_THREADPOOL_SIZE=64
     pm2 restart "$PM2_WORKER_NAME" --update-env
     pm2 logs "$PM2_WORKER_NAME" --lines 5 --nostream
@@ -73,6 +123,8 @@ fi
 
 if [ "$TARGET" = "all" ]; then
     log "🚀 Quick Restart All (API + Worker)..."
+    log "--→ Checking Rust Core build..."
+    build_rust_core || true
     export UV_THREADPOOL_SIZE=64
     pm2 restart "$PM2_API_NAME" --update-env
     pm2 restart "$PM2_WORKER_NAME" --update-env
@@ -165,7 +217,17 @@ if [ -d "$NATIVE_DIR" ]; then
     fi
     cd "$PROJECT_DIR"
 else
-    warn "Không tìm thấy thư mục native-core. Bỏ qua."
+    warn "Thư mục native-core không tồn tại. Bỏ qua."
+fi
+
+# ==============================================================================
+# BƯỚC 2.5: BUILD RUST CORE (SMART CHECK)
+# Chỉ build khi code Rust thay đổi. Tự động tối ưu CPU.
+# ==============================================================================
+log "Step 2.5: Checking Rust Core..."
+RUST_CORE_CHANGED=false
+if build_rust_core; then
+    RUST_CORE_CHANGED=true
 fi
 
 # ==============================================================================

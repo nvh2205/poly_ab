@@ -1,0 +1,1379 @@
+{
+  "generatedAt": "2026-02-10T17:38:19.852Z",
+  "description": "Full Rust EngineState variable dump — maps 1:1 to state.rs structs",
+  "stateStructMap": {
+    "engine_config": "EngineConfig { min_profit_bps, min_profit_abs, cooldown_ms }",
+    "price_table.slots[]": "PriceSlot { best_bid, best_ask, best_bid_size, best_ask_size, timestamp_ms }",
+    "price_table.token_to_slot": "HashMap<String, usize> — token_id → slot_index",
+    "groups[]": "GroupState { group_key, event_slug, crypto, child_metas, parent_metas, trio_states, trio_lookup_by_asset }",
+    "groups[].child_metas[]": "MarketMeta { market_id, slug, clob_token_ids, bounds_lower, bounds_upper, kind, neg_risk, yes_slot, no_slot }",
+    "groups[].parent_metas[]": "MarketMeta (same as child_metas)",
+    "groups[].trio_states[]": "TrioState { parent_lower_idx, parent_upper_idx, range_idx, lower_yes_slot, upper_no_slot, range_no_slot, lower_yes_token, upper_no_token, range_no_token, last_emitted_buy_ms, last_emitted_unbundle_ms, last_emitted_bundle_ms }",
+    "groups[].trio_lookup_by_asset": "HashMap<String, Vec<u16>> — token_id → [trio_indices]",
+    "group_key_index": "HashMap<String, u16> — group_key → group_idx",
+    "token_index": "HashMap<String, Vec<TokenRole>> — token_id → roles (TrioLeg | RangeChild | Parent)",
+    "last_price_cache": "HashMap<String, LastPrice { bid, ask, timestamp_ms }>"
+  },
+  "crossReferenceResult": "ALL_VALID",
+  "emptyState": {
+    "engine_config": {
+      "cooldown_ms": 0,
+      "min_profit_abs": 0,
+      "min_profit_bps": 5
+    },
+    "group_key_index": {},
+    "groups": [],
+    "last_price_cache": {},
+    "price_table": {
+      "slots": [],
+      "token_to_slot": {},
+      "total_slots": 0
+    },
+    "summary": {
+      "total_groups": 0,
+      "total_last_price_entries": 0,
+      "total_price_slots": 0,
+      "total_tokens_indexed": 0
+    },
+    "token_index": {}
+  },
+  "fullState": {
+    "engine_config": {
+      "cooldown_ms": 0,
+      "min_profit_abs": 0,
+      "min_profit_bps": 5
+    },
+    "group_key_index": {
+      "eth-2026-01-26T17:00:00.000Z": 0
+    },
+    "groups": [
+      {
+        "child_metas": [
+          {
+            "bounds_lower": null,
+            "bounds_upper": 2800,
+            "clob_token_ids": [
+              "81991113140094495144289588914499588995705099152304322713012654172347136540889",
+              "9142009765088648916969539400069726154023170476793947017564533215174272840621"
+            ],
+            "index": 0,
+            "kind": "below",
+            "market_id": "1220942",
+            "neg_risk": true,
+            "no_slot": 1,
+            "slug": "will-the-price-of-ethereum-be-less-than-2800-on-january-26",
+            "yes_slot": 0
+          },
+          {
+            "bounds_lower": 2800,
+            "bounds_upper": 2900,
+            "clob_token_ids": [
+              "54097196883014267352106707051869888293073431836953848950799110841374883550758",
+              "57462587931057585559862138797248178505730960028078359266744450555970724545986"
+            ],
+            "index": 1,
+            "kind": "range",
+            "market_id": "1220943",
+            "neg_risk": true,
+            "no_slot": 3,
+            "slug": "will-the-price-of-ethereum-be-between-2800-2900-on-january-26",
+            "yes_slot": 2
+          },
+          {
+            "bounds_lower": 2900,
+            "bounds_upper": 3000,
+            "clob_token_ids": [
+              "18082515780361628116736412938948043632898883290140191320932253927252123301709",
+              "61368306598767896215178056435813350833407911251683137609265080924549562466479"
+            ],
+            "index": 2,
+            "kind": "range",
+            "market_id": "1220944",
+            "neg_risk": true,
+            "no_slot": 5,
+            "slug": "will-the-price-of-ethereum-be-between-2900-3000-on-january-26",
+            "yes_slot": 4
+          },
+          {
+            "bounds_lower": 3000,
+            "bounds_upper": 3100,
+            "clob_token_ids": [
+              "26818879329211677503999596985430527677507371962061837945513513689953664092466",
+              "8832817007403549666253665917551019432743383304848856847827339681212657618856"
+            ],
+            "index": 3,
+            "kind": "range",
+            "market_id": "1220945",
+            "neg_risk": true,
+            "no_slot": 7,
+            "slug": "will-the-price-of-ethereum-be-between-3000-3100-on-january-26",
+            "yes_slot": 6
+          },
+          {
+            "bounds_lower": 3100,
+            "bounds_upper": 3200,
+            "clob_token_ids": [
+              "73091808146223951368107704570278210452310533622994924232698632881340912517936",
+              "23966919646508259178408723319902411097002814147008779099739098615212088261546"
+            ],
+            "index": 4,
+            "kind": "range",
+            "market_id": "1220946",
+            "neg_risk": true,
+            "no_slot": 9,
+            "slug": "will-the-price-of-ethereum-be-between-3100-3200-on-january-26",
+            "yes_slot": 8
+          },
+          {
+            "bounds_lower": 3200,
+            "bounds_upper": 3300,
+            "clob_token_ids": [
+              "81774838828465106659664856581733771939244384077477412053994564767107666269372",
+              "98114488219752901222032599395136112161346916598393404665630918149223689170462"
+            ],
+            "index": 5,
+            "kind": "range",
+            "market_id": "1220947",
+            "neg_risk": true,
+            "no_slot": 11,
+            "slug": "will-the-price-of-ethereum-be-between-3200-3300-on-january-26",
+            "yes_slot": 10
+          },
+          {
+            "bounds_lower": 3300,
+            "bounds_upper": 3400,
+            "clob_token_ids": [
+              "32913819689157948613145692933533739121604610320606698109055887691783613971652",
+              "99473093067999637511594232727901476914880342353674709812876237709859943132252"
+            ],
+            "index": 6,
+            "kind": "range",
+            "market_id": "1220948",
+            "neg_risk": true,
+            "no_slot": 13,
+            "slug": "will-the-price-of-ethereum-be-between-3300-3400-on-january-26",
+            "yes_slot": 12
+          },
+          {
+            "bounds_lower": 3400,
+            "bounds_upper": 3500,
+            "clob_token_ids": [
+              "46081783261826363510303746630635754667648732183652694689997317275413071997796",
+              "57914389028428076788178520753106909299399209338804069461614970631914311297747"
+            ],
+            "index": 7,
+            "kind": "range",
+            "market_id": "1220949",
+            "neg_risk": true,
+            "no_slot": 15,
+            "slug": "will-the-price-of-ethereum-be-between-3400-3500-on-january-26",
+            "yes_slot": 14
+          },
+          {
+            "bounds_lower": 3500,
+            "bounds_upper": 3600,
+            "clob_token_ids": [
+              "1674579996590532222447821352041685589015452504589482801095488229715118449178",
+              "54728316298200824114047817451898601797652089658980649436418667844683792698725"
+            ],
+            "index": 8,
+            "kind": "range",
+            "market_id": "1220950",
+            "neg_risk": true,
+            "no_slot": 17,
+            "slug": "will-the-price-of-ethereum-be-between-3500-3600-on-january-26",
+            "yes_slot": 16
+          },
+          {
+            "bounds_lower": 3600,
+            "bounds_upper": 3700,
+            "clob_token_ids": [
+              "81242041691621263284835558228510077882147796897960311517099230701218949277946",
+              "14150012478108100615292298381338009416312233296883032010146799642735072654425"
+            ],
+            "index": 9,
+            "kind": "range",
+            "market_id": "1220951",
+            "neg_risk": true,
+            "no_slot": 19,
+            "slug": "will-the-price-of-ethereum-be-between-3600-3700-on-january-26",
+            "yes_slot": 18
+          },
+          {
+            "bounds_lower": 3700,
+            "bounds_upper": null,
+            "clob_token_ids": [
+              "54525037307898436730641104167121194029314105088384728953716343648545335965016",
+              "66319295603642647933136755851183188007400893570313969246030496269805004531630"
+            ],
+            "index": 10,
+            "kind": "above",
+            "market_id": "1220953",
+            "neg_risk": true,
+            "no_slot": 21,
+            "slug": "will-the-price-of-ethereum-be-greater-than-3700-on-january-26",
+            "yes_slot": 20
+          }
+        ],
+        "crypto": "eth",
+        "event_slug": "ethereum-above-on-january-26",
+        "group_key": "eth-2026-01-26T17:00:00.000Z",
+        "parent_metas": [
+          {
+            "bounds_lower": 2800,
+            "bounds_upper": null,
+            "clob_token_ids": [
+              "7370326069001177695487147949634451008802488826153187216493604503435611409898",
+              "68612539461736870204806618539886112421734237330004503143676783112096124263912"
+            ],
+            "index": 0,
+            "kind": "above",
+            "market_id": "1220909",
+            "neg_risk": false,
+            "no_slot": 23,
+            "slug": "ethereum-above-2800-on-january-26",
+            "yes_slot": 22
+          },
+          {
+            "bounds_lower": 2900,
+            "bounds_upper": null,
+            "clob_token_ids": [
+              "25638126685176926673711473599808285819887160643223386591939814612588866491329",
+              "18573338478812207777933043206889747107895267746931662224658886631665640459750"
+            ],
+            "index": 1,
+            "kind": "above",
+            "market_id": "1220911",
+            "neg_risk": false,
+            "no_slot": 25,
+            "slug": "ethereum-above-2900-on-january-26",
+            "yes_slot": 24
+          },
+          {
+            "bounds_lower": 3000,
+            "bounds_upper": null,
+            "clob_token_ids": [
+              "21643578339280670927818784128180648211699428914600824679003505206750815191285",
+              "66354532347890132052949230384869829908980100664338423742943210607271011413843"
+            ],
+            "index": 2,
+            "kind": "above",
+            "market_id": "1220913",
+            "neg_risk": false,
+            "no_slot": 27,
+            "slug": "ethereum-above-3000-on-january-26",
+            "yes_slot": 26
+          },
+          {
+            "bounds_lower": 3100,
+            "bounds_upper": null,
+            "clob_token_ids": [
+              "106170066242685410216261286424790253381765638928112284219623318895668141929517",
+              "72969043595159519879644009582595119490413088954365846741649331254864362522712"
+            ],
+            "index": 3,
+            "kind": "above",
+            "market_id": "1220914",
+            "neg_risk": false,
+            "no_slot": 29,
+            "slug": "ethereum-above-3100-on-january-26",
+            "yes_slot": 28
+          },
+          {
+            "bounds_lower": 3200,
+            "bounds_upper": null,
+            "clob_token_ids": [
+              "7980595039876536000719389194450800386496442111098416789799627471727700356705",
+              "94358276984644335248540580752693566773198424509069179117926309593350039893074"
+            ],
+            "index": 4,
+            "kind": "above",
+            "market_id": "1220917",
+            "neg_risk": false,
+            "no_slot": 31,
+            "slug": "ethereum-above-3200-on-january-26",
+            "yes_slot": 30
+          },
+          {
+            "bounds_lower": 3300,
+            "bounds_upper": null,
+            "clob_token_ids": [
+              "106480901023118381599615909674333223769446694520090116713444411812102268588818",
+              "24487728214771667928983415742943461962350916542107862354613635698154124055689"
+            ],
+            "index": 5,
+            "kind": "above",
+            "market_id": "1220920",
+            "neg_risk": false,
+            "no_slot": 33,
+            "slug": "ethereum-above-3300-on-january-26",
+            "yes_slot": 32
+          },
+          {
+            "bounds_lower": 3400,
+            "bounds_upper": null,
+            "clob_token_ids": [
+              "25271733687039009332312757911374466197782195534161062739193878890197282479393",
+              "81281127370155921821138163275759888452605599011821217449134173499835102939490"
+            ],
+            "index": 6,
+            "kind": "above",
+            "market_id": "1220923",
+            "neg_risk": false,
+            "no_slot": 35,
+            "slug": "ethereum-above-3400-on-january-26",
+            "yes_slot": 34
+          },
+          {
+            "bounds_lower": 3500,
+            "bounds_upper": null,
+            "clob_token_ids": [
+              "22264819060716095175592805932416864399260563363029632380031413735730291896860",
+              "106122954337067216185995317374232361936040729359549621644027077908489401461295"
+            ],
+            "index": 7,
+            "kind": "above",
+            "market_id": "1220928",
+            "neg_risk": false,
+            "no_slot": 37,
+            "slug": "ethereum-above-3500-on-january-26",
+            "yes_slot": 36
+          },
+          {
+            "bounds_lower": 3600,
+            "bounds_upper": null,
+            "clob_token_ids": [
+              "115454775584308769416393899090696032525464120751988403429530385250339476587957",
+              "79305386428442439587687437223076385417075244809694859400203417229525287406027"
+            ],
+            "index": 8,
+            "kind": "above",
+            "market_id": "1220931",
+            "neg_risk": false,
+            "no_slot": 39,
+            "slug": "ethereum-above-3600-on-january-26",
+            "yes_slot": 38
+          },
+          {
+            "bounds_lower": 3700,
+            "bounds_upper": null,
+            "clob_token_ids": [
+              "2065012312746304574532470283746418834492850488894503441203899991451073548042",
+              "105843981582611728894635502199274038961039860244334121644120974196015630476805"
+            ],
+            "index": 9,
+            "kind": "above",
+            "market_id": "1220933",
+            "neg_risk": false,
+            "no_slot": 41,
+            "slug": "ethereum-above-3700-on-january-26",
+            "yes_slot": 40
+          }
+        ],
+        "summary": {
+          "child_count": 11,
+          "parent_count": 10,
+          "trio_count": 9,
+          "trio_lookup_tokens": 37
+        },
+        "trio_lookup_by_asset": {
+          "105843981582611728894635502199274038961039860244334121644120974196015630476805": [
+            8
+          ],
+          "106122954337067216185995317374232361936040729359549621644027077908489401461295": [
+            6
+          ],
+          "106170066242685410216261286424790253381765638928112284219623318895668141929517": [
+            2,
+            3
+          ],
+          "106480901023118381599615909674333223769446694520090116713444411812102268588818": [
+            4,
+            5
+          ],
+          "115454775584308769416393899090696032525464120751988403429530385250339476587957": [
+            7,
+            8
+          ],
+          "14150012478108100615292298381338009416312233296883032010146799642735072654425": [
+            8
+          ],
+          "1674579996590532222447821352041685589015452504589482801095488229715118449178": [
+            7
+          ],
+          "18082515780361628116736412938948043632898883290140191320932253927252123301709": [
+            1
+          ],
+          "18573338478812207777933043206889747107895267746931662224658886631665640459750": [
+            0
+          ],
+          "2065012312746304574532470283746418834492850488894503441203899991451073548042": [
+            8
+          ],
+          "21643578339280670927818784128180648211699428914600824679003505206750815191285": [
+            1,
+            2
+          ],
+          "22264819060716095175592805932416864399260563363029632380031413735730291896860": [
+            6,
+            7
+          ],
+          "23966919646508259178408723319902411097002814147008779099739098615212088261546": [
+            3
+          ],
+          "24487728214771667928983415742943461962350916542107862354613635698154124055689": [
+            4
+          ],
+          "25271733687039009332312757911374466197782195534161062739193878890197282479393": [
+            5,
+            6
+          ],
+          "25638126685176926673711473599808285819887160643223386591939814612588866491329": [
+            0,
+            1
+          ],
+          "26818879329211677503999596985430527677507371962061837945513513689953664092466": [
+            2
+          ],
+          "32913819689157948613145692933533739121604610320606698109055887691783613971652": [
+            5
+          ],
+          "46081783261826363510303746630635754667648732183652694689997317275413071997796": [
+            6
+          ],
+          "54097196883014267352106707051869888293073431836953848950799110841374883550758": [
+            0
+          ],
+          "54728316298200824114047817451898601797652089658980649436418667844683792698725": [
+            7
+          ],
+          "57462587931057585559862138797248178505730960028078359266744450555970724545986": [
+            0
+          ],
+          "57914389028428076788178520753106909299399209338804069461614970631914311297747": [
+            6
+          ],
+          "61368306598767896215178056435813350833407911251683137609265080924549562466479": [
+            1
+          ],
+          "66354532347890132052949230384869829908980100664338423742943210607271011413843": [
+            1
+          ],
+          "72969043595159519879644009582595119490413088954365846741649331254864362522712": [
+            2
+          ],
+          "73091808146223951368107704570278210452310533622994924232698632881340912517936": [
+            3
+          ],
+          "7370326069001177695487147949634451008802488826153187216493604503435611409898": [
+            0
+          ],
+          "79305386428442439587687437223076385417075244809694859400203417229525287406027": [
+            7
+          ],
+          "7980595039876536000719389194450800386496442111098416789799627471727700356705": [
+            3,
+            4
+          ],
+          "81242041691621263284835558228510077882147796897960311517099230701218949277946": [
+            8
+          ],
+          "81281127370155921821138163275759888452605599011821217449134173499835102939490": [
+            5
+          ],
+          "81774838828465106659664856581733771939244384077477412053994564767107666269372": [
+            4
+          ],
+          "8832817007403549666253665917551019432743383304848856847827339681212657618856": [
+            2
+          ],
+          "94358276984644335248540580752693566773198424509069179117926309593350039893074": [
+            3
+          ],
+          "98114488219752901222032599395136112161346916598393404665630918149223689170462": [
+            4
+          ],
+          "99473093067999637511594232727901476914880342353674709812876237709859943132252": [
+            5
+          ]
+        },
+        "trio_states": [
+          {
+            "last_emitted_bundle_ms": 0,
+            "last_emitted_buy_ms": 0,
+            "last_emitted_unbundle_ms": 0,
+            "lower_yes_slot": 22,
+            "lower_yes_token": "7370326069001177695487147949634451008802488826153187216493604503435611409898",
+            "parent_lower_idx": 0,
+            "parent_upper_idx": 1,
+            "range_idx": 1,
+            "range_no_slot": 3,
+            "range_no_token": "57462587931057585559862138797248178505730960028078359266744450555970724545986",
+            "trio_index": 0,
+            "upper_no_slot": 25,
+            "upper_no_token": "18573338478812207777933043206889747107895267746931662224658886631665640459750"
+          },
+          {
+            "last_emitted_bundle_ms": 0,
+            "last_emitted_buy_ms": 0,
+            "last_emitted_unbundle_ms": 0,
+            "lower_yes_slot": 24,
+            "lower_yes_token": "25638126685176926673711473599808285819887160643223386591939814612588866491329",
+            "parent_lower_idx": 1,
+            "parent_upper_idx": 2,
+            "range_idx": 2,
+            "range_no_slot": 5,
+            "range_no_token": "61368306598767896215178056435813350833407911251683137609265080924549562466479",
+            "trio_index": 1,
+            "upper_no_slot": 27,
+            "upper_no_token": "66354532347890132052949230384869829908980100664338423742943210607271011413843"
+          },
+          {
+            "last_emitted_bundle_ms": 0,
+            "last_emitted_buy_ms": 0,
+            "last_emitted_unbundle_ms": 0,
+            "lower_yes_slot": 26,
+            "lower_yes_token": "21643578339280670927818784128180648211699428914600824679003505206750815191285",
+            "parent_lower_idx": 2,
+            "parent_upper_idx": 3,
+            "range_idx": 3,
+            "range_no_slot": 7,
+            "range_no_token": "8832817007403549666253665917551019432743383304848856847827339681212657618856",
+            "trio_index": 2,
+            "upper_no_slot": 29,
+            "upper_no_token": "72969043595159519879644009582595119490413088954365846741649331254864362522712"
+          },
+          {
+            "last_emitted_bundle_ms": 0,
+            "last_emitted_buy_ms": 0,
+            "last_emitted_unbundle_ms": 0,
+            "lower_yes_slot": 28,
+            "lower_yes_token": "106170066242685410216261286424790253381765638928112284219623318895668141929517",
+            "parent_lower_idx": 3,
+            "parent_upper_idx": 4,
+            "range_idx": 4,
+            "range_no_slot": 9,
+            "range_no_token": "23966919646508259178408723319902411097002814147008779099739098615212088261546",
+            "trio_index": 3,
+            "upper_no_slot": 31,
+            "upper_no_token": "94358276984644335248540580752693566773198424509069179117926309593350039893074"
+          },
+          {
+            "last_emitted_bundle_ms": 0,
+            "last_emitted_buy_ms": 0,
+            "last_emitted_unbundle_ms": 0,
+            "lower_yes_slot": 30,
+            "lower_yes_token": "7980595039876536000719389194450800386496442111098416789799627471727700356705",
+            "parent_lower_idx": 4,
+            "parent_upper_idx": 5,
+            "range_idx": 5,
+            "range_no_slot": 11,
+            "range_no_token": "98114488219752901222032599395136112161346916598393404665630918149223689170462",
+            "trio_index": 4,
+            "upper_no_slot": 33,
+            "upper_no_token": "24487728214771667928983415742943461962350916542107862354613635698154124055689"
+          },
+          {
+            "last_emitted_bundle_ms": 0,
+            "last_emitted_buy_ms": 0,
+            "last_emitted_unbundle_ms": 0,
+            "lower_yes_slot": 32,
+            "lower_yes_token": "106480901023118381599615909674333223769446694520090116713444411812102268588818",
+            "parent_lower_idx": 5,
+            "parent_upper_idx": 6,
+            "range_idx": 6,
+            "range_no_slot": 13,
+            "range_no_token": "99473093067999637511594232727901476914880342353674709812876237709859943132252",
+            "trio_index": 5,
+            "upper_no_slot": 35,
+            "upper_no_token": "81281127370155921821138163275759888452605599011821217449134173499835102939490"
+          },
+          {
+            "last_emitted_bundle_ms": 0,
+            "last_emitted_buy_ms": 0,
+            "last_emitted_unbundle_ms": 0,
+            "lower_yes_slot": 34,
+            "lower_yes_token": "25271733687039009332312757911374466197782195534161062739193878890197282479393",
+            "parent_lower_idx": 6,
+            "parent_upper_idx": 7,
+            "range_idx": 7,
+            "range_no_slot": 15,
+            "range_no_token": "57914389028428076788178520753106909299399209338804069461614970631914311297747",
+            "trio_index": 6,
+            "upper_no_slot": 37,
+            "upper_no_token": "106122954337067216185995317374232361936040729359549621644027077908489401461295"
+          },
+          {
+            "last_emitted_bundle_ms": 0,
+            "last_emitted_buy_ms": 0,
+            "last_emitted_unbundle_ms": 0,
+            "lower_yes_slot": 36,
+            "lower_yes_token": "22264819060716095175592805932416864399260563363029632380031413735730291896860",
+            "parent_lower_idx": 7,
+            "parent_upper_idx": 8,
+            "range_idx": 8,
+            "range_no_slot": 17,
+            "range_no_token": "54728316298200824114047817451898601797652089658980649436418667844683792698725",
+            "trio_index": 7,
+            "upper_no_slot": 39,
+            "upper_no_token": "79305386428442439587687437223076385417075244809694859400203417229525287406027"
+          },
+          {
+            "last_emitted_bundle_ms": 0,
+            "last_emitted_buy_ms": 0,
+            "last_emitted_unbundle_ms": 0,
+            "lower_yes_slot": 38,
+            "lower_yes_token": "115454775584308769416393899090696032525464120751988403429530385250339476587957",
+            "parent_lower_idx": 8,
+            "parent_upper_idx": 9,
+            "range_idx": 9,
+            "range_no_slot": 19,
+            "range_no_token": "14150012478108100615292298381338009416312233296883032010146799642735072654425",
+            "trio_index": 8,
+            "upper_no_slot": 41,
+            "upper_no_token": "105843981582611728894635502199274038961039860244334121644120974196015630476805"
+          }
+        ]
+      }
+    ],
+    "last_price_cache": {},
+    "price_table": {
+      "slots": [
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 0,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 1,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 2,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 3,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 4,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 5,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 6,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 7,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 8,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 9,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 10,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 11,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 12,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 13,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 14,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 15,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 16,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 17,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 18,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 19,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 20,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 21,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 22,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 23,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 24,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 25,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 26,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 27,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 28,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 29,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 30,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 31,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 32,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 33,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 34,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 35,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 36,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 37,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 38,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 39,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 40,
+          "timestamp_ms": 0
+        },
+        {
+          "best_ask": null,
+          "best_ask_size": 0,
+          "best_bid": null,
+          "best_bid_size": 0,
+          "slot_index": 41,
+          "timestamp_ms": 0
+        }
+      ],
+      "token_to_slot": {
+        "105843981582611728894635502199274038961039860244334121644120974196015630476805": 41,
+        "106122954337067216185995317374232361936040729359549621644027077908489401461295": 37,
+        "106170066242685410216261286424790253381765638928112284219623318895668141929517": 28,
+        "106480901023118381599615909674333223769446694520090116713444411812102268588818": 32,
+        "115454775584308769416393899090696032525464120751988403429530385250339476587957": 38,
+        "14150012478108100615292298381338009416312233296883032010146799642735072654425": 19,
+        "1674579996590532222447821352041685589015452504589482801095488229715118449178": 16,
+        "18082515780361628116736412938948043632898883290140191320932253927252123301709": 4,
+        "18573338478812207777933043206889747107895267746931662224658886631665640459750": 25,
+        "2065012312746304574532470283746418834492850488894503441203899991451073548042": 40,
+        "21643578339280670927818784128180648211699428914600824679003505206750815191285": 26,
+        "22264819060716095175592805932416864399260563363029632380031413735730291896860": 36,
+        "23966919646508259178408723319902411097002814147008779099739098615212088261546": 9,
+        "24487728214771667928983415742943461962350916542107862354613635698154124055689": 33,
+        "25271733687039009332312757911374466197782195534161062739193878890197282479393": 34,
+        "25638126685176926673711473599808285819887160643223386591939814612588866491329": 24,
+        "26818879329211677503999596985430527677507371962061837945513513689953664092466": 6,
+        "32913819689157948613145692933533739121604610320606698109055887691783613971652": 12,
+        "46081783261826363510303746630635754667648732183652694689997317275413071997796": 14,
+        "54097196883014267352106707051869888293073431836953848950799110841374883550758": 2,
+        "54525037307898436730641104167121194029314105088384728953716343648545335965016": 20,
+        "54728316298200824114047817451898601797652089658980649436418667844683792698725": 17,
+        "57462587931057585559862138797248178505730960028078359266744450555970724545986": 3,
+        "57914389028428076788178520753106909299399209338804069461614970631914311297747": 15,
+        "61368306598767896215178056435813350833407911251683137609265080924549562466479": 5,
+        "66319295603642647933136755851183188007400893570313969246030496269805004531630": 21,
+        "66354532347890132052949230384869829908980100664338423742943210607271011413843": 27,
+        "68612539461736870204806618539886112421734237330004503143676783112096124263912": 23,
+        "72969043595159519879644009582595119490413088954365846741649331254864362522712": 29,
+        "73091808146223951368107704570278210452310533622994924232698632881340912517936": 8,
+        "7370326069001177695487147949634451008802488826153187216493604503435611409898": 22,
+        "79305386428442439587687437223076385417075244809694859400203417229525287406027": 39,
+        "7980595039876536000719389194450800386496442111098416789799627471727700356705": 30,
+        "81242041691621263284835558228510077882147796897960311517099230701218949277946": 18,
+        "81281127370155921821138163275759888452605599011821217449134173499835102939490": 35,
+        "81774838828465106659664856581733771939244384077477412053994564767107666269372": 10,
+        "81991113140094495144289588914499588995705099152304322713012654172347136540889": 0,
+        "8832817007403549666253665917551019432743383304848856847827339681212657618856": 7,
+        "9142009765088648916969539400069726154023170476793947017564533215174272840621": 1,
+        "94358276984644335248540580752693566773198424509069179117926309593350039893074": 31,
+        "98114488219752901222032599395136112161346916598393404665630918149223689170462": 11,
+        "99473093067999637511594232727901476914880342353674709812876237709859943132252": 13
+      },
+      "total_slots": 42
+    },
+    "summary": {
+      "total_groups": 1,
+      "total_last_price_entries": 0,
+      "total_price_slots": 42,
+      "total_tokens_indexed": 39
+    },
+    "token_index": {
+      "105843981582611728894635502199274038961039860244334121644120974196015630476805": [
+        {
+          "group_idx": 0,
+          "role": "ParentUpperNo",
+          "trio_idx": 8,
+          "type": "TrioLeg"
+        }
+      ],
+      "106122954337067216185995317374232361936040729359549621644027077908489401461295": [
+        {
+          "group_idx": 0,
+          "role": "ParentUpperNo",
+          "trio_idx": 6,
+          "type": "TrioLeg"
+        }
+      ],
+      "106170066242685410216261286424790253381765638928112284219623318895668141929517": [
+        {
+          "group_idx": 0,
+          "parent_idx": 3,
+          "type": "Parent"
+        },
+        {
+          "group_idx": 0,
+          "role": "ParentLowerYes",
+          "trio_idx": 3,
+          "type": "TrioLeg"
+        }
+      ],
+      "106480901023118381599615909674333223769446694520090116713444411812102268588818": [
+        {
+          "group_idx": 0,
+          "parent_idx": 5,
+          "type": "Parent"
+        },
+        {
+          "group_idx": 0,
+          "role": "ParentLowerYes",
+          "trio_idx": 5,
+          "type": "TrioLeg"
+        }
+      ],
+      "115454775584308769416393899090696032525464120751988403429530385250339476587957": [
+        {
+          "group_idx": 0,
+          "parent_idx": 8,
+          "type": "Parent"
+        },
+        {
+          "group_idx": 0,
+          "role": "ParentLowerYes",
+          "trio_idx": 8,
+          "type": "TrioLeg"
+        }
+      ],
+      "14150012478108100615292298381338009416312233296883032010146799642735072654425": [
+        {
+          "group_idx": 0,
+          "role": "RangeNo",
+          "trio_idx": 8,
+          "type": "TrioLeg"
+        }
+      ],
+      "1674579996590532222447821352041685589015452504589482801095488229715118449178": [
+        {
+          "child_idx": 8,
+          "group_idx": 0,
+          "type": "RangeChild"
+        }
+      ],
+      "18082515780361628116736412938948043632898883290140191320932253927252123301709": [
+        {
+          "child_idx": 2,
+          "group_idx": 0,
+          "type": "RangeChild"
+        }
+      ],
+      "18573338478812207777933043206889747107895267746931662224658886631665640459750": [
+        {
+          "group_idx": 0,
+          "role": "ParentUpperNo",
+          "trio_idx": 0,
+          "type": "TrioLeg"
+        }
+      ],
+      "2065012312746304574532470283746418834492850488894503441203899991451073548042": [
+        {
+          "group_idx": 0,
+          "parent_idx": 9,
+          "type": "Parent"
+        }
+      ],
+      "21643578339280670927818784128180648211699428914600824679003505206750815191285": [
+        {
+          "group_idx": 0,
+          "parent_idx": 2,
+          "type": "Parent"
+        },
+        {
+          "group_idx": 0,
+          "role": "ParentLowerYes",
+          "trio_idx": 2,
+          "type": "TrioLeg"
+        }
+      ],
+      "22264819060716095175592805932416864399260563363029632380031413735730291896860": [
+        {
+          "group_idx": 0,
+          "parent_idx": 7,
+          "type": "Parent"
+        },
+        {
+          "group_idx": 0,
+          "role": "ParentLowerYes",
+          "trio_idx": 7,
+          "type": "TrioLeg"
+        }
+      ],
+      "23966919646508259178408723319902411097002814147008779099739098615212088261546": [
+        {
+          "group_idx": 0,
+          "role": "RangeNo",
+          "trio_idx": 3,
+          "type": "TrioLeg"
+        }
+      ],
+      "24487728214771667928983415742943461962350916542107862354613635698154124055689": [
+        {
+          "group_idx": 0,
+          "role": "ParentUpperNo",
+          "trio_idx": 4,
+          "type": "TrioLeg"
+        }
+      ],
+      "25271733687039009332312757911374466197782195534161062739193878890197282479393": [
+        {
+          "group_idx": 0,
+          "parent_idx": 6,
+          "type": "Parent"
+        },
+        {
+          "group_idx": 0,
+          "role": "ParentLowerYes",
+          "trio_idx": 6,
+          "type": "TrioLeg"
+        }
+      ],
+      "25638126685176926673711473599808285819887160643223386591939814612588866491329": [
+        {
+          "group_idx": 0,
+          "parent_idx": 1,
+          "type": "Parent"
+        },
+        {
+          "group_idx": 0,
+          "role": "ParentLowerYes",
+          "trio_idx": 1,
+          "type": "TrioLeg"
+        }
+      ],
+      "26818879329211677503999596985430527677507371962061837945513513689953664092466": [
+        {
+          "child_idx": 3,
+          "group_idx": 0,
+          "type": "RangeChild"
+        }
+      ],
+      "32913819689157948613145692933533739121604610320606698109055887691783613971652": [
+        {
+          "child_idx": 6,
+          "group_idx": 0,
+          "type": "RangeChild"
+        }
+      ],
+      "46081783261826363510303746630635754667648732183652694689997317275413071997796": [
+        {
+          "child_idx": 7,
+          "group_idx": 0,
+          "type": "RangeChild"
+        }
+      ],
+      "54097196883014267352106707051869888293073431836953848950799110841374883550758": [
+        {
+          "child_idx": 1,
+          "group_idx": 0,
+          "type": "RangeChild"
+        }
+      ],
+      "54525037307898436730641104167121194029314105088384728953716343648545335965016": [
+        {
+          "child_idx": 10,
+          "group_idx": 0,
+          "type": "RangeChild"
+        }
+      ],
+      "54728316298200824114047817451898601797652089658980649436418667844683792698725": [
+        {
+          "group_idx": 0,
+          "role": "RangeNo",
+          "trio_idx": 7,
+          "type": "TrioLeg"
+        }
+      ],
+      "57462587931057585559862138797248178505730960028078359266744450555970724545986": [
+        {
+          "group_idx": 0,
+          "role": "RangeNo",
+          "trio_idx": 0,
+          "type": "TrioLeg"
+        }
+      ],
+      "57914389028428076788178520753106909299399209338804069461614970631914311297747": [
+        {
+          "group_idx": 0,
+          "role": "RangeNo",
+          "trio_idx": 6,
+          "type": "TrioLeg"
+        }
+      ],
+      "61368306598767896215178056435813350833407911251683137609265080924549562466479": [
+        {
+          "group_idx": 0,
+          "role": "RangeNo",
+          "trio_idx": 1,
+          "type": "TrioLeg"
+        }
+      ],
+      "66354532347890132052949230384869829908980100664338423742943210607271011413843": [
+        {
+          "group_idx": 0,
+          "role": "ParentUpperNo",
+          "trio_idx": 1,
+          "type": "TrioLeg"
+        }
+      ],
+      "72969043595159519879644009582595119490413088954365846741649331254864362522712": [
+        {
+          "group_idx": 0,
+          "role": "ParentUpperNo",
+          "trio_idx": 2,
+          "type": "TrioLeg"
+        }
+      ],
+      "73091808146223951368107704570278210452310533622994924232698632881340912517936": [
+        {
+          "child_idx": 4,
+          "group_idx": 0,
+          "type": "RangeChild"
+        }
+      ],
+      "7370326069001177695487147949634451008802488826153187216493604503435611409898": [
+        {
+          "group_idx": 0,
+          "parent_idx": 0,
+          "type": "Parent"
+        },
+        {
+          "group_idx": 0,
+          "role": "ParentLowerYes",
+          "trio_idx": 0,
+          "type": "TrioLeg"
+        }
+      ],
+      "79305386428442439587687437223076385417075244809694859400203417229525287406027": [
+        {
+          "group_idx": 0,
+          "role": "ParentUpperNo",
+          "trio_idx": 7,
+          "type": "TrioLeg"
+        }
+      ],
+      "7980595039876536000719389194450800386496442111098416789799627471727700356705": [
+        {
+          "group_idx": 0,
+          "parent_idx": 4,
+          "type": "Parent"
+        },
+        {
+          "group_idx": 0,
+          "role": "ParentLowerYes",
+          "trio_idx": 4,
+          "type": "TrioLeg"
+        }
+      ],
+      "81242041691621263284835558228510077882147796897960311517099230701218949277946": [
+        {
+          "child_idx": 9,
+          "group_idx": 0,
+          "type": "RangeChild"
+        }
+      ],
+      "81281127370155921821138163275759888452605599011821217449134173499835102939490": [
+        {
+          "group_idx": 0,
+          "role": "ParentUpperNo",
+          "trio_idx": 5,
+          "type": "TrioLeg"
+        }
+      ],
+      "81774838828465106659664856581733771939244384077477412053994564767107666269372": [
+        {
+          "child_idx": 5,
+          "group_idx": 0,
+          "type": "RangeChild"
+        }
+      ],
+      "81991113140094495144289588914499588995705099152304322713012654172347136540889": [
+        {
+          "child_idx": 0,
+          "group_idx": 0,
+          "type": "RangeChild"
+        }
+      ],
+      "8832817007403549666253665917551019432743383304848856847827339681212657618856": [
+        {
+          "group_idx": 0,
+          "role": "RangeNo",
+          "trio_idx": 2,
+          "type": "TrioLeg"
+        }
+      ],
+      "94358276984644335248540580752693566773198424509069179117926309593350039893074": [
+        {
+          "group_idx": 0,
+          "role": "ParentUpperNo",
+          "trio_idx": 3,
+          "type": "TrioLeg"
+        }
+      ],
+      "98114488219752901222032599395136112161346916598393404665630918149223689170462": [
+        {
+          "group_idx": 0,
+          "role": "RangeNo",
+          "trio_idx": 4,
+          "type": "TrioLeg"
+        }
+      ],
+      "99473093067999637511594232727901476914880342353674709812876237709859943132252": [
+        {
+          "group_idx": 0,
+          "role": "RangeNo",
+          "trio_idx": 5,
+          "type": "TrioLeg"
+        }
+      ]
+    }
+  }
+}

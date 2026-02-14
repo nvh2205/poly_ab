@@ -1,0 +1,29 @@
+[
+  {
+    "timestamp": "2026-01-24T18:40:24.728Z",
+    "orderParams": {
+      "tokenID": "12937426142836914903777963016294300589031044494756403739791684111258088378890",
+      "price": 0.5,
+      "side": "BUY",
+      "size": 2,
+      "orderType": "GTC"
+    },
+    "orderResult": {
+      "order": {
+        "salt": "1376786590952",
+        "maker": "0x33568DB0DfB9890f5107Fb50F566a159F6f612ED",
+        "signer": "0x4769B103570877eCD516BC7737DcFD834413E6b4",
+        "taker": "0x0000000000000000000000000000000000000000",
+        "tokenId": "12937426142836914903777963016294300589031044494756403739791684111258088378890",
+        "makerAmount": "1000000",
+        "takerAmount": "2000000",
+        "expiration": "0",
+        "nonce": "0",
+        "feeRateBps": "0",
+        "side": 0,
+        "signatureType": 2,
+        "signature": "0x275f71883493c6c71c7c49c9bf5484d5e0a82fecded2d5283cc25df5008bc0797a62e09c2e161b241ba61e390a26d8183f49884900c842de204787c1395cf7491b"
+      }
+    }
+  }
+]

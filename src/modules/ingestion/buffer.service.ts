@@ -104,11 +104,12 @@ export class BufferService implements OnModuleInit {
       timestampMs: tsMs,
     };
 
-    if (this.perfEnabled && Number.isFinite(data.receivedAtMs)) {
-      update.socketReceivedAtMs = data.receivedAtMs;
-    }
+    // if (this.perfEnabled && Number.isFinite(data.receivedAtMs)) {
+    //   update.socketReceivedAtMs = data.receivedAtMs;
+    // }
 
-    void this.emitTopOfBookWithMetadata(update);
+    // void this.emitTopOfBookWithMetadata(update);
+    this.marketDataStreamService.emitTopOfBook(update);
 
     // Auto-flush if buffer reaches batch size
     // if (this.buffer.length >= this.batchSize) {
@@ -136,11 +137,13 @@ export class BufferService implements OnModuleInit {
       timestampMs: tsMs,
     };
 
-    if (this.perfEnabled && Number.isFinite(data.receivedAtMs)) {
-      update.socketReceivedAtMs = data.receivedAtMs;
-    }
+    // if (this.perfEnabled && Number.isFinite(data.receivedAtMs)) {
+    //   update.socketReceivedAtMs = data.receivedAtMs;
+    // }
 
-    void this.emitTopOfBookWithMetadata(update);
+    this.marketDataStreamService.emitTopOfBook(update);
+
+    // void this.emitTopOfBookWithMetadata(update);
   }
 
   private toNumber(value: any): number {

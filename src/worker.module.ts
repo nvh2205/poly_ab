@@ -2,13 +2,14 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bull';
+import { ScheduleModule } from '@nestjs/schedule';
 
 // Entities
 import { Market } from './database/entities/market.entity';
 import { Event } from './database/entities/event.entity';
-import { ArbSignal } from './database/entities/arb-signal.entity';
-import { ArbPaperTrade } from './database/entities/arb-paper-trade.entity';
+
 import { ArbRealTrade } from './database/entities/arb-real-trade.entity';
+import { ArbSignal } from './database/entities/arb-signal.entity';
 import { SellStatistics } from './database/entities/sell-statistics.entity';
 
 // Modules
@@ -21,22 +22,27 @@ import { MintQueueProcessor } from './modules/strategy/services/mint-queue.proce
 import { MANAGE_POSITION_QUEUE_NAME } from './modules/strategy/services/manage-position-queue.service';
 import { ManagePositionProcessor } from './modules/strategy/services/manage-position.processor';
 
+// Worker Cron Service
+import { WorkerCronService } from './modules/worker/worker-cron.service';
+import { UtilService } from './common/services/util.service';
+import { PolymarketApiService } from './common/services/polymarket-api.service';
+
 import { APP_CONSTANTS } from './common/constants/app.constants';
 
 /**
  * Worker Module
  * 
- * Minimal module that ONLY includes:
+ * Includes:
  * - Database connection (to query market data)
  * - Bull Queue registration (to process jobs)
  * - Queue Processors (MintQueueProcessor, ManagePositionProcessor)
  * - Required services (PolymarketOnchainService)
+ * - ScheduleModule + WorkerCronService (cron jobs separated from trading process)
  * 
  * Does NOT include:
  * - HTTP Controllers
  * - WebSocket services
- * - Strategy Engine services
- * - Other non-essential modules
+ * - Strategy Engine services (ArbitrageEngine, RealExecution, etc.)
  */
 @Module({
     imports: [
@@ -44,6 +50,9 @@ import { APP_CONSTANTS } from './common/constants/app.constants';
             isGlobal: true,
             envFilePath: '.env',
         }),
+
+        // NestJS Schedule for cron jobs in worker
+        ScheduleModule.forRoot(),
 
         // Bull Queue configuration
         BullModule.forRootAsync({
@@ -74,9 +83,8 @@ import { APP_CONSTANTS } from './common/constants/app.constants';
                 entities: [
                     Market,
                     Event,
-                    ArbSignal,
-                    ArbPaperTrade,
                     ArbRealTrade,
+                    ArbSignal,
                     SellStatistics,
                 ],
                 synchronize: true,
@@ -88,8 +96,8 @@ import { APP_CONSTANTS } from './common/constants/app.constants';
             inject: [ConfigService],
         }),
 
-        // Entity repository
-        TypeOrmModule.forFeature([Market, ArbRealTrade, Event]),
+        // Entity repositories for queue processors + cron service
+        TypeOrmModule.forFeature([Market, Event, ArbRealTrade]),
 
         // Register queues for processing
         BullModule.registerQueue(
@@ -124,9 +132,16 @@ import { APP_CONSTANTS } from './common/constants/app.constants';
         PolymarketOnchainWorkerModule,
     ],
     providers: [
-        // Only Queue Processors - they will auto-listen for jobs
+        // Queue Processors - auto-listen for jobs
         MintQueueProcessor,
         ManagePositionProcessor,
+
+        // Cron jobs - run periodic tasks in worker process
+        WorkerCronService,
+
+        // Dependencies for WorkerCronService
+        UtilService,
+        PolymarketApiService,
     ],
 })
 export class WorkerModule { }

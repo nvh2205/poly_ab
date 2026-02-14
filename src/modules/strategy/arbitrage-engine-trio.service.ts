@@ -4,6 +4,7 @@ import {
     OnModuleDestroy,
     OnModuleInit,
 } from '@nestjs/common';
+import { isRustMode, getRunMode } from '../../common/config/run-mode';
 import { Subscription, Subject, Observable, merge } from 'rxjs';
 import { MarketStructureService } from './market-structure.service';
 import { MarketDataStreamService } from '../ingestion/market-data-stream.service';
@@ -74,7 +75,7 @@ interface TokenSnapshot {
     timestampMs?: number;
 }
 
-type ParentState = MarketSnapshot & { coverage?: RangeCoverage };
+type ParentState = MarketSnapshot;
 
 // Simplified GroupState for Trio Model only
 interface GroupState {
@@ -130,6 +131,13 @@ export class ArbitrageEngineTrioService implements OnModuleInit, OnModuleDestroy
     }
 
     async onModuleInit(): Promise<void> {
+        if (isRustMode()) {
+            this.logger.log(
+                `RUN_MODE=${getRunMode()}, JS Trio engine is INACTIVE (Rust handles arbitrage)`,
+            );
+            return;
+        }
+
         await this.bootstrapGroups();
         this.topOfBookSub = this.marketDataStreamService
             .onTopOfBook()
@@ -161,6 +169,9 @@ export class ArbitrageEngineTrioService implements OnModuleInit, OnModuleDestroy
     }
 
     async ensureBootstrapped(): Promise<void> {
+        if (isRustMode()) {
+            return; // Rust handles arbitrage, no need to bootstrap JS trio
+        }
         if (this.hasGroups()) {
             this.logger.debug('Trio engine already has groups, skipping bootstrap');
             return;
@@ -213,10 +224,8 @@ export class ArbitrageEngineTrioService implements OnModuleInit, OnModuleDestroy
         }));
 
         const parentStates = group.parents.map<ParentState>((descriptor) => {
-            const coverage = this.computeCoverage(rangeChildren, descriptor);
             return {
                 descriptor,
-                coverage: coverage ?? undefined,
                 bestAsk: undefined,
                 bestBid: undefined,
                 assetId: descriptor.clobTokenIds?.[0],
@@ -405,48 +414,15 @@ export class ArbitrageEngineTrioService implements OnModuleInit, OnModuleDestroy
         }
     }
 
-    private computeCoverage(
-        children: MarketRangeDescriptor[],
-        parent: MarketRangeDescriptor,
-    ): RangeCoverage | null {
-        if (!children.length) return null;
-
-        const parentLower = Number.isFinite(parent.bounds.lower)
-            ? (parent.bounds.lower as number)
-            : Number.NEGATIVE_INFINITY;
-        const parentUpper = Number.isFinite(parent.bounds.upper)
-            ? (parent.bounds.upper as number)
-            : Number.POSITIVE_INFINITY;
-
-        let start = -1;
-        let end = -1;
-
-        for (let i = 0; i < children.length; i++) {
-            const child = children[i];
-            const childLower = Number.isFinite(child.bounds.lower)
-                ? (child.bounds.lower as number)
-                : Number.NEGATIVE_INFINITY;
-            const childUpper = Number.isFinite(child.bounds.upper)
-                ? (child.bounds.upper as number)
-                : Number.POSITIVE_INFINITY;
-
-            const overlaps = childUpper > parentLower && childLower < parentUpper;
-            if (overlaps) {
-                if (start === -1) start = i;
-                end = i;
-            }
-        }
-
-        if (start === -1 || end === -1) return null;
-        return { startIndex: start, endIndex: end };
-    }
 
     // ============================================================================
     // HOT PATH - handleTopOfBook
     // ============================================================================
 
     private handleTopOfBook(update: TopOfBookUpdate): void {
-        if (update.bestBid === 0 || update.bestAsk === 0) return;
+        const t0 = performance.now();
+
+        // if (update.bestBid === 0 || update.bestAsk === 0) return;
 
         // Dirty checking
         const cacheKey = update.assetId;
@@ -473,7 +449,14 @@ export class ArbitrageEngineTrioService implements OnModuleInit, OnModuleDestroy
         this.handleTrioTopOfBook(update);
 
         // Handle Range Arbitrage
-        // this.handleRangeArbitrage(update);
+        this.handleRangeArbitrage(update);
+        // console.log("0----",update)
+        const totalMs = performance.now() - t0;
+        if (totalMs > 2) {
+            this.logger.debug(
+                `total=${totalMs.toFixed(3)}ms`,
+            );
+        }
     }
 
     // ============================================================================
@@ -572,7 +555,7 @@ export class ArbitrageEngineTrioService implements OnModuleInit, OnModuleDestroy
     private calculateTrioProfit(
         state: GroupState,
         trio: TrioState,
-    ): { profitAbs: number; profitBps: number; opportunity: ArbOpportunity; emitKey: string } | null {
+    ): { profitAbs: number; profitBps: number; opportunity: any; emitKey: string } | null {
         const calc = this.calcTrioProfitOnly(trio);
         if (!calc) return null;
 
@@ -582,7 +565,7 @@ export class ArbitrageEngineTrioService implements OnModuleInit, OnModuleDestroy
             mode: 'BUY' | 'SELL',
             profitAbs: number,
             profitBps: number,
-        ): ArbOpportunity => {
+        ): any => {
             const parentLower = state.parentStates[trio.parentLowerIndex];
             const parentUpper = state.parentStates[trio.parentUpperIndex];
             const rangeChild = state.childStates[trio.rangeIndex];
@@ -599,7 +582,7 @@ export class ArbitrageEngineTrioService implements OnModuleInit, OnModuleDestroy
                     : 'POLYMARKET_TRIANGLE_SELL' as const,
                 parent: {
                     descriptor: parentLower.descriptor,
-                    coverage: parentLower.coverage ?? { startIndex: 0, endIndex: 0 },
+                    coverage: { startIndex: trio.rangeIndex, endIndex: trio.rangeIndex },
                     bestBid: trio.lowerYes.bestBid ?? undefined,
                     bestAsk: trio.lowerYes.bestAsk ?? undefined,
                     bestBidSize: trio.lowerYes.bestBidSize,
@@ -776,7 +759,7 @@ export class ArbitrageEngineTrioService implements OnModuleInit, OnModuleDestroy
         parentLower: ParentState,
         parentUpper: ParentState,
         rangeChild: MarketSnapshot,
-    ): { profitAbs: number; emitKey: string; opportunity: ArbOpportunity } | null {
+    ): { profitAbs: number; emitKey: string; opportunity: any } | null {
         const bidLower = parentLower.bestBid;
         const askRange = rangeChild.bestAsk;
         const askUpper = parentUpper.bestAsk;
@@ -789,17 +772,43 @@ export class ArbitrageEngineTrioService implements OnModuleInit, OnModuleDestroy
 
         if (profitAbs < this.minProfitAbs || profitBps < this.minProfitBps) return null;
 
-        const opportunity: ArbOpportunity = {
+        const opportunity: any = {
             groupKey: state.group.groupKey,
             eventSlug: state.group.eventSlug,
             crypto: state.group.crypto,
             strategy: 'SELL_PARENT_BUY_CHILDREN' as const,
             parent: {
-                ...parentLower,
-                coverage: parentLower.coverage ?? { startIndex: 0, endIndex: 0 },
+                descriptor: parentLower.descriptor,
+                coverage: { startIndex: trio.rangeIndex, endIndex: trio.rangeIndex },
+                bestBid: parentLower.bestBid,
+                bestAsk: parentLower.bestAsk,
+                bestBidSize: parentLower.bestBidSize,
+                bestAskSize: parentLower.bestAskSize,
+                assetId: parentLower.assetId,
+                marketSlug: parentLower.marketSlug,
+                timestampMs: parentLower.timestampMs,
             },
-            parentUpper: { ...parentUpper },
-            children: [{ ...rangeChild, index: trio.rangeIndex }],
+            parentUpper: {
+                descriptor: parentUpper.descriptor,
+                bestBid: parentUpper.bestBid,
+                bestAsk: parentUpper.bestAsk,
+                bestBidSize: parentUpper.bestBidSize,
+                bestAskSize: parentUpper.bestAskSize,
+                assetId: parentUpper.assetId,
+                marketSlug: parentUpper.marketSlug,
+                timestampMs: parentUpper.timestampMs,
+            },
+            children: [{
+                descriptor: rangeChild.descriptor,
+                index: trio.rangeIndex,
+                bestBid: rangeChild.bestBid,
+                bestAsk: rangeChild.bestAsk,
+                bestBidSize: rangeChild.bestBidSize,
+                bestAskSize: rangeChild.bestAskSize,
+                assetId: rangeChild.assetId,
+                marketSlug: rangeChild.marketSlug,
+                timestampMs: rangeChild.timestampMs,
+            }],
             childrenSumAsk: rangeChild.bestAsk ?? 0,
             childrenSumBid: rangeChild.bestBid ?? 0,
             parentBestBid: bidLower,
@@ -822,7 +831,7 @@ export class ArbitrageEngineTrioService implements OnModuleInit, OnModuleDestroy
         parentLower: ParentState,
         parentUpper: ParentState,
         rangeChild: MarketSnapshot,
-    ): { profitAbs: number; emitKey: string; opportunity: ArbOpportunity } | null {
+    ): { profitAbs: number; emitKey: string; opportunity: any } | null {
         const askLower = parentLower.bestAsk;
         const bidRange = rangeChild.bestBid;
         const bidUpper = parentUpper.bestBid;
@@ -835,17 +844,43 @@ export class ArbitrageEngineTrioService implements OnModuleInit, OnModuleDestroy
 
         if (profitAbs < this.minProfitAbs || profitBps < this.minProfitBps) return null;
 
-        const opportunity: ArbOpportunity = {
+        const opportunity: any = {
             groupKey: state.group.groupKey,
             eventSlug: state.group.eventSlug,
             crypto: state.group.crypto,
             strategy: 'BUY_PARENT_SELL_CHILDREN' as const,
             parent: {
-                ...parentLower,
-                coverage: parentLower.coverage ?? { startIndex: 0, endIndex: 0 },
+                descriptor: parentLower.descriptor,
+                coverage: { startIndex: trio.rangeIndex, endIndex: trio.rangeIndex },
+                bestBid: parentLower.bestBid,
+                bestAsk: parentLower.bestAsk,
+                bestBidSize: parentLower.bestBidSize,
+                bestAskSize: parentLower.bestAskSize,
+                assetId: parentLower.assetId,
+                marketSlug: parentLower.marketSlug,
+                timestampMs: parentLower.timestampMs,
             },
-            parentUpper: { ...parentUpper },
-            children: [{ ...rangeChild, index: trio.rangeIndex }],
+            parentUpper: {
+                descriptor: parentUpper.descriptor,
+                bestBid: parentUpper.bestBid,
+                bestAsk: parentUpper.bestAsk,
+                bestBidSize: parentUpper.bestBidSize,
+                bestAskSize: parentUpper.bestAskSize,
+                assetId: parentUpper.assetId,
+                marketSlug: parentUpper.marketSlug,
+                timestampMs: parentUpper.timestampMs,
+            },
+            children: [{
+                descriptor: rangeChild.descriptor,
+                index: trio.rangeIndex,
+                bestBid: rangeChild.bestBid,
+                bestAsk: rangeChild.bestAsk,
+                bestBidSize: rangeChild.bestBidSize,
+                bestAskSize: rangeChild.bestAskSize,
+                assetId: rangeChild.assetId,
+                marketSlug: rangeChild.marketSlug,
+                timestampMs: rangeChild.timestampMs,
+            }],
             childrenSumAsk: rangeChild.bestAsk ?? 0,
             childrenSumBid: rangeChild.bestBid ?? 0,
             parentBestBid: parentLower.bestBid ?? undefined,

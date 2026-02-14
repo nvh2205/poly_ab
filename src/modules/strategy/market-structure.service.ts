@@ -71,20 +71,22 @@ export class MarketStructureService {
   }
 
   /**
-   * Cleanup expired groups from cache based on groupKeys
-   * Simplified: Clear entire cache and rebuild (since markets in same group share endDate)
+   * Cleanup expired groups from cache based on groupKeys.
+   * Only removes the specific expired groups — preserves active groups.
    */
   cleanupExpiredGroups(groupKeys: string[]): number {
     if (groupKeys.length === 0) return 0;
 
-    const removedCount = this.cache.size;
-
-    // Clear entire cache
-    this.cache.clear();
+    let removedCount = 0;
+    for (const key of groupKeys) {
+      if (this.cache.delete(key)) {
+        removedCount++;
+      }
+    }
 
     if (removedCount > 0) {
       this.logger.log(
-        `Cleaned up ${removedCount} groups from cache (cleared all)`,
+        `Cleaned up ${removedCount}/${groupKeys.length} expired groups from cache (${this.cache.size} remaining)`,
       );
     }
 
