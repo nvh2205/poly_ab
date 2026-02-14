@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use crate::engine::range_evaluator;
+// use crate::engine::range_evaluator;
 use crate::engine::state::*;
 use crate::engine::trio_evaluator;
 use crate::types::signal::ArbSignal;
@@ -244,6 +244,7 @@ impl EngineState {
                 //         }
                 //     }
                 // }
+                _ => {}
             }
         }
 
