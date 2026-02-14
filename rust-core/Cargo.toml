@@ -1,0 +1,52 @@
+[package]
+name = "rust-core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# N-API bindings (consistent with native-core)
+napi = { version = "2", features = ["async", "napi4", "tokio_rt"] }
+napi-derive = "2"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# WebSocket
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+futures-util = "0.3"
+
+# JSON Parse
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# HTTP Client (HFT-optimized, persistent connections)
+reqwest = { version = "0.12", features = ["json", "native-tls"] }
+
+# Crypto (EIP-712 signing) — same versions as native-core
+ethers-core = "2"
+ethers-signers = { version = "2", default-features = false }
+hex = "0.4"
+
+# HMAC Authentication (Polymarket L2 API)
+hmac = "0.12"
+sha2 = "0.10"
+base64 = "0.22"
+
+# Random (salt generation)
+rand = "0.8"
+
+# Utilities
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[build-dependencies]
+napi-build = "2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

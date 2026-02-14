@@ -280,9 +280,12 @@ async function main(): Promise<void> {
 
         console.log(`\n--- SAMPLE trioTokenIndex (first 10) ---`);
         for (const [tokenId, locators] of Object.entries(sampleTrioTokenIndex)) {
-            console.log(`${tokenId.substring(0, 20)}...: ${locators.length} locators`);
-            for (const loc of locators.slice(0, 2)) {
-                console.log(`    -> group: ${loc.groupKey.substring(0, 30)}..., trio: ${loc.trioIndex}, role: ${loc.role}`);
+            const arr = Array.isArray(locators) ? locators : [locators];
+            console.log(`${tokenId.substring(0, 20)}...: ${arr.length} locators`);
+            for (const loc of arr.slice(0, 2)) {
+                if (loc && typeof loc === 'object') {
+                    console.log(`    -> group: ${(loc as any).groupKey?.substring?.(0, 30) ?? '?'}..., trio: ${(loc as any).trioIndex}, role: ${(loc as any).role}`);
+                }
             }
         }
 
@@ -311,6 +314,9 @@ async function main(): Promise<void> {
         output.keys = {
             groupKeys: takeMaybe(groupKeys),
             tokenIndexKeys: takeMaybe(tokenKeys),
+            tokenIndexFull: Object.fromEntries(
+                takeMaybe(tokenKeys).map(k => [k, internals.tokenIndex.get(k)])
+            ),
             slugIndexKeys: takeMaybe(slugKeys),
             marketIdIndexKeys: takeMaybe(marketIdKeys),
             trioTokenIndexKeys: takeMaybe(trioTokenKeys),

@@ -1,0 +1,24 @@
+{
+  "name": "rust-core",
+  "version": "0.1.0",
+  "description": "High-performance WebSocket + Arbitrage Engine for Polymarket HFT",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "name": "rust-core",
+    "triples": {
+      "defaults": true,
+      "additional": []
+    }
+  },
+  "scripts": {
+    "artifacts": "napi artifacts",
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "prepublishOnly": "napi prepublish -t npm",
+    "test": "cargo test"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.0"
+  }
+}

@@ -3,8 +3,12 @@ import { AppModule } from './app.module';
 import { Logger } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
+
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
+
+
+
   const app = await NestFactory.create(AppModule);
 
   // Setup Swagger
@@ -12,7 +16,7 @@ async function bootstrap() {
     .setTitle('Polymarket Orderbook Data Collection System')
     .setDescription(
       'API documentation for Polymarket Orderbook Data Collection System. ' +
-        'This system collects real-time market data from Polymarket via WebSocket connections.',
+      'This system collects real-time market data from Polymarket via WebSocket connections.',
     )
     .setVersion('1.0.0')
     .addTag('market', 'Market discovery and management endpoints')

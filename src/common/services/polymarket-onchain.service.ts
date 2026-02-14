@@ -104,6 +104,9 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
   private credentialsCache = new Map<string, ApiKeyCreds>();
   private clientCache = new Map<string, ClobClientType>();
 
+  // Cache for negRisk status per token ID (keyed by tokenID string)
+  private negRiskCache = new Map<string, boolean>();
+
   // Cache for wallet instances (keyed by private key hash for security)
   private walletCache = new Map<string, Wallet>();
 
@@ -146,7 +149,7 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
   }
 
   // Contract addresses (Fixed for Polygon)
-  private readonly RPC_READ_ONLY = 'http://lynx:lynx@polygon-rpc.lynxsolution.xyz';
+  private readonly RPC_READ_ONLY = 'https://silent-virulent-ensemble.matic.quiknode.pro/69d6739125c575fbfc5ba71b43023323742a9092/';
   private readonly CTF_EXCHANGE_ADDR =
     '0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E';
   private readonly CTF_ADDR = '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045';
@@ -334,6 +337,30 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
   /**
    * Get or create API credentials (cached by wallet address)
    */
+  /**
+   * Get API credentials and signer address for Rust batch order API.
+   * Returns credentials from cache (created at startup or on-demand by the JS service).
+   */
+  async getApiCredentials(config?: PolymarketConfig): Promise<{
+    apiKey: string;
+    apiSecret: string;
+    apiPassphrase: string;
+    signerAddress: string;
+  }> {
+    const cfg = config || this.defaultConfig;
+    if (!cfg) {
+      throw new Error('No Polymarket config available');
+    }
+    const wallet = this.buildWallet(cfg);
+    const creds = await this.getOrCreateCredentials(wallet, cfg);
+    return {
+      apiKey: creds.key,
+      apiSecret: creds.secret,
+      apiPassphrase: creds.passphrase,
+      signerAddress: wallet.address,
+    };
+  }
+
   private async getOrCreateCredentials(
     wallet: Wallet,
     config: PolymarketConfig,
@@ -368,6 +395,58 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
     this.logger.log(`API credentials created and cached for ${walletAddress}`);
 
     return creds;
+  }
+
+  /**
+   * Get the negRisk flag for a token from the CLOB API, with caching.
+   * This is critical for EIP-712 signing — wrong negRisk = wrong domain separator = invalid signature.
+   */
+  async getNegRisk(tokenId: string): Promise<boolean> {
+    const cached = this.negRiskCache.get(tokenId);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    try {
+      const response = await this.hftHttpClient.get(`/neg-risk`, {
+        params: { token_id: tokenId },
+        timeout: 3000,
+      });
+      const negRisk = response.data?.neg_risk === true;
+      this.negRiskCache.set(tokenId, negRisk);
+      this.logger.debug(`negRisk for token ${tokenId.slice(0, 20)}...: ${negRisk}`);
+      return negRisk;
+    } catch (error: any) {
+      this.logger.warn(`Failed to fetch negRisk for token ${tokenId.slice(0, 20)}...: ${error.message}. Defaulting to false.`);
+      return false;
+    }
+  }
+
+  /**
+   * Batch resolve negRisk for multiple token IDs (parallel, cached).
+   */
+  async resolveNegRiskBatch(tokenIds: string[]): Promise<Map<string, boolean>> {
+    const result = new Map<string, boolean>();
+    const uncached: string[] = [];
+
+    for (const tokenId of tokenIds) {
+      const cached = this.negRiskCache.get(tokenId);
+      if (cached !== undefined) {
+        result.set(tokenId, cached);
+      } else {
+        uncached.push(tokenId);
+      }
+    }
+
+    if (uncached.length > 0) {
+      const promises = uncached.map(async (tokenId) => {
+        const negRisk = await this.getNegRisk(tokenId);
+        result.set(tokenId, negRisk);
+      });
+      await Promise.all(promises);
+    }
+
+    return result;
   }
 
   /**
@@ -1774,13 +1853,14 @@ export class PolymarketOnchainService implements OnApplicationBootstrap {
     address: string;
   }> {
     try {
-      const rpcUrl = new URL(this.RPC_READ_ONLY);
-      const readOnlyProvider = new providers.StaticJsonRpcProvider({
-        url: `${rpcUrl.protocol}//${rpcUrl.host}${rpcUrl.pathname}`,
-        headers: rpcUrl.username
-          ? { Authorization: 'Basic ' + Buffer.from(`${rpcUrl.username}:${rpcUrl.password}`).toString('base64') }
-          : undefined,
-      }, 137);
+      // const rpcUrl = new URL(this.RPC_READ_ONLY);
+      // const readOnlyProvider = new providers.StaticJsonRpcProvider({
+      //   url: `${rpcUrl.protocol}//${rpcUrl.host}${rpcUrl.pathname}`,
+      //   headers: rpcUrl.username
+      //     ? { Authorization: 'Basic ' + Buffer.from(`${rpcUrl.username}:${rpcUrl.password}`).toString('base64') }
+      //     : undefined,
+      // }, 137);
+      const readOnlyProvider = new providers.JsonRpcProvider(config.polygonRpc);
       const wallet = this.buildWallet(config);
       const targetAddress = overrideAddress || wallet.address;
       const usdcContract = new Contract(

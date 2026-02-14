@@ -10,6 +10,7 @@ import { ArbRealTrade } from '../../database/entities/arb-real-trade.entity';
 import { MarketStructureService } from './market-structure.service';
 import { IngestionModule } from '../ingestion/ingestion.module';
 import { ArbitrageEngineTrioService } from './arbitrage-engine-trio.service';
+import { RustEngineBridgeService } from './rust-engine-bridge.service';
 import { PaperExecutionService } from './paper-execution.service';
 import { RealExecutionService } from './real-execution.service';
 import { TradeAnalysisService } from './trade-analysis.service';
@@ -67,6 +68,7 @@ import { ManagePositionQueueService, MANAGE_POSITION_QUEUE_NAME } from './servic
   providers: [
     MarketStructureService,
     ArbitrageEngineTrioService,
+    RustEngineBridgeService,
     // ArbitrageEngineService,
     PaperExecutionService,
     RealExecutionService,
@@ -81,6 +83,7 @@ import { ManagePositionQueueService, MANAGE_POSITION_QUEUE_NAME } from './servic
   exports: [
     MarketStructureService,
     ArbitrageEngineTrioService,
+    RustEngineBridgeService,
     // ArbitrageEngineService,
     PaperExecutionService,
     RealExecutionService,
@@ -90,3 +93,4 @@ import { ManagePositionQueueService, MANAGE_POSITION_QUEUE_NAME } from './servic
   ],
 })
 export class StrategyModule { }
+

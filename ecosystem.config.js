@@ -6,6 +6,10 @@ module.exports = {
       script: './dist/src/main.js',
       instances: 1,
       exec_mode: 'cluster',
+      node_args: [
+        '--max-semi-space-size=64',   // 64MB young gen (default 16MB) - reduces minor GC frequency
+        '--max-old-space-size=4096',  // 4GB old gen - reduces major GC frequency
+      ].join(' '),
       env: {
         NODE_ENV: 'production',
         APP_MODE: 'api',

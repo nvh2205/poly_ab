@@ -1,0 +1,683 @@
+{
+  "generatedAt": "2026-02-10T12:28:51.478Z",
+  "rustCoreExports": [
+    "getEngineStatus",
+    "getSocketStatus",
+    "initSocket",
+    "onSignal",
+    "onTopOfBook",
+    "shutdownSocket",
+    "subscribeTokens",
+    "unsubscribeTokens",
+    "updateEngineConfig",
+    "updateMarketStructure"
+  ],
+  "engineConfig": {
+    "minProfitBps": 5,
+    "minProfitAbs": 0,
+    "cooldownMs": 0
+  },
+  "engineStatus": {
+    "totalGroups": 1,
+    "totalTrios": 9,
+    "totalPriceSlots": 42,
+    "totalTokensIndexed": 42
+  },
+  "groupDetails": [
+    {
+      "groupKey": "eth-2026-01-26T17:00:00.000Z",
+      "eventSlug": "ethereum-above-on-january-26",
+      "crypto": "eth",
+      "children": {
+        "count": 11,
+        "markets": [
+          {
+            "marketId": "1220942",
+            "slug": "will-the-price-of-ethereum-be-less-than-2800-on-january-26",
+            "kind": "below",
+            "boundsUpper": 2800,
+            "negRisk": true,
+            "yesToken": "819911...540889",
+            "noToken": "914200...840621"
+          },
+          {
+            "marketId": "1220943",
+            "slug": "will-the-price-of-ethereum-be-between-2800-2900-on-january-26",
+            "kind": "range",
+            "boundsLower": 2800,
+            "boundsUpper": 2900,
+            "negRisk": true,
+            "yesToken": "540971...550758",
+            "noToken": "574625...545986"
+          },
+          {
+            "marketId": "1220944",
+            "slug": "will-the-price-of-ethereum-be-between-2900-3000-on-january-26",
+            "kind": "range",
+            "boundsLower": 2900,
+            "boundsUpper": 3000,
+            "negRisk": true,
+            "yesToken": "180825...301709",
+            "noToken": "613683...466479"
+          },
+          {
+            "marketId": "1220945",
+            "slug": "will-the-price-of-ethereum-be-between-3000-3100-on-january-26",
+            "kind": "range",
+            "boundsLower": 3000,
+            "boundsUpper": 3100,
+            "negRisk": true,
+            "yesToken": "268188...092466",
+            "noToken": "883281...618856"
+          },
+          {
+            "marketId": "1220946",
+            "slug": "will-the-price-of-ethereum-be-between-3100-3200-on-january-26",
+            "kind": "range",
+            "boundsLower": 3100,
+            "boundsUpper": 3200,
+            "negRisk": true,
+            "yesToken": "730918...517936",
+            "noToken": "239669...261546"
+          },
+          {
+            "marketId": "1220947",
+            "slug": "will-the-price-of-ethereum-be-between-3200-3300-on-january-26",
+            "kind": "range",
+            "boundsLower": 3200,
+            "boundsUpper": 3300,
+            "negRisk": true,
+            "yesToken": "817748...269372",
+            "noToken": "981144...170462"
+          },
+          {
+            "marketId": "1220948",
+            "slug": "will-the-price-of-ethereum-be-between-3300-3400-on-january-26",
+            "kind": "range",
+            "boundsLower": 3300,
+            "boundsUpper": 3400,
+            "negRisk": true,
+            "yesToken": "329138...971652",
+            "noToken": "994730...132252"
+          },
+          {
+            "marketId": "1220949",
+            "slug": "will-the-price-of-ethereum-be-between-3400-3500-on-january-26",
+            "kind": "range",
+            "boundsLower": 3400,
+            "boundsUpper": 3500,
+            "negRisk": true,
+            "yesToken": "460817...997796",
+            "noToken": "579143...297747"
+          },
+          {
+            "marketId": "1220950",
+            "slug": "will-the-price-of-ethereum-be-between-3500-3600-on-january-26",
+            "kind": "range",
+            "boundsLower": 3500,
+            "boundsUpper": 3600,
+            "negRisk": true,
+            "yesToken": "167457...449178",
+            "noToken": "547283...698725"
+          },
+          {
+            "marketId": "1220951",
+            "slug": "will-the-price-of-ethereum-be-between-3600-3700-on-january-26",
+            "kind": "range",
+            "boundsLower": 3600,
+            "boundsUpper": 3700,
+            "negRisk": true,
+            "yesToken": "812420...277946",
+            "noToken": "141500...654425"
+          },
+          {
+            "marketId": "1220953",
+            "slug": "will-the-price-of-ethereum-be-greater-than-3700-on-january-26",
+            "kind": "above",
+            "boundsLower": 3700,
+            "negRisk": true,
+            "yesToken": "545250...965016",
+            "noToken": "663192...531630"
+          }
+        ]
+      },
+      "parents": {
+        "count": 10,
+        "markets": [
+          {
+            "marketId": "1220909",
+            "slug": "ethereum-above-2800-on-january-26",
+            "kind": "above",
+            "boundsLower": 2800,
+            "negRisk": false,
+            "yesToken": "737032...409898",
+            "noToken": "686125...263912"
+          },
+          {
+            "marketId": "1220911",
+            "slug": "ethereum-above-2900-on-january-26",
+            "kind": "above",
+            "boundsLower": 2900,
+            "negRisk": false,
+            "yesToken": "256381...491329",
+            "noToken": "185733...459750"
+          },
+          {
+            "marketId": "1220913",
+            "slug": "ethereum-above-3000-on-january-26",
+            "kind": "above",
+            "boundsLower": 3000,
+            "negRisk": false,
+            "yesToken": "216435...191285",
+            "noToken": "663545...413843"
+          },
+          {
+            "marketId": "1220914",
+            "slug": "ethereum-above-3100-on-january-26",
+            "kind": "above",
+            "boundsLower": 3100,
+            "negRisk": false,
+            "yesToken": "106170...929517",
+            "noToken": "729690...522712"
+          },
+          {
+            "marketId": "1220917",
+            "slug": "ethereum-above-3200-on-january-26",
+            "kind": "above",
+            "boundsLower": 3200,
+            "negRisk": false,
+            "yesToken": "798059...356705",
+            "noToken": "943582...893074"
+          },
+          {
+            "marketId": "1220920",
+            "slug": "ethereum-above-3300-on-january-26",
+            "kind": "above",
+            "boundsLower": 3300,
+            "negRisk": false,
+            "yesToken": "106480...588818",
+            "noToken": "244877...055689"
+          },
+          {
+            "marketId": "1220923",
+            "slug": "ethereum-above-3400-on-january-26",
+            "kind": "above",
+            "boundsLower": 3400,
+            "negRisk": false,
+            "yesToken": "252717...479393",
+            "noToken": "812811...939490"
+          },
+          {
+            "marketId": "1220928",
+            "slug": "ethereum-above-3500-on-january-26",
+            "kind": "above",
+            "boundsLower": 3500,
+            "negRisk": false,
+            "yesToken": "222648...896860",
+            "noToken": "106122...461295"
+          },
+          {
+            "marketId": "1220931",
+            "slug": "ethereum-above-3600-on-january-26",
+            "kind": "above",
+            "boundsLower": 3600,
+            "negRisk": false,
+            "yesToken": "115454...587957",
+            "noToken": "793053...406027"
+          },
+          {
+            "marketId": "1220933",
+            "slug": "ethereum-above-3700-on-january-26",
+            "kind": "above",
+            "boundsLower": 3700,
+            "negRisk": false,
+            "yesToken": "206501...548042",
+            "noToken": "105843...476805"
+          }
+        ]
+      },
+      "trios": [
+        {
+          "index": 0,
+          "parentLower": {
+            "slug": "ethereum-above-2800-on-january-26",
+            "bounds": ">=2800",
+            "yesToken": "737032...409898",
+            "noToken": "686125...263912"
+          },
+          "parentUpper": {
+            "slug": "ethereum-above-2900-on-january-26",
+            "bounds": ">=2900",
+            "yesToken": "256381...491329",
+            "noToken": "185733...459750"
+          },
+          "rangeChild": {
+            "slug": "will-the-price-of-ethereum-be-between-2800-2900-on-january-26",
+            "bounds": "2800-2900",
+            "yesToken": "540971...550758",
+            "noToken": "574625...545986"
+          },
+          "triangleBuy": {
+            "legs": "LowerYES_ASK + UpperNO_ASK + RangeNO_ASK",
+            "payout": 2,
+            "formula": "profit = 2.0 - totalAsk"
+          },
+          "unbundling": {
+            "legs": "LowerYES_BID vs (RangeYES_ASK + UpperYES_ASK)",
+            "formula": "profit = LowerYES_BID - (RangeYES_ASK + UpperYES_ASK)"
+          },
+          "bundling": {
+            "legs": "LowerYES_ASK vs (RangeYES_BID + UpperYES_BID)",
+            "formula": "profit = (RangeYES_BID + UpperYES_BID) - LowerYES_ASK"
+          }
+        },
+        {
+          "index": 1,
+          "parentLower": {
+            "slug": "ethereum-above-2900-on-january-26",
+            "bounds": ">=2900",
+            "yesToken": "256381...491329",
+            "noToken": "185733...459750"
+          },
+          "parentUpper": {
+            "slug": "ethereum-above-3000-on-january-26",
+            "bounds": ">=3000",
+            "yesToken": "216435...191285",
+            "noToken": "663545...413843"
+          },
+          "rangeChild": {
+            "slug": "will-the-price-of-ethereum-be-between-2900-3000-on-january-26",
+            "bounds": "2900-3000",
+            "yesToken": "180825...301709",
+            "noToken": "613683...466479"
+          },
+          "triangleBuy": {
+            "legs": "LowerYES_ASK + UpperNO_ASK + RangeNO_ASK",
+            "payout": 2,
+            "formula": "profit = 2.0 - totalAsk"
+          },
+          "unbundling": {
+            "legs": "LowerYES_BID vs (RangeYES_ASK + UpperYES_ASK)",
+            "formula": "profit = LowerYES_BID - (RangeYES_ASK + UpperYES_ASK)"
+          },
+          "bundling": {
+            "legs": "LowerYES_ASK vs (RangeYES_BID + UpperYES_BID)",
+            "formula": "profit = (RangeYES_BID + UpperYES_BID) - LowerYES_ASK"
+          }
+        },
+        {
+          "index": 2,
+          "parentLower": {
+            "slug": "ethereum-above-3000-on-january-26",
+            "bounds": ">=3000",
+            "yesToken": "216435...191285",
+            "noToken": "663545...413843"
+          },
+          "parentUpper": {
+            "slug": "ethereum-above-3100-on-january-26",
+            "bounds": ">=3100",
+            "yesToken": "106170...929517",
+            "noToken": "729690...522712"
+          },
+          "rangeChild": {
+            "slug": "will-the-price-of-ethereum-be-between-3000-3100-on-january-26",
+            "bounds": "3000-3100",
+            "yesToken": "268188...092466",
+            "noToken": "883281...618856"
+          },
+          "triangleBuy": {
+            "legs": "LowerYES_ASK + UpperNO_ASK + RangeNO_ASK",
+            "payout": 2,
+            "formula": "profit = 2.0 - totalAsk"
+          },
+          "unbundling": {
+            "legs": "LowerYES_BID vs (RangeYES_ASK + UpperYES_ASK)",
+            "formula": "profit = LowerYES_BID - (RangeYES_ASK + UpperYES_ASK)"
+          },
+          "bundling": {
+            "legs": "LowerYES_ASK vs (RangeYES_BID + UpperYES_BID)",
+            "formula": "profit = (RangeYES_BID + UpperYES_BID) - LowerYES_ASK"
+          }
+        },
+        {
+          "index": 3,
+          "parentLower": {
+            "slug": "ethereum-above-3100-on-january-26",
+            "bounds": ">=3100",
+            "yesToken": "106170...929517",
+            "noToken": "729690...522712"
+          },
+          "parentUpper": {
+            "slug": "ethereum-above-3200-on-january-26",
+            "bounds": ">=3200",
+            "yesToken": "798059...356705",
+            "noToken": "943582...893074"
+          },
+          "rangeChild": {
+            "slug": "will-the-price-of-ethereum-be-between-3100-3200-on-january-26",
+            "bounds": "3100-3200",
+            "yesToken": "730918...517936",
+            "noToken": "239669...261546"
+          },
+          "triangleBuy": {
+            "legs": "LowerYES_ASK + UpperNO_ASK + RangeNO_ASK",
+            "payout": 2,
+            "formula": "profit = 2.0 - totalAsk"
+          },
+          "unbundling": {
+            "legs": "LowerYES_BID vs (RangeYES_ASK + UpperYES_ASK)",
+            "formula": "profit = LowerYES_BID - (RangeYES_ASK + UpperYES_ASK)"
+          },
+          "bundling": {
+            "legs": "LowerYES_ASK vs (RangeYES_BID + UpperYES_BID)",
+            "formula": "profit = (RangeYES_BID + UpperYES_BID) - LowerYES_ASK"
+          }
+        },
+        {
+          "index": 4,
+          "parentLower": {
+            "slug": "ethereum-above-3200-on-january-26",
+            "bounds": ">=3200",
+            "yesToken": "798059...356705",
+            "noToken": "943582...893074"
+          },
+          "parentUpper": {
+            "slug": "ethereum-above-3300-on-january-26",
+            "bounds": ">=3300",
+            "yesToken": "106480...588818",
+            "noToken": "244877...055689"
+          },
+          "rangeChild": {
+            "slug": "will-the-price-of-ethereum-be-between-3200-3300-on-january-26",
+            "bounds": "3200-3300",
+            "yesToken": "817748...269372",
+            "noToken": "981144...170462"
+          },
+          "triangleBuy": {
+            "legs": "LowerYES_ASK + UpperNO_ASK + RangeNO_ASK",
+            "payout": 2,
+            "formula": "profit = 2.0 - totalAsk"
+          },
+          "unbundling": {
+            "legs": "LowerYES_BID vs (RangeYES_ASK + UpperYES_ASK)",
+            "formula": "profit = LowerYES_BID - (RangeYES_ASK + UpperYES_ASK)"
+          },
+          "bundling": {
+            "legs": "LowerYES_ASK vs (RangeYES_BID + UpperYES_BID)",
+            "formula": "profit = (RangeYES_BID + UpperYES_BID) - LowerYES_ASK"
+          }
+        },
+        {
+          "index": 5,
+          "parentLower": {
+            "slug": "ethereum-above-3300-on-january-26",
+            "bounds": ">=3300",
+            "yesToken": "106480...588818",
+            "noToken": "244877...055689"
+          },
+          "parentUpper": {
+            "slug": "ethereum-above-3400-on-january-26",
+            "bounds": ">=3400",
+            "yesToken": "252717...479393",
+            "noToken": "812811...939490"
+          },
+          "rangeChild": {
+            "slug": "will-the-price-of-ethereum-be-between-3300-3400-on-january-26",
+            "bounds": "3300-3400",
+            "yesToken": "329138...971652",
+            "noToken": "994730...132252"
+          },
+          "triangleBuy": {
+            "legs": "LowerYES_ASK + UpperNO_ASK + RangeNO_ASK",
+            "payout": 2,
+            "formula": "profit = 2.0 - totalAsk"
+          },
+          "unbundling": {
+            "legs": "LowerYES_BID vs (RangeYES_ASK + UpperYES_ASK)",
+            "formula": "profit = LowerYES_BID - (RangeYES_ASK + UpperYES_ASK)"
+          },
+          "bundling": {
+            "legs": "LowerYES_ASK vs (RangeYES_BID + UpperYES_BID)",
+            "formula": "profit = (RangeYES_BID + UpperYES_BID) - LowerYES_ASK"
+          }
+        },
+        {
+          "index": 6,
+          "parentLower": {
+            "slug": "ethereum-above-3400-on-january-26",
+            "bounds": ">=3400",
+            "yesToken": "252717...479393",
+            "noToken": "812811...939490"
+          },
+          "parentUpper": {
+            "slug": "ethereum-above-3500-on-january-26",
+            "bounds": ">=3500",
+            "yesToken": "222648...896860",
+            "noToken": "106122...461295"
+          },
+          "rangeChild": {
+            "slug": "will-the-price-of-ethereum-be-between-3400-3500-on-january-26",
+            "bounds": "3400-3500",
+            "yesToken": "460817...997796",
+            "noToken": "579143...297747"
+          },
+          "triangleBuy": {
+            "legs": "LowerYES_ASK + UpperNO_ASK + RangeNO_ASK",
+            "payout": 2,
+            "formula": "profit = 2.0 - totalAsk"
+          },
+          "unbundling": {
+            "legs": "LowerYES_BID vs (RangeYES_ASK + UpperYES_ASK)",
+            "formula": "profit = LowerYES_BID - (RangeYES_ASK + UpperYES_ASK)"
+          },
+          "bundling": {
+            "legs": "LowerYES_ASK vs (RangeYES_BID + UpperYES_BID)",
+            "formula": "profit = (RangeYES_BID + UpperYES_BID) - LowerYES_ASK"
+          }
+        },
+        {
+          "index": 7,
+          "parentLower": {
+            "slug": "ethereum-above-3500-on-january-26",
+            "bounds": ">=3500",
+            "yesToken": "222648...896860",
+            "noToken": "106122...461295"
+          },
+          "parentUpper": {
+            "slug": "ethereum-above-3600-on-january-26",
+            "bounds": ">=3600",
+            "yesToken": "115454...587957",
+            "noToken": "793053...406027"
+          },
+          "rangeChild": {
+            "slug": "will-the-price-of-ethereum-be-between-3500-3600-on-january-26",
+            "bounds": "3500-3600",
+            "yesToken": "167457...449178",
+            "noToken": "547283...698725"
+          },
+          "triangleBuy": {
+            "legs": "LowerYES_ASK + UpperNO_ASK + RangeNO_ASK",
+            "payout": 2,
+            "formula": "profit = 2.0 - totalAsk"
+          },
+          "unbundling": {
+            "legs": "LowerYES_BID vs (RangeYES_ASK + UpperYES_ASK)",
+            "formula": "profit = LowerYES_BID - (RangeYES_ASK + UpperYES_ASK)"
+          },
+          "bundling": {
+            "legs": "LowerYES_ASK vs (RangeYES_BID + UpperYES_BID)",
+            "formula": "profit = (RangeYES_BID + UpperYES_BID) - LowerYES_ASK"
+          }
+        },
+        {
+          "index": 8,
+          "parentLower": {
+            "slug": "ethereum-above-3600-on-january-26",
+            "bounds": ">=3600",
+            "yesToken": "115454...587957",
+            "noToken": "793053...406027"
+          },
+          "parentUpper": {
+            "slug": "ethereum-above-3700-on-january-26",
+            "bounds": ">=3700",
+            "yesToken": "206501...548042",
+            "noToken": "105843...476805"
+          },
+          "rangeChild": {
+            "slug": "will-the-price-of-ethereum-be-between-3600-3700-on-january-26",
+            "bounds": "3600-3700",
+            "yesToken": "812420...277946",
+            "noToken": "141500...654425"
+          },
+          "triangleBuy": {
+            "legs": "LowerYES_ASK + UpperNO_ASK + RangeNO_ASK",
+            "payout": 2,
+            "formula": "profit = 2.0 - totalAsk"
+          },
+          "unbundling": {
+            "legs": "LowerYES_BID vs (RangeYES_ASK + UpperYES_ASK)",
+            "formula": "profit = LowerYES_BID - (RangeYES_ASK + UpperYES_ASK)"
+          },
+          "bundling": {
+            "legs": "LowerYES_ASK vs (RangeYES_BID + UpperYES_BID)",
+            "formula": "profit = (RangeYES_BID + UpperYES_BID) - LowerYES_ASK"
+          }
+        }
+      ]
+    }
+  ],
+  "tokenAnalysis": {
+    "totalTokens": 42,
+    "tokensByGroup": {
+      "eth-2026-01-26T17:00:00.000Z": {
+        "totalTokens": 42,
+        "childTokens": 22,
+        "parentTokens": 20
+      }
+    }
+  },
+  "coverageAnalysis": [
+    {
+      "group": "eth-2026-01-26T17:00:00.000Z",
+      "parentIdx": 0,
+      "parentSlug": "ethereum-above-2800-on-january-26",
+      "parentBounds": ">=2800",
+      "coverageStart": 0,
+      "coverageEnd": 8,
+      "coveredCount": 9
+    },
+    {
+      "group": "eth-2026-01-26T17:00:00.000Z",
+      "parentIdx": 1,
+      "parentSlug": "ethereum-above-2900-on-january-26",
+      "parentBounds": ">=2900",
+      "coverageStart": 1,
+      "coverageEnd": 8,
+      "coveredCount": 8
+    },
+    {
+      "group": "eth-2026-01-26T17:00:00.000Z",
+      "parentIdx": 2,
+      "parentSlug": "ethereum-above-3000-on-january-26",
+      "parentBounds": ">=3000",
+      "coverageStart": 2,
+      "coverageEnd": 8,
+      "coveredCount": 7
+    },
+    {
+      "group": "eth-2026-01-26T17:00:00.000Z",
+      "parentIdx": 3,
+      "parentSlug": "ethereum-above-3100-on-january-26",
+      "parentBounds": ">=3100",
+      "coverageStart": 3,
+      "coverageEnd": 8,
+      "coveredCount": 6
+    },
+    {
+      "group": "eth-2026-01-26T17:00:00.000Z",
+      "parentIdx": 4,
+      "parentSlug": "ethereum-above-3200-on-january-26",
+      "parentBounds": ">=3200",
+      "coverageStart": 4,
+      "coverageEnd": 8,
+      "coveredCount": 5
+    },
+    {
+      "group": "eth-2026-01-26T17:00:00.000Z",
+      "parentIdx": 5,
+      "parentSlug": "ethereum-above-3300-on-january-26",
+      "parentBounds": ">=3300",
+      "coverageStart": 5,
+      "coverageEnd": 8,
+      "coveredCount": 4
+    },
+    {
+      "group": "eth-2026-01-26T17:00:00.000Z",
+      "parentIdx": 6,
+      "parentSlug": "ethereum-above-3400-on-january-26",
+      "parentBounds": ">=3400",
+      "coverageStart": 6,
+      "coverageEnd": 8,
+      "coveredCount": 3
+    },
+    {
+      "group": "eth-2026-01-26T17:00:00.000Z",
+      "parentIdx": 7,
+      "parentSlug": "ethereum-above-3500-on-january-26",
+      "parentBounds": ">=3500",
+      "coverageStart": 7,
+      "coverageEnd": 8,
+      "coveredCount": 2
+    },
+    {
+      "group": "eth-2026-01-26T17:00:00.000Z",
+      "parentIdx": 8,
+      "parentSlug": "ethereum-above-3600-on-january-26",
+      "parentBounds": ">=3600",
+      "coverageStart": 8,
+      "coverageEnd": 8,
+      "coveredCount": 1
+    },
+    {
+      "group": "eth-2026-01-26T17:00:00.000Z",
+      "parentIdx": 9,
+      "parentSlug": "ethereum-above-3700-on-january-26",
+      "parentBounds": ">=3700",
+      "coverageStart": -1,
+      "coverageEnd": -1,
+      "coveredCount": 0
+    }
+  ],
+  "formulas": {
+    "triangleBuy": {
+      "name": "POLYMARKET_TRIANGLE_BUY",
+      "description": "Buy all 3 legs at ASK, guarantee $2 payout",
+      "legs": "ParentLower YES + ParentUpper NO + Range NO",
+      "formula": "profit = $2.00 - (LowerYES_ASK + UpperNO_ASK + RangeNO_ASK)",
+      "profitBps": "(profit / totalAsk) × 10000",
+      "minRequired": "profit >= min_profit_abs AND profitBps >= min_profit_bps"
+    },
+    "unbundling": {
+      "name": "SELL_PARENT_BUY_CHILDREN",
+      "description": "Sell parent lower YES, buy range YES + parent upper YES",
+      "legs": "ParentLower YES (sell) + Range YES (buy) + ParentUpper YES (buy)",
+      "formula": "profit = LowerYES_BID - (RangeYES_ASK + UpperYES_ASK)",
+      "profitBps": "(profit / cost) × 10000",
+      "minRequired": "profit >= min_profit_abs AND profitBps >= min_profit_bps"
+    },
+    "bundling": {
+      "name": "BUY_PARENT_SELL_CHILDREN",
+      "description": "Buy parent lower YES, sell range YES + parent upper YES",
+      "legs": "ParentLower YES (buy) + Range YES (sell) + ParentUpper YES (sell)",
+      "formula": "profit = (RangeYES_BID + UpperYES_BID) - LowerYES_ASK",
+      "profitBps": "(profit / LowerYES_ASK) × 10000",
+      "minRequired": "profit >= min_profit_abs AND profitBps >= min_profit_bps"
+    }
+  },
+  "capturedSignals": [],
+  "inputSummary": {
+    "bootstrapFile": "/Users/nguyenhieu/Documents/data/lynx/mm_poly/test/artifacts/arbitrage-engine.bootstrap.json",
+    "groupsProvided": 1,
+    "triosCreated": 9
+  }
+}

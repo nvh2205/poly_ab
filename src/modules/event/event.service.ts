@@ -1,5 +1,4 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -39,7 +38,7 @@ export class EventCrawlerService implements OnApplicationBootstrap {
     private readonly eventRepository: Repository<Event>,
     @InjectRepository(Market)
     private readonly marketRepository: Repository<Market>,
-  ) {}
+  ) { }
 
   async onApplicationBootstrap() {
     this.logger.log('EventCrawlerService initialized');
@@ -49,7 +48,7 @@ export class EventCrawlerService implements OnApplicationBootstrap {
   /**
    * Run every 1 hour at 00 minutes 00 seconds
    */
-  @Cron('0 0 * * * *')
+  // NOTE: @Cron removed - now runs in Worker process (WorkerCronService)
   async crawlEventsEvery4Hours(): Promise<void> {
     const startedAt = Date.now();
     this.logger.log(
@@ -232,18 +231,18 @@ export class EventCrawlerService implements OnApplicationBootstrap {
     market.startTime =
       this.utilService.parseDate(
         marketData?.eventStartTime ??
-          marketData?.startDate ??
-          marketData?.startDateIso ??
-          marketData?.start_time ??
-          marketData?.start_date,
+        marketData?.startDate ??
+        marketData?.startDateIso ??
+        marketData?.start_time ??
+        marketData?.start_date,
       ) ?? market.startTime;
     market.endDate =
       this.utilService.parseDate(
         marketData?.endDate ??
-          marketData?.endTime ??
-          marketData?.endDateIso ??
-          marketData?.end_time ??
-          marketData?.end_date,
+        marketData?.endTime ??
+        marketData?.endDateIso ??
+        marketData?.end_time ??
+        marketData?.end_date,
       ) ?? market.endDate;
 
     // Set volume

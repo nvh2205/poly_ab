@@ -10,6 +10,7 @@ import { Subscription } from 'rxjs';
 import { ArbSignal } from '../../database/entities/arb-signal.entity';
 import { ArbRealTrade } from '../../database/entities/arb-real-trade.entity';
 import { ArbitrageEngineTrioService } from './arbitrage-engine-trio.service';
+import { RustEngineBridgeService, RustTradeResult } from './rust-engine-bridge.service';
 import { ArbOpportunity } from './interfaces/arbitrage.interface';
 import {
   PolymarketOnchainService,
@@ -21,6 +22,9 @@ import { loadPolymarketConfig } from '../../common/services/polymarket-onchain.c
 import { TelegramService } from '../../common/services/telegram.service';
 import { MintQueueService } from './services/mint-queue.service';
 import { ManagePositionQueueService } from './services/manage-position-queue.service';
+import { RedisService } from '../../common/services/redis.service';
+import { WORKER_USDC_BALANCE_KEY } from '../worker/worker-cron.service';
+import { isRustMode, getRunMode } from '../../common/config/run-mode';
 // import { ArbitrageEngineService } from './arbitrage-engine.service';
 
 interface RealTradeResult {
@@ -88,6 +92,7 @@ const EXTREME_SPREAD = 0.001; // 0.1 cent spread for extreme prices (near 0 or 1
 export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RealExecutionService.name);
   private opportunitySub?: Subscription;
+  private tradeResultSub?: Subscription;
   private cachedUsdcBalance?: number;
   private mintedAssetCacheByGroup?: Map<string, Map<string, number>>;
 
@@ -117,10 +122,12 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     @InjectRepository(ArbRealTrade)
     private readonly arbRealTradeRepository: Repository<ArbRealTrade>,
     private readonly arbitrageEngineTrioService: ArbitrageEngineTrioService,
+    private readonly rustEngineBridgeService: RustEngineBridgeService,
     private readonly polymarketOnchainService: PolymarketOnchainService,
     private readonly telegramService: TelegramService,
     private readonly mintQueueService: MintQueueService,
     private readonly managePositionQueueService: ManagePositionQueueService,
+    private readonly redisService: RedisService,
     // private readonly arbitrageEngineService: ArbitrageEngineService
   ) { }
 
@@ -150,21 +157,28 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     // === HFT: Initialize mintedAssetCacheByGroup ===
     this.mintedAssetCacheByGroup = new Map();
 
-    // === HFT: Initial balance fetch ===
-    this.refreshBalancesBackground();
+    // === HFT: Initial balance fetch (JS mode only — Rust bridge has its own) ===
+    if (!isRustMode()) {
+      this.refreshBalancesBackground();
+    }
 
     // === HFT: Initial minted assets fetch (BASE POOL) ===
     this.refreshMintedAssetsBackground();
 
-    // === HFT: Setup background balance refresh (every 5s) ===
-    this.balanceRefreshInterval = setInterval(() => {
-      this.refreshBalancesBackground();
-    }, BALANCE_REFRESH_MS);
-    this.logger.log(
-      `Background balance refresh scheduled every ${BALANCE_REFRESH_MS}ms`,
-    );
+    // === HFT: Setup background jobs ===
+    if (!isRustMode()) {
+      // JS mode: refresh balance from Redis every 5s for JS executor
+      this.balanceRefreshInterval = setInterval(() => {
+        this.refreshBalancesBackground();
+      }, BALANCE_REFRESH_MS);
+      this.logger.log(
+        `Background balance refresh scheduled every ${BALANCE_REFRESH_MS}ms`,
+      );
+    } else {
+      this.logger.log('Balance refresh SKIPPED — Rust bridge pushes balance directly');
+    }
 
-    // === HFT: Setup background minted assets refresh (every 10s) ===
+    // Minted assets refresh runs in both modes (pushes to Rust executor for SELL validation)
     this.mintedRefreshInterval = setInterval(() => {
       this.refreshMintedAssetsBackground();
     }, MINTED_REFRESH_MS);
@@ -172,10 +186,29 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       `Background minted assets refresh scheduled every ${MINTED_REFRESH_MS}ms`,
     );
 
-    // Subscribe to opportunities
-    this.opportunitySub = this.arbitrageEngineTrioService
-      .onOpportunity()
-      .subscribe((opportunity) => this.handleOpportunity(opportunity));
+    // Subscribe to opportunities — RUN_MODE toggle
+    // Deferred to next tick so all OnApplicationBootstrap hooks complete first
+    // (RustEngineBridgeService may not be active yet during our bootstrap)
+
+    setTimeout(() => {
+      if (isRustMode() && this.rustEngineBridgeService.active) {
+        // === RUST MODE ===
+        // Rust handles: engine → validate → sign → POST
+        // JS handles: DB save, Telegram, mint queue (from TradeResult callback)
+        this.tradeResultSub = this.rustEngineBridgeService
+          .onTradeResult()
+          .subscribe((result) => this.handleRustTradeResult(result));
+        this.logger.log('🦀 Subscribed to RUST trade results (RUN_MODE=rust)');
+        this.logger.log('   Rust handles: engine → validation → signing → HTTP POST');
+        this.logger.log('   JS handles: DB save, Telegram, mint queue');
+      } else {
+        // === JS MODE ===
+        this.opportunitySub = this.arbitrageEngineTrioService
+          .onOpportunity()
+          .subscribe((opportunity) => this.handleOpportunity(opportunity));
+        this.logger.log(`Subscribed to JS engine signals (RUN_MODE=${getRunMode()})`);
+      }
+    }, 0);
 
     this.logger.log('Real Execution Service initialized and ACTIVE (HFT Mode)');
   }
@@ -183,6 +216,9 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy(): void {
     if (this.opportunitySub) {
       this.opportunitySub.unsubscribe();
+    }
+    if (this.tradeResultSub) {
+      this.tradeResultSub.unsubscribe();
     }
     if (this.balanceRefreshInterval) {
       clearInterval(this.balanceRefreshInterval);
@@ -192,21 +228,171 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  // =========================================================================
+  // RUST EXECUTOR: Trade Result Handler
+  // =========================================================================
+
   /**
-   * Background balance refresh - runs async, updates localUsdcBalance
-   * This is called periodically to sync cached balance with actual RPC/Redis state
+   * Handle trade results from Rust executor.
+   * Rust already handled: validation → order prep → signing → HTTP POST.
+   * This method handles: DB save, Telegram notification, mint queue.
+   */
+  private handleRustTradeResult(result: RustTradeResult): void {
+    try {
+      const latencyMs = result.latencyUs / 1000;
+
+      if (result.success && result.orderIds.length > 0) {
+        this.logger.log(
+          `🦀 ✅ Rust trade: ${result.orderIds.length} orders placed, ` +
+          `${result.failedOrders.length} failed | ${latencyMs.toFixed(1)}ms | ` +
+          `PnL: $${result.expectedPnl.toFixed(4)} | ${result.signalStrategy}`,
+        );
+
+        // Log failed orders
+        if (result.failedOrders.length > 0) {
+          this.logger.warn(`❌ ${result.failedOrders.length} order(s) failed:`);
+          result.failedOrders.forEach((order, idx) => {
+            this.logger.warn(
+              `  [${idx + 1}] ${order.side} ${order.tokenId.substring(0, 10)}... @ ${order.price.toFixed(4)} - ${order.errorMsg}`,
+            );
+          });
+        }
+
+        // Telegram notification (fire & forget)
+        this.telegramService.notifyOrderFilled({
+          success: true,
+          strategy: result.signalStrategy as any,
+          ordersPlaced: result.orderIds.length,
+          ordersFailed: result.failedOrders.length,
+          successfulOrders: [],  // Not available from Rust result (could be extended)
+          failedOrders: result.failedOrders.map((f) => ({
+            tokenID: f.tokenId,
+            side: f.side as 'BUY' | 'SELL',
+            price: f.price,
+            errorMsg: f.errorMsg,
+          })),
+          size: result.totalCost, // Approximation
+          pnlPercent: result.totalCost > 0
+            ? (result.expectedPnl / result.totalCost) * 100
+            : 0,
+          totalCost: result.totalCost,
+          expectedPnl: result.expectedPnl,
+          latencyMs,
+          balance: this.localUsdcBalance,
+          reserved: result.totalCost,
+        }).catch(() => { /* Silent */ });
+
+        // Save to database (fire & forget)
+        const tradeResult: RealTradeResult = {
+          signalId: 'rust-executor',
+          success: true,
+          orderIds: result.orderIds,
+          errorMessages: result.failedOrders.length > 0
+            ? result.failedOrders.map((f) => ({
+              tokenID: f.tokenId,
+              side: f.side as 'BUY' | 'SELL',
+              price: f.price,
+              errorMsg: f.errorMsg,
+            }))
+            : undefined,
+          totalCost: result.totalCost,
+          expectedPnl: result.expectedPnl,
+          timestampMs: Date.now(),
+        };
+
+        this.saveRealTrade(tradeResult)
+          .then((savedTrade) => {
+            // Queue order status check for manage-position
+            if (result.orderIds.length > 0) {
+              const originalOrders = result.orderIds.map((orderId) => ({
+                orderId,
+                tokenID: '',
+                side: 'BUY' as const,
+                price: 0,
+                size: 0,
+                negRisk: false,
+              }));
+
+              this.managePositionQueueService.addToQueue(
+                savedTrade.id,
+                result.orderIds,
+                originalOrders,
+              ).catch((err) => {
+                this.logger.warn(`Failed to queue order status check: ${err.message}`);
+              });
+            }
+          })
+          .catch((error) => {
+            this.logger.error(`Failed to save Rust trade result to DB: ${error.message}`);
+          });
+      } else {
+        this.logger.error(
+          `🦀 ❌ Rust trade FAILED - ${result.signalStrategy} | ${latencyMs.toFixed(1)}ms`,
+        );
+
+        // Telegram notification (fire & forget)
+        this.telegramService.notifyOrderFilled({
+          success: false,
+          strategy: result.signalStrategy as any,
+          error: 'Batch order failed',
+          latencyMs,
+          balance: this.localUsdcBalance,
+          reserved: result.totalCost,
+        }).catch(() => { /* Silent */ });
+
+        // Save failure to database
+        const tradeResult: RealTradeResult = {
+          signalId: 'rust-executor',
+          success: false,
+          error: 'Rust executor batch failed',
+          totalCost: result.totalCost,
+          expectedPnl: result.expectedPnl,
+          timestampMs: Date.now(),
+        };
+
+        this.saveRealTrade(tradeResult).catch((error) => {
+          this.logger.error(`Failed to save Rust trade result to DB: ${error.message}`);
+        });
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to handle Rust trade result: ${error.message}`,
+        error.stack,
+      );
+    }
+  }
+
+  /**
+   * Background balance refresh - reads USDC balance from Redis
+   * Worker process handles the heavy RPC call and writes to Redis.
+   * Main process just reads from Redis (sub-ms) instead of RPC (10-500ms).
    */
   private refreshBalancesBackground(): void {
-    const targetAddress = this.config.proxyAddress || undefined;
-    this.polymarketOnchainService
-      .getBalances(this.config, undefined, targetAddress)
-      .then((balances) => {
-        this.localUsdcBalance = parseFloat(balances.usdc) || 0;
-        this.cachedUsdcBalance = this.localUsdcBalance;
+    this.redisService
+      .get(WORKER_USDC_BALANCE_KEY)
+      .then((balanceStr) => {
+        if (balanceStr !== null) {
+          this.localUsdcBalance = parseFloat(balanceStr) || 0;
+          this.cachedUsdcBalance = this.localUsdcBalance;
+        } else {
+          // Fallback: if Redis key not set yet (worker not started), use RPC directly
+          const targetAddress = this.config.proxyAddress || undefined;
+          this.polymarketOnchainService
+            .getBalances(this.config, undefined, targetAddress)
+            .then((balances) => {
+              this.localUsdcBalance = parseFloat(balances.usdc) || 0;
+              this.cachedUsdcBalance = this.localUsdcBalance;
+            })
+            .catch((error) => {
+              this.logger.warn(
+                `Fallback balance refresh (RPC) failed: ${error.message}`,
+              );
+            });
+        }
       })
       .catch((error) => {
         this.logger.warn(
-          `Background balance refresh failed: ${error.message}`,
+          `Background balance refresh (Redis) failed: ${error.message}`,
         );
       });
   }
@@ -236,6 +422,8 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
             this.mintedAssetCacheByGroup = new Map();
           }
           this.mintedAssetCacheByGroup.set(groupKey, cache);
+          // Push to Rust executor for SELL leg validation
+          this.rustEngineBridgeService.updateMintedAssets(groupKey, cache);
         })
         .catch((error) => {
           this.logger.warn(
@@ -292,6 +480,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
    */
   private handleOpportunity(opportunity: ArbOpportunity): void {
     try {
+
       // === VALIDATION: Check if opportunity should be skipped ===
       const validation = this.shouldSkipOpportunity(opportunity);
       if (validation.shouldSkip) {
@@ -556,9 +745,9 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     totalCost?: number;
   } {
     // === CHECK: Skip if trading is disabled ===
-    if (!this.runtimeEnabled) {
-      return { shouldSkip: true };
-    }
+    // if (!this.runtimeEnabled) {
+    //   return { shouldSkip: true };
+    // }
 
     // === CHECK: Skip if already submitting an order ===
     if (this.isSubmittingOrder) {
@@ -569,10 +758,6 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
     const now = Date.now();
     const timeSinceLastOpportunity = now - this.lastOpportunityExecutedAt;
     if (this.lastOpportunityExecutedAt > 0 && timeSinceLastOpportunity < OPPORTUNITY_TIMEOUT_MS) {
-      const remainingMs = OPPORTUNITY_TIMEOUT_MS - timeSinceLastOpportunity;
-      this.logger.debug(
-        `Skipping opportunity: timeout (${remainingMs}ms remaining until next opportunity)`
-      );
       return { shouldSkip: true };
     }
 
@@ -582,10 +767,10 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
 
     // Check PnL threshold (synchronous)
     if (pnlPercent < this.minPnlThresholdPercent) {
-      this.logger.debug(`pnlPercent: ${pnlPercent} < ${this.minPnlThresholdPercent}%`);
+      console.log(`${new Date().toISOString()} --pnl:-----`, pnlPercent)
       return { shouldSkip: true };
     }
-
+    return { shouldSkip: true }
     // === Calculate order size using cached balance (NO awaits) ===
     const candidates = this.buildOrderCandidates(opportunity);
     if (candidates.length === 0) {
@@ -596,11 +781,6 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
 
     // Validate size: must be finite, positive, and >= 5 (Polymarket minimum)
     if (!Number.isFinite(size) || size < 5) {
-      if (size > 0 && size < 5) {
-        this.logger.debug(
-          `Order size ${size} is below Polymarket minimum (5). Skip opportunity.`,
-        );
-      }
       return { shouldSkip: true };
     }
 
@@ -1606,7 +1786,8 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
    */
   enableTrading(): { success: boolean; message: string; enabled: boolean; slippageEnabled: boolean } {
     this.runtimeEnabled = true;
-    // this.slippageEnabled = true;
+    // Propagate to Rust executor if active
+    this.rustEngineBridgeService.setTradingEnabled(true);
     this.logger.log('Real trading ENABLED via API (slippage: ON)');
     return {
       success: true,
@@ -1622,6 +1803,8 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
   disableTrading(): { success: boolean; message: string; enabled: boolean; slippageEnabled: boolean } {
     this.runtimeEnabled = false;
     this.slippageEnabled = false;
+    // Propagate to Rust executor if active
+    this.rustEngineBridgeService.setTradingEnabled(false);
     this.logger.log('Real trading DISABLED via API (slippage: OFF)');
     return {
       success: true,
