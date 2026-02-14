@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-// range_evaluator will be used when range arb is enabled
+// use crate::engine::range_evaluator;
 use crate::engine::state::*;
 use crate::engine::trio_evaluator;
 use crate::types::signal::ArbSignal;
@@ -221,7 +221,29 @@ impl EngineState {
                         }
                     }
                 }
-                // RangeChild/Parent dispatch — currently disabled (range arb not yet active)
+                // TokenRole::RangeChild { group_idx, .. }
+                // | TokenRole::Parent { group_idx, .. } => {
+                //     let gi = *group_idx as usize;
+                //     if gi < self.groups.len() {
+                //         // Find trios affected by this token
+                //         let trio_indices: Vec<u16> = self.groups[gi]
+                //             .trio_lookup_by_asset
+                //             .get(asset_id)
+                //             .cloned()
+                //             .unwrap_or_default();
+
+                //         if !trio_indices.is_empty() {
+                //             let range_signals =
+                //                 range_evaluator::evaluate_trios_for_range_arbitrage(
+                //                     &mut self.groups[gi],
+                //                     &trio_indices,
+                //                     &self.price_table,
+                //                     &config,
+                //                 );
+                //             signals.extend(range_signals);
+                //         }
+                //     }
+                // }
                 _ => {}
             }
         }
