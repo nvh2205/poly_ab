@@ -203,10 +203,14 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
         this.logger.log('   JS handles: DB save, Telegram, mint queue');
       } else {
         // === JS MODE ===
-        this.opportunitySub = this.arbitrageEngineTrioService
-          .onOpportunity()
-          .subscribe((opportunity) => this.handleOpportunity(opportunity));
-        this.logger.log(`Subscribed to JS engine signals (RUN_MODE=${getRunMode()})`);
+        // this.opportunitySub = this.arbitrageEngineTrioService
+        //   .onOpportunity()
+        //   .subscribe((opportunity) => this.handleOpportunity(opportunity));
+        // this.logger.log(`Subscribed to JS engine signals (RUN_MODE=${getRunMode()})`);
+
+        this.tradeResultSub = this.rustEngineBridgeService
+          .onTradeResult()
+          .subscribe((result) => this.handleRustTradeResult(result));
       }
     }, 0);
 
