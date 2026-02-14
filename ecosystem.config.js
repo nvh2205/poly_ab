@@ -13,10 +13,12 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         APP_MODE: 'api',
+        RUST_LOG: 'debug',
       },
       env_production: {
         NODE_ENV: 'production',
         APP_MODE: 'api',
+        RUST_LOG: 'debug',
       },
       error_file: './logs/api-error.log',
       out_file: './logs/api-out.log',
