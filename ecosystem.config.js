@@ -5,7 +5,7 @@ module.exports = {
       name: 'polymarket-api',
       script: './dist/src/main.js',
       instances: 1,
-      exec_mode: 'cluster',
+      exec_mode: 'fork', // fork mode: captures native (Rust) stdout properly. Cluster mode swallows Rust tracing output.
       node_args: [
         '--max-semi-space-size=64',   // 64MB young gen (default 16MB) - reduces minor GC frequency
         '--max-old-space-size=4096',  // 4GB old gen - reduces major GC frequency
