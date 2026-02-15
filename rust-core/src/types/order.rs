@@ -45,6 +45,7 @@ pub struct SignedClobOrder {
 #[derive(Debug, Clone)]
 pub struct OrderCandidate {
     pub token_id: String,
+    pub market_slug: String,
     pub price: f64,
     pub side: OrderSide,
     pub orderbook_size: Option<f64>,
@@ -77,11 +78,22 @@ impl OrderSide {
 // N-API TYPES (Rust ↔ Node.js)
 // =============================================================================
 
+/// Successful order detail — part of TradeResult.
+#[napi(object)]
+#[derive(Debug, Clone)]
+pub struct NapiSuccessOrder {
+    pub token_id: String,
+    pub market_slug: String,
+    pub side: String,
+    pub price: f64,
+}
+
 /// Failed order detail — part of TradeResult.
 #[napi(object)]
 #[derive(Debug, Clone)]
 pub struct NapiFailedOrder {
     pub token_id: String,
+    pub market_slug: String,
     pub side: String,
     pub price: f64,
     pub error_msg: String,
@@ -93,6 +105,7 @@ pub struct NapiFailedOrder {
 pub struct TradeResult {
     pub success: bool,
     pub order_ids: Vec<String>,
+    pub successful_orders: Vec<NapiSuccessOrder>,
     pub failed_orders: Vec<NapiFailedOrder>,
     pub total_cost: f64,
     pub expected_pnl: f64,

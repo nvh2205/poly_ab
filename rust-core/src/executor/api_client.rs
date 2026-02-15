@@ -95,9 +95,10 @@ impl ClobApiClient {
         .map_err(|e| format!("Failed to decode API secret: {}", e))?;
 
         // Build reqwest client with HFT settings
+        // pool_idle_timeout = 25s — must be > warm interval (20s) to keep connections alive
         let client = reqwest::Client::builder()
             .tcp_nodelay(true) // Disable Nagle's algorithm
-            .pool_idle_timeout(std::time::Duration::from_secs(30))
+            .pool_idle_timeout(std::time::Duration::from_secs(25))
             .pool_max_idle_per_host(10)
             .timeout(std::time::Duration::from_secs(5))
             .build()
@@ -268,6 +269,22 @@ impl ClobApiClient {
 
         // Convert to URL-safe base64: '+' -> '-', '/' -> '_'
         sig.replace('+', "-").replace('/', "_")
+    }
+
+    /// Warm the connection pool by sending a lightweight GET request.
+    /// This keeps the TCP+TLS connection alive across long idle periods.
+    pub async fn warm_connection(&self) -> bool {
+        let url = format!("{}/time", self.base_url);
+        match self.client.get(&url).send().await {
+            Ok(resp) => {
+                tracing::trace!("[Warmer] GET /time -> {}", resp.status());
+                true
+            }
+            Err(e) => {
+                tracing::warn!("[Warmer] Connection warm failed: {}", e);
+                false
+            }
+        }
     }
 }
 

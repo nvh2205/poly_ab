@@ -48,6 +48,7 @@ export class ArbSignal {
       'POLYMARKET_TRIANGLE',
       'POLYMARKET_TRIANGLE_BUY',
       'POLYMARKET_TRIANGLE_SELL',
+      'POLYMARKET_COMPLEMENT_BUY',
     ],
   })
   strategy:
@@ -59,7 +60,8 @@ export class ArbSignal {
     | 'BUY_PARENT_NO_SELL_CHILD_NO'
     | 'POLYMARKET_TRIANGLE'
     | 'POLYMARKET_TRIANGLE_BUY'
-    | 'POLYMARKET_TRIANGLE_SELL';
+    | 'POLYMARKET_TRIANGLE_SELL'
+    | 'POLYMARKET_COMPLEMENT_BUY';
 
   @Column({ name: 'parent_market_id', type: 'varchar', length: 255, nullable: true })
   parentMarketId?: string;

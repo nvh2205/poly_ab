@@ -268,9 +268,15 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
           strategy: result.signalStrategy as any,
           ordersPlaced: result.orderIds.length,
           ordersFailed: result.failedOrders.length,
-          successfulOrders: [],
+          successfulOrders: result.successfulOrders.map((o) => ({
+            tokenID: o.tokenId,
+            marketSlug: o.marketSlug,
+            side: o.side as 'BUY' | 'SELL',
+            price: o.price,
+          })),
           failedOrders: result.failedOrders.map((f) => ({
             tokenID: f.tokenId,
+            marketSlug: f.marketSlug,
             side: f.side as 'BUY' | 'SELL',
             price: f.price,
             errorMsg: f.errorMsg,
@@ -431,6 +437,7 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
       errorMessages: result.failedOrders.length > 0
         ? result.failedOrders.map((f) => ({
           tokenID: f.tokenId,
+          marketSlug: f.marketSlug,
           side: f.side as 'BUY' | 'SELL',
           price: f.price,
           errorMsg: f.errorMsg,

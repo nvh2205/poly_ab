@@ -22,8 +22,15 @@ import { RangeGroup, MarketRangeDescriptor } from './interfaces/range-group.inte
 export interface RustTradeResult {
     success: boolean;
     orderIds: string[];
+    successfulOrders: Array<{
+        tokenId: string;
+        marketSlug: string;
+        side: string;
+        price: number;
+    }>;
     failedOrders: Array<{
         tokenId: string;
+        marketSlug: string;
         side: string;
         price: number;
         errorMsg: string;

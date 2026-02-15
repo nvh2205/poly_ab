@@ -263,6 +263,7 @@ fn build_order_candidates(signal: &ArbSignal) -> Vec<OrderCandidate> {
             if let Some(ask) = signal.parent_best_ask {
                 candidates.push(OrderCandidate {
                     token_id: signal.parent_asset_id.clone(),
+                    market_slug: signal.parent_market_slug.clone(),
                     price: ask,
                     side: OrderSide::Buy,
                     orderbook_size: signal.parent_best_ask_size,
@@ -272,6 +273,7 @@ fn build_order_candidates(signal: &ArbSignal) -> Vec<OrderCandidate> {
             if let Some(ask) = signal.parent_upper_best_ask {
                 candidates.push(OrderCandidate {
                     token_id: signal.parent_upper_asset_id.clone(),
+                    market_slug: signal.parent_upper_market_slug.clone(),
                     price: ask,
                     side: OrderSide::Buy,
                     orderbook_size: signal.parent_upper_best_ask_size,
@@ -281,6 +283,7 @@ fn build_order_candidates(signal: &ArbSignal) -> Vec<OrderCandidate> {
             if let Some(ask) = signal.child_best_ask {
                 candidates.push(OrderCandidate {
                     token_id: signal.child_asset_id.clone(),
+                    market_slug: signal.child_market_slug.clone(),
                     price: ask,
                     side: OrderSide::Buy,
                     orderbook_size: signal.child_best_ask_size,
@@ -293,6 +296,7 @@ fn build_order_candidates(signal: &ArbSignal) -> Vec<OrderCandidate> {
             if let Some(bid) = signal.parent_best_bid_flat {
                 candidates.push(OrderCandidate {
                     token_id: signal.parent_asset_id.clone(),
+                    market_slug: signal.parent_market_slug.clone(),
                     price: bid,
                     side: OrderSide::Sell,
                     orderbook_size: signal.parent_best_bid_size,
@@ -302,6 +306,7 @@ fn build_order_candidates(signal: &ArbSignal) -> Vec<OrderCandidate> {
             if let Some(ask) = signal.parent_upper_best_ask {
                 candidates.push(OrderCandidate {
                     token_id: signal.parent_upper_asset_id.clone(),
+                    market_slug: signal.parent_upper_market_slug.clone(),
                     price: ask,
                     side: OrderSide::Buy,
                     orderbook_size: signal.parent_upper_best_ask_size,
@@ -311,6 +316,7 @@ fn build_order_candidates(signal: &ArbSignal) -> Vec<OrderCandidate> {
             if let Some(ask) = signal.child_best_ask {
                 candidates.push(OrderCandidate {
                     token_id: signal.child_asset_id.clone(),
+                    market_slug: signal.child_market_slug.clone(),
                     price: ask,
                     side: OrderSide::Buy,
                     orderbook_size: signal.child_best_ask_size,
@@ -323,6 +329,7 @@ fn build_order_candidates(signal: &ArbSignal) -> Vec<OrderCandidate> {
             if let Some(ask) = signal.parent_best_ask_flat {
                 candidates.push(OrderCandidate {
                     token_id: signal.parent_asset_id.clone(),
+                    market_slug: signal.parent_market_slug.clone(),
                     price: ask,
                     side: OrderSide::Buy,
                     orderbook_size: signal.parent_best_ask_size,
@@ -332,6 +339,7 @@ fn build_order_candidates(signal: &ArbSignal) -> Vec<OrderCandidate> {
             if let Some(bid) = signal.parent_upper_best_bid {
                 candidates.push(OrderCandidate {
                     token_id: signal.parent_upper_asset_id.clone(),
+                    market_slug: signal.parent_upper_market_slug.clone(),
                     price: bid,
                     side: OrderSide::Sell,
                     orderbook_size: signal.parent_upper_best_bid_size,
@@ -341,6 +349,7 @@ fn build_order_candidates(signal: &ArbSignal) -> Vec<OrderCandidate> {
             if let Some(bid) = signal.child_best_bid {
                 candidates.push(OrderCandidate {
                     token_id: signal.child_asset_id.clone(),
+                    market_slug: signal.child_market_slug.clone(),
                     price: bid,
                     side: OrderSide::Sell,
                     orderbook_size: signal.child_best_bid_size,
@@ -635,6 +644,7 @@ mod tests {
     ) -> OrderToSign {
         let candidate = OrderCandidate {
             token_id: token_id.to_string(),
+            market_slug: String::new(),
             price,
             side,
             orderbook_size: Some(100.0),
@@ -777,6 +787,7 @@ mod tests {
         // Executor with slippage ENABLED
         let candidate = OrderCandidate {
             token_id: token_id.to_string(),
+            market_slug: String::new(),
             price,
             side: OrderSide::Buy,
             orderbook_size: Some(100.0),

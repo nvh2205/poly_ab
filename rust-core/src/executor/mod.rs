@@ -15,7 +15,7 @@ use std::time::Instant;
 use tokio::sync::mpsc;
 
 use crate::bridge::callbacks::get_registry;
-use crate::types::order::{NapiExecutorConfigInput, NapiFailedOrder, OrderSide, TradeResult};
+use crate::types::order::{NapiExecutorConfigInput, NapiFailedOrder, NapiSuccessOrder, OrderSide, TradeResult};
 use crate::types::signal::ArbSignal;
 
 use self::api_client::ClobApiClient;
@@ -88,9 +88,29 @@ pub fn spawn_executor(
     let (tx, rx) = mpsc::channel::<ArbSignal>(16);
 
     let runtime = crate::bridge::napi_exports::get_runtime();
-    runtime.spawn(executor_loop(state, rx));
+    runtime.spawn(executor_loop(Arc::clone(&state), rx));
+
+    // Spawn background connection warmer to keep TCP+TLS alive
+    runtime.spawn(connection_warmer(Arc::clone(&state)));
 
     tx
+}
+
+/// Background task: sends GET /time every 20s to keep the connection pool warm.
+/// Ensures that POST /orders always reuses an existing TCP+TLS connection,
+/// even after hours of inactivity between orders.
+async fn connection_warmer(state: Arc<ExecutorState>) {
+    const WARM_INTERVAL: std::time::Duration = std::time::Duration::from_secs(20);
+
+    tracing::info!("[Warmer] Connection warmer started (interval={}s)", WARM_INTERVAL.as_secs());
+
+    // Initial warm to establish connection immediately
+    state.api_client.warm_connection().await;
+
+    loop {
+        tokio::time::sleep(WARM_INTERVAL).await;
+        state.api_client.warm_connection().await;
+    }
 }
 
 /// Main executor loop — receives signals and processes them.
@@ -216,16 +236,27 @@ async fn process_signal(state: &ExecutorState, signal: ArbSignal) {
 
     // === BUILD TRADE RESULT ===
     let mut order_ids = Vec::new();
+    let mut successful_orders = Vec::new();
     let mut failed_orders = Vec::new();
 
     if post_result.success {
         for (i, resp) in post_result.responses.iter().enumerate() {
+            let candidate = validation_result.candidates.get(i);
             if let Some(ref oid) = resp.order_id {
                 order_ids.push(oid.clone());
+                // Track successful order details for notification
+                if let Some(c) = candidate {
+                    successful_orders.push(NapiSuccessOrder {
+                        token_id: c.token_id.clone(),
+                        market_slug: c.market_slug.clone(),
+                        side: c.side.as_str().to_string(),
+                        price: c.price,
+                    });
+                }
             } else {
-                let candidate = validation_result.candidates.get(i);
                 failed_orders.push(NapiFailedOrder {
                     token_id: candidate.map(|c| c.token_id.clone()).unwrap_or_default(),
+                    market_slug: candidate.map(|c| c.market_slug.clone()).unwrap_or_default(),
                     side: candidate
                         .map(|c| c.side.as_str().to_string())
                         .unwrap_or_default(),
@@ -267,6 +298,7 @@ async fn process_signal(state: &ExecutorState, signal: ArbSignal) {
     let trade_result = TradeResult {
         success: post_result.success && !order_ids.is_empty(),
         order_ids,
+        successful_orders,
         failed_orders,
         total_cost: validation_result.required_cost,
         expected_pnl: actual_pnl,
