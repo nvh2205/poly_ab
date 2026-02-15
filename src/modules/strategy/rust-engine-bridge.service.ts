@@ -10,6 +10,7 @@ import { ethers } from 'ethers';
 import { Observable, Subject } from 'rxjs';
 import { MarketStructureService } from './market-structure.service';
 import { loadPolymarketConfig } from '../../common/services/polymarket-onchain.config';
+import { PolymarketOnchainService } from '../../common/services/polymarket-onchain.service';
 import { RedisService } from '../../common/services/redis.service';
 import { WORKER_USDC_BALANCE_KEY } from '../worker/worker-cron.service';
 import { RangeGroup, MarketRangeDescriptor } from './interfaces/range-group.interface';
@@ -31,10 +32,52 @@ export interface RustTradeResult {
     expectedPnl: number;
     latencyUs: number;
     signalGroupKey: string;
+    signalEventSlug: string;
+    signalCrypto: string;
     signalStrategy: string;
     signalProfitAbs: number;
     signalProfitBps: number;
     signalTimestampMs: number;
+
+    // Signal snapshot: Parent
+    signalParentAssetId: string;
+    signalParentMarketSlug: string;
+    signalParentBestBid: number | null;
+    signalParentBestAsk: number | null;
+    signalParentBestBidSize: number | null;
+    signalParentBestAskSize: number | null;
+    signalParentNegRisk: boolean;
+
+    // Signal snapshot: Parent Upper
+    signalParentUpperAssetId: string;
+    signalParentUpperMarketSlug: string;
+    signalParentUpperBestBid: number | null;
+    signalParentUpperBestAsk: number | null;
+    signalParentUpperBestBidSize: number | null;
+    signalParentUpperBestAskSize: number | null;
+    signalParentUpperNegRisk: boolean;
+
+    // Signal snapshot: Child
+    signalChildAssetId: string;
+    signalChildMarketSlug: string;
+    signalChildBestBid: number | null;
+    signalChildBestAsk: number | null;
+    signalChildBestBidSize: number | null;
+    signalChildBestAskSize: number | null;
+    signalChildNegRisk: boolean;
+    signalChildIndex: number;
+
+    // Aggregates
+    signalChildrenSumAsk: number;
+    signalChildrenSumBid: number;
+
+    // Triangle context
+    signalTriangleTotalCost: number | null;
+    signalTriangleTotalBid: number | null;
+    signalTrianglePayout: number | null;
+    signalTriangleMode: string | null;
+
+    signalReason: string;
 }
 
 /**
@@ -73,6 +116,7 @@ export class RustEngineBridgeService
     constructor(
         private readonly marketStructureService: MarketStructureService,
         private readonly redisService: RedisService,
+        private readonly polymarketOnchainService: PolymarketOnchainService,
     ) { }
 
     // =========================================================================
@@ -347,25 +391,29 @@ export class RustEngineBridgeService
             const wallet = new ethers.Wallet(config.privateKey);
             const signerAddress = wallet.address;
 
+            // Get CLOB API credentials (auto-derived from wallet if env vars not set)
+            const creds = await this.polymarketOnchainService.getApiCredentials();
+            this.logger.log(`API credentials resolved for signer=${signerAddress.substring(0, 10)}...`);
+
             // Initialize executor in Rust
             this.rustCore.initExecutor({
                 privateKey: config.privateKey,
                 proxyAddress: config.proxyAddress,
-                signerAddress,
-                apiKey: config.apiKey || '',
-                apiSecret: config.apiSecret || '',
-                apiPassphrase: config.apiPassphrase || '',
+                signerAddress: creds.signerAddress,
+                apiKey: creds.apiKey,
+                apiSecret: creds.apiSecret,
+                apiPassphrase: creds.apiPassphrase,
                 clobUrl: config.clobUrl || undefined,
                 minPnlThresholdPercent: parseFloat(
-                    process.env.REAL_TRADING_MIN_PNL_PERCENT || '1',
+                    process.env.REAL_TRADING_MIN_PNL_PERCENT || '0.5',
                 ),
                 defaultSize: parseFloat(
                     process.env.REAL_TRADE_SIZE || '10',
                 ),
                 slippageEnabled:
-                    process.env.SLIPPAGE_ENABLED === 'true',
+                    process.env.SLIPPAGE_ENABLED === 'false',
                 opportunityTimeoutMs: parseInt(
-                    process.env.ARB_COOLDOWN_MS || '5000',
+                    process.env.ARB_COOLDOWN_MS || '20000',
                     10,
                 ),
             });

@@ -28,7 +28,7 @@ import { isRustMode, getRunMode } from '../../common/config/run-mode';
 // import { ArbitrageEngineService } from './arbitrage-engine.service';
 
 interface RealTradeResult {
-  signalId: string;
+  signalId: string | null;
   success: boolean;
   orderIds?: string[];
   error?: string;
@@ -268,14 +268,14 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
           strategy: result.signalStrategy as any,
           ordersPlaced: result.orderIds.length,
           ordersFailed: result.failedOrders.length,
-          successfulOrders: [],  // Not available from Rust result (could be extended)
+          successfulOrders: [],
           failedOrders: result.failedOrders.map((f) => ({
             tokenID: f.tokenId,
             side: f.side as 'BUY' | 'SELL',
             price: f.price,
             errorMsg: f.errorMsg,
           })),
-          size: result.totalCost, // Approximation
+          size: result.totalCost,
           pnlPercent: result.totalCost > 0
             ? (result.expectedPnl / result.totalCost) * 100
             : 0,
@@ -286,25 +286,8 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
           reserved: result.totalCost,
         }).catch(() => { /* Silent */ });
 
-        // Save to database (fire & forget)
-        const tradeResult: RealTradeResult = {
-          signalId: 'rust-executor',
-          success: true,
-          orderIds: result.orderIds,
-          errorMessages: result.failedOrders.length > 0
-            ? result.failedOrders.map((f) => ({
-              tokenID: f.tokenId,
-              side: f.side as 'BUY' | 'SELL',
-              price: f.price,
-              errorMsg: f.errorMsg,
-            }))
-            : undefined,
-          totalCost: result.totalCost,
-          expectedPnl: result.expectedPnl,
-          timestampMs: Date.now(),
-        };
-
-        this.saveRealTrade(tradeResult)
+        // Save signal + trade to database (fire & forget)
+        this.saveRustSignalAndTrade(result, true)
           .then((savedTrade) => {
             // Queue order status check for manage-position
             if (result.orderIds.length > 0) {
@@ -344,17 +327,8 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
           reserved: result.totalCost,
         }).catch(() => { /* Silent */ });
 
-        // Save failure to database
-        const tradeResult: RealTradeResult = {
-          signalId: 'rust-executor',
-          success: false,
-          error: 'Rust executor batch failed',
-          totalCost: result.totalCost,
-          expectedPnl: result.expectedPnl,
-          timestampMs: Date.now(),
-        };
-
-        this.saveRealTrade(tradeResult).catch((error) => {
+        // Save signal + trade failure to database
+        this.saveRustSignalAndTrade(result, false).catch((error) => {
           this.logger.error(`Failed to save Rust trade result to DB: ${error.message}`);
         });
       }
@@ -364,6 +338,110 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
         error.stack,
       );
     }
+  }
+
+  /**
+   * Save ArbSignal + ArbRealTrade from Rust executor result.
+   * Creates a signal record with snapshot (matching JS flow), then links trade to it.
+   */
+  private async saveRustSignalAndTrade(
+    result: RustTradeResult,
+    success: boolean,
+  ): Promise<ArbRealTrade> {
+    // Build snapshot object matching JS flow structure
+    const snapshot: any = {
+      parent: {
+        assetId: result.signalParentAssetId,
+        marketSlug: result.signalParentMarketSlug,
+        bestBid: result.signalParentBestBid,
+        bestAsk: result.signalParentBestAsk,
+        bestBidSize: result.signalParentBestBidSize,
+        bestAskSize: result.signalParentBestAskSize,
+      },
+      children: [
+        {
+          index: result.signalChildIndex,
+          assetId: result.signalChildAssetId,
+          marketSlug: result.signalChildMarketSlug,
+          bestBid: result.signalChildBestBid,
+          bestAsk: result.signalChildBestAsk,
+          bestBidSize: result.signalChildBestBidSize,
+          bestAskSize: result.signalChildBestAskSize,
+        },
+      ],
+    };
+
+    // Add parentUpper if present
+    if (result.signalParentUpperAssetId) {
+      snapshot.parentUpper = {
+        assetId: result.signalParentUpperAssetId,
+        marketSlug: result.signalParentUpperMarketSlug,
+        bestBid: result.signalParentUpperBestBid,
+        bestAsk: result.signalParentUpperBestAsk,
+        bestBidSize: result.signalParentUpperBestBidSize,
+        bestAskSize: result.signalParentUpperBestAskSize,
+      };
+    }
+
+    // Add triangle context if present
+    if (result.signalTriangleMode) {
+      snapshot.polymarketTriangle = {
+        totalCost: result.signalTriangleTotalCost,
+        totalBid: result.signalTriangleTotalBid,
+        payout: result.signalTrianglePayout,
+        mode: result.signalTriangleMode,
+      };
+    }
+
+    // Create ArbSignal record
+    const signal = this.arbSignalRepository.create({
+      groupKey: result.signalGroupKey,
+      eventSlug: result.signalEventSlug || undefined,
+      crypto: result.signalCrypto || undefined,
+      strategy: result.signalStrategy as any,
+      parentAssetId: result.signalParentAssetId || undefined,
+      parentMarketId: result.signalParentMarketSlug || undefined,
+      tokenType: 'yes',
+      parentBestBid: this.toFiniteOrNull(result.signalParentBestBid),
+      parentBestAsk: this.toFiniteOrNull(result.signalParentBestAsk),
+      parentBestBidSize: this.toFiniteOrNull(result.signalParentBestBidSize),
+      parentBestAskSize: this.toFiniteOrNull(result.signalParentBestAskSize),
+      parentUpperBestBid: this.toFiniteOrNull(result.signalParentUpperBestBid),
+      parentUpperBestAsk: this.toFiniteOrNull(result.signalParentUpperBestAsk),
+      parentUpperBestBidSize: this.toFiniteOrNull(result.signalParentUpperBestBidSize),
+      parentUpperBestAskSize: this.toFiniteOrNull(result.signalParentUpperBestAskSize),
+      childrenSumAsk: this.toFiniteOrNull(result.signalChildrenSumAsk),
+      childrenSumBid: this.toFiniteOrNull(result.signalChildrenSumBid),
+      profitAbs: this.toFiniteOrNull(result.signalProfitAbs) ?? 0,
+      profitBps: this.toFiniteOrNull(result.signalProfitBps) ?? 0,
+      isExecutable: true,
+      reason: result.signalReason || undefined,
+      snapshot,
+      timestampMs: result.signalTimestampMs,
+    });
+
+    const savedSignal = await this.arbSignalRepository.save(signal);
+
+    // Create ArbRealTrade record linked to the signal
+    const tradeResult: RealTradeResult = {
+      signalId: savedSignal.id,
+      success,
+      orderIds: success ? result.orderIds : undefined,
+      error: success ? undefined : 'Rust executor batch failed',
+      errorMessages: result.failedOrders.length > 0
+        ? result.failedOrders.map((f) => ({
+          tokenID: f.tokenId,
+          side: f.side as 'BUY' | 'SELL',
+          price: f.price,
+          errorMsg: f.errorMsg,
+        }))
+        : undefined,
+      totalCost: result.totalCost,
+      expectedPnl: result.expectedPnl,
+      timestampMs: Date.now(),
+    };
+
+    return await this.saveRealTrade(tradeResult);
   }
 
   /**

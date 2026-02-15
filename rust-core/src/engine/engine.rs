@@ -130,14 +130,31 @@ impl EngineState {
                     });
             }
 
-            // Trio leg tokens (for trio-specific dispatch)
+            // Trio leg tokens — Triangle BUY (YES/NO/NO)
             for (trio_idx, trio) in trio_states.iter().enumerate() {
-                let roles = [
+                let triangle_roles = [
                     (&trio.lower_yes_token, TrioLegRole::ParentLowerYes),
                     (&trio.upper_no_token, TrioLegRole::ParentUpperNo),
                     (&trio.range_no_token, TrioLegRole::RangeNo),
                 ];
-                for (token_id, role) in roles {
+                for (token_id, role) in triangle_roles {
+                    self.token_index
+                        .entry(token_id.clone())
+                        .or_default()
+                        .push(TokenRole::TrioLeg {
+                            group_idx,
+                            trio_idx: trio_idx as u16,
+                            role,
+                        });
+                }
+
+                // Complement BUY legs (NO/YES/YES)
+                let complement_roles = [
+                    (&trio.lower_no_token, TrioLegRole::ParentLowerNo),
+                    (&trio.range_yes_token, TrioLegRole::RangeYes),
+                    (&trio.upper_yes_token, TrioLegRole::ParentUpperYes),
+                ];
+                for (token_id, role) in complement_roles {
                     self.token_index
                         .entry(token_id.clone())
                         .or_default()
@@ -206,18 +223,38 @@ impl EngineState {
                 TokenRole::TrioLeg {
                     group_idx,
                     trio_idx,
-                    ..
+                    role,
                 } => {
                     let gi = *group_idx as usize;
                     let ti = *trio_idx as usize;
                     if gi < self.groups.len() {
-                        if let Some(sig) = trio_evaluator::evaluate_single_trio(
-                            &mut self.groups[gi],
-                            ti,
-                            &self.price_table,
-                            &config,
-                        ) {
-                            signals.push(sig);
+                        match role {
+                            // Triangle BUY legs → evaluate triangle
+                            TrioLegRole::ParentLowerYes
+                            | TrioLegRole::ParentUpperNo
+                            | TrioLegRole::RangeNo => {
+                                if let Some(sig) = trio_evaluator::evaluate_single_trio(
+                                    &mut self.groups[gi],
+                                    ti,
+                                    &self.price_table,
+                                    &config,
+                                ) {
+                                    signals.push(sig);
+                                }
+                            }
+                            // Complement BUY legs → evaluate complement
+                            TrioLegRole::ParentLowerNo
+                            | TrioLegRole::RangeYes
+                            | TrioLegRole::ParentUpperYes => {
+                                if let Some(sig) = trio_evaluator::evaluate_complement_trio(
+                                    &mut self.groups[gi],
+                                    ti,
+                                    &self.price_table,
+                                    &config,
+                                ) {
+                                    signals.push(sig);
+                                }
+                            }
                         }
                     }
                 }
@@ -311,6 +348,7 @@ fn initialize_trio_states(
         let lower_yes_token = &lower.clob_token_ids[0];
         let upper_no_token = &upper.clob_token_ids[1];
         let range_no_token = &range_child.clob_token_ids[1];
+        let lower_no_token = &lower.clob_token_ids[1];
         let upper_yes_token = &upper.clob_token_ids[0];
         let range_yes_token = &range_child.clob_token_ids[0];
 
@@ -322,13 +360,23 @@ fn initialize_trio_states(
             parent_lower_idx: lower_idx as u16,
             parent_upper_idx: (lower_idx + 1) as u16,
             range_idx: range_idx as u16,
+            // Triangle BUY slots
             lower_yes_slot: lower.yes_slot,
             upper_no_slot: upper.no_slot,
             range_no_slot: range_child.no_slot,
             lower_yes_token: lower_yes_token.clone(),
             upper_no_token: upper_no_token.clone(),
             range_no_token: range_no_token.clone(),
+            // Complement BUY slots
+            lower_no_slot: lower.no_slot,
+            range_yes_slot: range_child.yes_slot,
+            upper_yes_slot: upper.yes_slot,
+            lower_no_token: lower_no_token.clone(),
+            range_yes_token: range_yes_token.clone(),
+            upper_yes_token: upper_yes_token.clone(),
+            // Cooldowns
             last_emitted_buy_ms: 0,
+            last_emitted_complement_ms: 0,
             last_emitted_unbundle_ms: 0,
             last_emitted_bundle_ms: 0,
         };
@@ -336,11 +384,12 @@ fn initialize_trio_states(
         let trio_idx = trios.len() as u16;
         trios.push(trio);
 
-        // Index ALL 5 tokens (matches TS behavior)
+        // Index ALL tokens: 3 triangle + 3 complement (some may overlap)
         for token in [
             lower_yes_token,
             upper_no_token,
             range_no_token,
+            lower_no_token,
             upper_yes_token,
             range_yes_token,
         ] {
@@ -430,11 +479,12 @@ mod tests {
         // Verify PriceTable has 6 slots (2 per market × 3 markets)
         assert_eq!(engine.price_table.slots.len(), 6);
 
-        // Verify all 5 tokens are in trio_lookup
+        // Verify all 6 tokens are in trio_lookup (3 triangle + 3 complement)
         let lookup = &engine.groups[0].trio_lookup_by_asset;
         assert!(lookup.contains_key("parent_lower_yes"));
         assert!(lookup.contains_key("parent_upper_no"));
         assert!(lookup.contains_key("range_no_token"));
+        assert!(lookup.contains_key("parent_lower_no"));
         assert!(lookup.contains_key("parent_upper_yes"));
         assert!(lookup.contains_key("range_yes_token"));
     }
@@ -503,5 +553,32 @@ mod tests {
             signals.iter().map(|s| &s.strategy).collect::<Vec<_>>()
         );
         assert!((unbundle_sigs[0].profit_abs - 0.10).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_handle_top_of_book_complement_buy() {
+        let mut engine = make_engine();
+        engine.update_market_structure(vec![make_group_input()]);
+
+        // Complement BUY: Ask(PL_NO) + Ask(RC_YES) + Ask(PU_YES) < 1.0
+        // totalAsk = 0.40 + 0.20 + 0.15 = 0.75, profit = 0.25
+        engine.handle_top_of_book("parent_lower_no", 0.38, 0.40, Some(100.0), Some(100.0), 1);
+        engine.handle_top_of_book("range_yes_token", 0.18, 0.20, Some(100.0), Some(100.0), 2);
+
+        let signals =
+            engine.handle_top_of_book("parent_upper_yes", 0.13, 0.15, Some(100.0), Some(100.0), 3);
+
+        let complement_sigs: Vec<_> = signals
+            .iter()
+            .filter(|s| s.strategy == "POLYMARKET_COMPLEMENT_BUY")
+            .collect();
+        assert!(
+            !complement_sigs.is_empty(),
+            "Expected complement BUY signal, got: {:?}",
+            signals.iter().map(|s| &s.strategy).collect::<Vec<_>>()
+        );
+        assert!((complement_sigs[0].profit_abs - 0.25).abs() < 1e-10);
+        assert_eq!(complement_sigs[0].triangle_mode, Some("COMPLEMENT_BUY".to_string()));
+        assert_eq!(complement_sigs[0].triangle_payout, Some(1.0));
     }
 }

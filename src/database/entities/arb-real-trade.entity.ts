@@ -28,10 +28,10 @@ export class ArbRealTrade {
   })
   createdAt: Date;
 
-  @Column({ name: 'signal_id', type: 'uuid' })
-  signalId: string;
+  @Column({ name: 'signal_id', type: 'uuid', nullable: true })
+  signalId: string | null;
 
-  @ManyToOne(() => ArbSignal, { onDelete: 'CASCADE' })
+  @ManyToOne(() => ArbSignal, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'signal_id' })
   signal: ArbSignal;
 

@@ -143,7 +143,8 @@ pub struct MarketMeta {
 
 /// Trio: adjacent parent pair + connecting range child.
 ///
-/// Structure: Parent[lower] YES + Parent[upper] NO + Range NO
+/// Triangle BUY:  Parent[lower] YES + Parent[upper] NO + Range NO  (payout = 2)
+/// Complement BUY: Parent[lower] NO  + Range YES + Parent[upper] YES  (payout = 1)
 /// Reads from PriceTable by slot index — never stores prices inline.
 #[derive(Debug, Clone)]
 pub struct TrioState {
@@ -152,18 +153,29 @@ pub struct TrioState {
     pub parent_upper_idx: u16,
     pub range_idx: u16,
 
-    // PriceTable slot IDs — direct lookup
+    // === Triangle BUY slots (YES/NO/NO) ===
     pub lower_yes_slot: u32, // parent_metas[lower].yes_slot
     pub upper_no_slot: u32,  // parent_metas[upper].no_slot
     pub range_no_slot: u32,  // child_metas[range].no_slot
 
-    // Token IDs for signal output & emit key
+    // Triangle BUY token IDs
     pub lower_yes_token: String, // parent_lower.clobTokenIds[0]
     pub upper_no_token: String,  // parent_upper.clobTokenIds[1]
     pub range_no_token: String,  // range_child.clobTokenIds[1]
 
+    // === Complement BUY slots (NO/YES/YES) ===
+    pub lower_no_slot: u32,  // parent_metas[lower].no_slot
+    pub range_yes_slot: u32, // child_metas[range].yes_slot
+    pub upper_yes_slot: u32, // parent_metas[upper].yes_slot
+
+    // Complement BUY token IDs
+    pub lower_no_token: String,  // parent_lower.clobTokenIds[1]
+    pub range_yes_token: String, // range_child.clobTokenIds[0]
+    pub upper_yes_token: String, // parent_upper.clobTokenIds[0]
+
     // Cooldown timestamps (inline — no HashMap overhead)
     pub last_emitted_buy_ms: i64,
+    pub last_emitted_complement_ms: i64,
     pub last_emitted_unbundle_ms: i64,
     pub last_emitted_bundle_ms: i64,
 }
@@ -201,6 +213,10 @@ pub enum TrioLegRole {
     ParentLowerYes,
     ParentUpperNo,
     RangeNo,
+    // Complement triangle legs
+    ParentLowerNo,
+    RangeYes,
+    ParentUpperYes,
 }
 
 /// Where a token is used — for TopOfBook dispatch.

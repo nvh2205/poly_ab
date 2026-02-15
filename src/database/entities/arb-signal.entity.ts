@@ -61,11 +61,11 @@ export class ArbSignal {
     | 'POLYMARKET_TRIANGLE_BUY'
     | 'POLYMARKET_TRIANGLE_SELL';
 
-  @Column({ name: 'parent_market_id', type: 'varchar', length: 255 })
-  parentMarketId: string;
+  @Column({ name: 'parent_market_id', type: 'varchar', length: 255, nullable: true })
+  parentMarketId?: string;
 
-  @Column({ name: 'parent_asset_id', type: 'varchar', length: 255 })
-  parentAssetId: string;
+  @Column({ name: 'parent_asset_id', type: 'varchar', length: 255, nullable: true })
+  parentAssetId?: string;
 
   @Column({
     name: 'token_type',
@@ -75,11 +75,11 @@ export class ArbSignal {
   })
   tokenType: 'yes' | 'no';
 
-  @Column({ name: 'range_i', type: 'int' })
-  rangeI: number;
+  @Column({ name: 'range_i', type: 'int', nullable: true })
+  rangeI?: number;
 
-  @Column({ name: 'range_j', type: 'int' })
-  rangeJ: number;
+  @Column({ name: 'range_j', type: 'int', nullable: true })
+  rangeJ?: number;
 
   @Column({
     name: 'parent_best_bid',

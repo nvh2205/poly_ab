@@ -155,10 +155,41 @@ export interface TradeResult {
   expectedPnl: number
   latencyUs: number
   signalGroupKey: string
+  signalEventSlug: string
+  signalCrypto: string
   signalStrategy: string
   signalProfitAbs: number
   signalProfitBps: number
   signalTimestampMs: number
+  signalParentAssetId: string
+  signalParentMarketSlug: string
+  signalParentBestBid?: number
+  signalParentBestAsk?: number
+  signalParentBestBidSize?: number
+  signalParentBestAskSize?: number
+  signalParentNegRisk: boolean
+  signalParentUpperAssetId: string
+  signalParentUpperMarketSlug: string
+  signalParentUpperBestBid?: number
+  signalParentUpperBestAsk?: number
+  signalParentUpperBestBidSize?: number
+  signalParentUpperBestAskSize?: number
+  signalParentUpperNegRisk: boolean
+  signalChildAssetId: string
+  signalChildMarketSlug: string
+  signalChildBestBid?: number
+  signalChildBestAsk?: number
+  signalChildBestBidSize?: number
+  signalChildBestAskSize?: number
+  signalChildNegRisk: boolean
+  signalChildIndex: number
+  signalChildrenSumAsk: number
+  signalChildrenSumBid: number
+  signalTriangleTotalCost?: number
+  signalTriangleTotalBid?: number
+  signalTrianglePayout?: number
+  signalTriangleMode?: string
+  signalReason: string
 }
 /** Executor config input from Node.js (init_executor / update_executor_config). */
 export interface NapiExecutorConfigInput {

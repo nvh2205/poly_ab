@@ -98,10 +98,52 @@ pub struct TradeResult {
     pub expected_pnl: f64,
     pub latency_us: i64, // Microseconds
     pub signal_group_key: String,
+    pub signal_event_slug: String,
+    pub signal_crypto: String,
     pub signal_strategy: String,
     pub signal_profit_abs: f64,
     pub signal_profit_bps: f64,
     pub signal_timestamp_ms: i64,
+
+    // ── Signal snapshot: Parent ──
+    pub signal_parent_asset_id: String,
+    pub signal_parent_market_slug: String,
+    pub signal_parent_best_bid: Option<f64>,
+    pub signal_parent_best_ask: Option<f64>,
+    pub signal_parent_best_bid_size: Option<f64>,
+    pub signal_parent_best_ask_size: Option<f64>,
+    pub signal_parent_neg_risk: bool,
+
+    // ── Signal snapshot: Parent Upper ──
+    pub signal_parent_upper_asset_id: String,
+    pub signal_parent_upper_market_slug: String,
+    pub signal_parent_upper_best_bid: Option<f64>,
+    pub signal_parent_upper_best_ask: Option<f64>,
+    pub signal_parent_upper_best_bid_size: Option<f64>,
+    pub signal_parent_upper_best_ask_size: Option<f64>,
+    pub signal_parent_upper_neg_risk: bool,
+
+    // ── Signal snapshot: Child ──
+    pub signal_child_asset_id: String,
+    pub signal_child_market_slug: String,
+    pub signal_child_best_bid: Option<f64>,
+    pub signal_child_best_ask: Option<f64>,
+    pub signal_child_best_bid_size: Option<f64>,
+    pub signal_child_best_ask_size: Option<f64>,
+    pub signal_child_neg_risk: bool,
+    pub signal_child_index: i32,
+
+    // ── Signal snapshot: Aggregates ──
+    pub signal_children_sum_ask: f64,
+    pub signal_children_sum_bid: f64,
+
+    // ── Signal snapshot: Triangle context ──
+    pub signal_triangle_total_cost: Option<f64>,
+    pub signal_triangle_total_bid: Option<f64>,
+    pub signal_triangle_payout: Option<f64>,
+    pub signal_triangle_mode: Option<String>,
+
+    pub signal_reason: String,
 }
 
 /// Executor config input from Node.js (init_executor / update_executor_config).

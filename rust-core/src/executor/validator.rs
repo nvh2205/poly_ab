@@ -185,6 +185,10 @@ pub fn should_skip(
     for c in &candidates {
         if let Some(ob_size) = c.orderbook_size {
             if ob_size < default_size {
+                tracing::debug!(
+                    "[Executor] InsufficientOrderbookSize: strategy={} token={} ob_size={:.2} < default_size={:.2} price={:.4}",
+                    signal.strategy, c.token_id, ob_size, default_size, c.price
+                );
                 return Err(SkipReason::InsufficientOrderbookSize);
             }
         }
@@ -229,6 +233,7 @@ pub fn should_skip(
     let required_cost = estimate_required_cost(&candidates, size);
     let balance = state.get_balance();
     if balance < required_cost {
+        tracing::debug!("Insufficient balance: {} < {}", balance, required_cost);
         return Err(SkipReason::InsufficientBalance);
     }
 
@@ -250,8 +255,11 @@ fn build_order_candidates(signal: &ArbSignal) -> Vec<OrderCandidate> {
     let mut candidates = Vec::with_capacity(3);
 
     match strategy {
-        "POLYMARKET_TRIANGLE_BUY" => {
-            // BUY all 3 legs: parent YES, parent_upper NO, child NO
+        // Triangle BUY: parent_lower YES + parent_upper NO + range NO
+        // Complement BUY: parent_lower NO + range YES + parent_upper YES
+        // Both are BUY-all-3-legs — signal fields already point to correct tokens
+        "POLYMARKET_TRIANGLE_BUY" | "POLYMARKET_COMPLEMENT_BUY" => {
+            // BUY all 3 legs
             if let Some(ask) = signal.parent_best_ask {
                 candidates.push(OrderCandidate {
                     token_id: signal.parent_asset_id.clone(),
@@ -352,7 +360,9 @@ fn build_order_candidates(signal: &ArbSignal) -> Vec<OrderCandidate> {
 /// For BUY legs, cost = `ask`.
 fn calculate_total_cost(signal: &ArbSignal) -> f64 {
     match signal.strategy.as_str() {
-        "POLYMARKET_TRIANGLE_BUY" => signal.triangle_total_cost.unwrap_or(0.0),
+        "POLYMARKET_TRIANGLE_BUY" | "POLYMARKET_COMPLEMENT_BUY" => {
+            signal.triangle_total_cost.unwrap_or(0.0)
+        }
 
         // Unbundling: SELL parent lower, BUY range child + BUY parent upper
         // Cost = childrenSumAsk + parentUpperAsk + (1 - parentBid)

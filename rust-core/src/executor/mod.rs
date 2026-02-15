@@ -272,10 +272,52 @@ async fn process_signal(state: &ExecutorState, signal: ArbSignal) {
         expected_pnl: actual_pnl,
         latency_us: total_elapsed.as_micros() as i64,
         signal_group_key: signal.group_key.clone(),
+        signal_event_slug: signal.event_slug.clone(),
+        signal_crypto: signal.crypto.clone(),
         signal_strategy: signal.strategy.clone(),
         signal_profit_abs: signal.profit_abs,
         signal_profit_bps: signal.profit_bps,
         signal_timestamp_ms: signal.timestamp_ms,
+
+        // Snapshot: Parent
+        signal_parent_asset_id: signal.parent_asset_id.clone(),
+        signal_parent_market_slug: signal.parent_market_slug.clone(),
+        signal_parent_best_bid: signal.parent_best_bid,
+        signal_parent_best_ask: signal.parent_best_ask,
+        signal_parent_best_bid_size: signal.parent_best_bid_size,
+        signal_parent_best_ask_size: signal.parent_best_ask_size,
+        signal_parent_neg_risk: signal.parent_neg_risk,
+
+        // Snapshot: Parent Upper
+        signal_parent_upper_asset_id: signal.parent_upper_asset_id.clone(),
+        signal_parent_upper_market_slug: signal.parent_upper_market_slug.clone(),
+        signal_parent_upper_best_bid: signal.parent_upper_best_bid,
+        signal_parent_upper_best_ask: signal.parent_upper_best_ask,
+        signal_parent_upper_best_bid_size: signal.parent_upper_best_bid_size,
+        signal_parent_upper_best_ask_size: signal.parent_upper_best_ask_size,
+        signal_parent_upper_neg_risk: signal.parent_upper_neg_risk,
+
+        // Snapshot: Child
+        signal_child_asset_id: signal.child_asset_id.clone(),
+        signal_child_market_slug: signal.child_market_slug.clone(),
+        signal_child_best_bid: signal.child_best_bid,
+        signal_child_best_ask: signal.child_best_ask,
+        signal_child_best_bid_size: signal.child_best_bid_size,
+        signal_child_best_ask_size: signal.child_best_ask_size,
+        signal_child_neg_risk: signal.child_neg_risk,
+        signal_child_index: signal.child_index,
+
+        // Aggregates
+        signal_children_sum_ask: signal.children_sum_ask,
+        signal_children_sum_bid: signal.children_sum_bid,
+
+        // Triangle context
+        signal_triangle_total_cost: signal.triangle_total_cost,
+        signal_triangle_total_bid: signal.triangle_total_bid,
+        signal_triangle_payout: signal.triangle_payout,
+        signal_triangle_mode: signal.triangle_mode.clone(),
+
+        signal_reason: signal.reason.clone(),
     };
 
     tracing::info!(

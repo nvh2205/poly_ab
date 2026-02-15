@@ -145,7 +145,7 @@ export class MarketService implements OnApplicationBootstrap {
 
       // 3. Read active tokens list from Redis (Worker queries DB every 30s)
       const tokensRaw = await this.redisService.get(WORKER_ACTIVE_TOKENS_KEY);
-      if (!tokensRaw) {
+      if (!tokensRaw || tokensRaw === '[]') {
         this.logger.debug('No active tokens in Redis (Worker may not be running), falling back to DB');
         await this.crawlMarketsForSocketSubscriptionFromDB();
         return;
@@ -153,6 +153,7 @@ export class MarketService implements OnApplicationBootstrap {
 
       const uniqueTokens: string[] = JSON.parse(tokensRaw);
       if (uniqueTokens.length === 0) {
+        this.logger.debug('Worker Redis has empty token list');
         return;
       }
 
