@@ -27,6 +27,8 @@ export interface RustTradeResult {
         marketSlug: string;
         side: string;
         price: number;
+        size: number;
+        negRisk: boolean;
     }>;
     failedOrders: Array<{
         tokenId: string;

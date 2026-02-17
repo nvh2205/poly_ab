@@ -251,6 +251,8 @@ async fn process_signal(state: &ExecutorState, signal: ArbSignal) {
                         market_slug: c.market_slug.clone(),
                         side: c.side.as_str().to_string(),
                         price: c.price,
+                        size: validation_result.size,
+                        neg_risk: c.neg_risk,
                     });
                 }
             } else {

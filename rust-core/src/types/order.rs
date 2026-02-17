@@ -86,6 +86,8 @@ pub struct NapiSuccessOrder {
     pub market_slug: String,
     pub side: String,
     pub price: f64,
+    pub size: f64,
+    pub neg_risk: bool,
 }
 
 /// Failed order detail — part of TradeResult.

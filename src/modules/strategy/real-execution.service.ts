@@ -297,13 +297,13 @@ export class RealExecutionService implements OnModuleInit, OnModuleDestroy {
           .then((savedTrade) => {
             // Queue order status check for manage-position
             if (result.orderIds.length > 0) {
-              const originalOrders = result.orderIds.map((orderId) => ({
-                orderId,
-                tokenID: '',
-                side: 'BUY' as const,
-                price: 0,
-                size: 0,
-                negRisk: false,
+              const originalOrders = result.successfulOrders.map((o, idx) => ({
+                orderId: result.orderIds[idx] || '',
+                tokenID: o.tokenId,
+                side: o.side as 'BUY' | 'SELL',
+                price: o.price,
+                size: o.size,
+                negRisk: o.negRisk,
               }));
 
               this.managePositionQueueService.addToQueue(
