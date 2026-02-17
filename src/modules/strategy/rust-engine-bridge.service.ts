@@ -412,7 +412,7 @@ export class RustEngineBridgeService
                 apiPassphrase: creds.apiPassphrase,
                 clobUrl: config.clobUrl || undefined,
                 minPnlThresholdPercent: parseFloat(
-                    process.env.REAL_TRADING_MIN_PNL_PERCENT || '0.5',
+                    process.env.REAL_TRADING_MIN_PNL_PERCENT || '0.7',
                 ),
                 defaultSize: parseFloat(
                     process.env.REAL_TRADE_SIZE || '10',
